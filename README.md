@@ -17,19 +17,38 @@
 
 ```mermaid
 graph TB
-    K([👑 King\nOpus — your conversation, your gates])
+    K([👑 King · Opus<br/>your conversation, your gates])
 
-    K -->|cmux send| W1([⚙️ worker-1\nbackend])
-    K -->|cmux send| W2([⚙️ worker-2\nfrontend])
-    K -->|tmux send-keys| W3([⚙️ worker-3\nops])
-    K -->|tmux send-keys| CW([🤝 co-worker-1\nyou-paired])
-    K -->|claude -p| WM([👁 watchman-1\n/loop monitor])
+    K ==>|cmux send| W1([⚙️ worker-1 · Opus<br/>backend])
+    K ==>|cmux send| W2([⚙️ worker-2 · Opus<br/>frontend])
+    K ==>|tmux send-keys| W3([⚙️ worker-3 · Opus<br/>ops])
+    K ==>|tmux send-keys| CW([🤝 co-worker-1 · Opus<br/>you-paired])
+    K ==>|claude -p| WM([👁 watchman-1 · Sonnet<br/>/loop monitor])
 
-    W1 & W2 & W3 & CW & WM --> LOG[(.kingdom/project/logs/)]
-    W1 & W2 & W3 & CW --> TSK[(.kingdom/project/tasks/)]
+    W1 -->|Agent| SA1([🧩 sub · Sonnet<br/>code])
+    W1 -->|Agent| SA2([🧩 sub · Haiku<br/>doc digest])
+    W1 -->|Agent| SA3([🧩 sub · Sonnet<br/>test])
+    W2 -->|Agent| SA4([🧩 sub · Sonnet<br/>code])
+    W2 -->|Agent| SA5([🧩 sub · Sonnet<br/>storybook])
+    CW -->|Agent| SA6([🧩 sub · Opus<br/>auth review])
 
-    classDef king stroke:#f59e0b,stroke-width:2px
+    SA1 & SA2 & SA3 & SA4 & SA5 & SA6 & W3 & WM -.->|"4-step closer"| LOG[(.kingdom/project/logs/)]
+    W1 & W2 & W3 & CW -.->|"task file"| TSK[(.kingdom/project/tasks/)]
+
+    classDef king fill:#fef3c7,stroke:#f59e0b,stroke-width:3px,color:#78350f
+    classDef opus stroke:#a78bfa,stroke-width:2px
+    classDef sonnet stroke:#60a5fa,stroke-width:1.5px
+    classDef haiku stroke:#34d399,stroke-width:1.5px
+    classDef monitor stroke:#fb7185,stroke-width:1.5px
+    classDef store fill:none,stroke:#94a3b8,stroke-width:1px
+
     class K king
+    class W1,W2,W3,CW opus
+    class SA1,SA3,SA4,SA5 sonnet
+    class SA2 haiku
+    class SA6 opus
+    class WM monitor
+    class LOG,TSK store
 ```
 
 A Claude Code plugin that turns one Claude session into a coordinated team — each lane in its own git worktree on its own branch. **You stay in one chat with the King.** The King runs gates, asks before every push, and writes audit artifacts you can grep next month. No new runtime, no daemons. Just Claude + git worktrees + a clean discipline.
