@@ -4,6 +4,27 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.9.0] — 2026-05-18
+
+The "fan out the audit, stop waiting" release. Restructures `/kingdom:update` from "Lead does steps 3.1-3.7 sequentially" to "Lead spawns 4 specialists in parallel, then synthesizes gaps". Target wall-clock: under 2 minutes for typical mid-size projects (was ~5 min sequential).
+
+### Changed
+
+- **`/kingdom:update` is now Sonnet Lead + 4 parallel specialists + Haiku scanner fan-out.** The 4 specialists, all dispatched in one Agent batch and polled via a single blocking Bash loop:
+  - 🐱 **A · Project scanner** (Sonnet sub-Lead) — owns Step 3.0 (Layer-1 project state scan). Itself fans out ≤10 Haiku scanners reading `.md`/`.txt`/`.csv` files with 1-hop transitive reads.
+  - 🐱 **B · Task reconciler** (Sonnet) — owns Step 3.1 (checkbox reconciliation against `git log`). Writes only `tasks/*.md`.
+  - 🐱 **C · Logs reconciler** (Sonnet) — owns Steps 3.2 + 3.3 + 3.5 (orphan digests + log backfill + digest re-understanding flags). Writes only new `logs/<ID>.md` + appends `master_agent.log`.
+  - 🐱 **D · Organization audit** (Sonnet) — owns Steps 3.4 + 3.6 (stale `[[name]]` links + merge/archive candidates). Writes only additive footnotes.
+- **Disjoint write sets.** B/C/D write to non-overlapping paths, so the parallel fan-out is race-safe without locks or coordination beyond the Lead's poll-and-aggregate.
+- **Lead does Step 3.7 (gap synthesis) directly** after all 4 specialists complete. Uses Specialist A's project reality picture + B's task results + C's log results. Writes the aggregate `logs/kingdom-update-<UTC>.md` with two top-level `## Gap A` / `## Gap B` sections + counts.
+- **4 specialist sub-digests survive** at `logs/audit-{A,B,C,D}-<...>-<UTC>.md` — King can drill into any of them when investigating a specific section of the aggregate.
+
+### Why this matters
+
+Real-test feedback on v0.8.0: the audit on bfg-swt was running every step sequentially inside one Sonnet, ~5 minutes wall-clock. With 4 parallel specialists, the same audit completes in under 2 minutes (longest-running specialist gates the rest). No correctness changes — only speed. Same digest structure, same gap surfacing.
+
+---
+
 ## [0.8.0] — 2026-05-17
 
 The "auto-switch" patch on top of v0.7.0. Refines `/kingdom:update` Step 0.5 to remove the off-branch prompt entirely — switching to `kingdom` is a local-only no-side-effect operation, so the audit just does it.
