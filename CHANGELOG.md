@@ -4,6 +4,34 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.12.0] — 2026-05-18
+
+The "everyday workflow" release. Three small UX cleanups that fall out of real testing.
+
+### Changed
+
+- **`/kingdom:start` no longer accepts shape override args.** Was: `/kingdom:start <project> [workers=N] [co-workers=M] [watchman=K]` — the optional args were redundant since `kingdom.json` is the source of truth, and they cluttered the slash-menu argument hint to look more complex than it is. Now: `/kingdom:start <project>` only. To change shape, edit `.kingdom/<project>/kingdom.json` directly or re-run `/kingdom:init <project> workers=N`.
+- **`/kingdom:start` confirmation prompt** dropped the "adjust counts" branch — was: `Proceed? (yes / no / adjust counts)` · now: `Proceed? (yes / no)`. Adjusting counts mid-start is no longer supported (edit `kingdom.json` instead).
+- **README slash command table** — `/kingdom:start` row reflects the simpler signature with a note pointing at `kingdom.json` for shape changes.
+
+### Added
+
+- **`## 🔁 Resume work (5 seconds)` README section** — between First-time setup and `/kingdom:init` shape docs. Covers:
+  - cmux.app persistence (close terminal, panes survive)
+  - Cold restart: `claude` + `/kingdom:start my-app` (idempotent — resumes existing worktrees)
+  - Away-a-while case: run `/kingdom:update` first to see Gap A / Gap B before resuming work
+- **`## 🔄 Updating the plugin` README section** — after Slash commands. Two-layer flow:
+  1. `/plugin update kingdom` (auto — pulls new code + templates)
+  2. `/kingdom:init` (manual — re-syncs workspace role docs from new templates, asks before overwriting)
+
+  Plus a table documenting which assets survive a plugin update (everything user-written; nothing they configured).
+
+### Why this matters
+
+Real test feedback (paraphrased): "the `/kingdom:start` slash hint shows `[workers=N] [co-workers=M] [watchman=K]` — those look required, but they're already in kingdom.json — confusing." Same person's other gap: "after First-time setup, the README doesn't tell me how to come back tomorrow." Both addressed in one release.
+
+---
+
 ## [0.11.0] — 2026-05-18
 
 The "one init to rule them all" release. Consolidates `/kingdom:init` (workspace) + `/kingdom:new` (project) into a single smart `/kingdom:init` that handles both layers args-driven. One fewer command in the kit.

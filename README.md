@@ -4,7 +4,7 @@
 
 **One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.11.0-success)
+![Version](https://img.shields.io/badge/version-0.12.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -134,6 +134,49 @@ Or run them separately if you prefer:
 ```
 
 Idempotent — re-running on existing scaffolding just prints status.
+
+---
+
+## 🔁 Resume work (5 seconds)
+
+Day 2+: the kingdom is already scaffolded. Two flows depending on how you left things.
+
+### If you closed your terminal but kept cmux.app open
+
+cmux.app persists workspaces across reboots. Just click back into the 👑 King pane and keep typing — all worktrees, panes, and lane sessions are exactly where you left them.
+
+### If you closed cmux.app (or weren't using it)
+
+```bash
+cd ~/code/my-workspace
+claude                    # start the King
+```
+
+Inside Claude:
+
+```
+/kingdom:start my-app     # idempotent — resumes existing worktrees, re-spawns lanes
+```
+
+The King reads `.kingdom/my-app/{kingdom.json, tasks/, logs/}` to know:
+- Which sub-tasks were claimed (`logs/claims/*.lane`)
+- What shipped already (`master_agent.log`)
+- Which lanes are mid-task (task files with unchecked boxes)
+
+Tell the King "what's the state?" for a summary, or just continue: "👷 worker-1 — keep going on BE-AUTH-3" and the King re-dispatches.
+
+### When you've been away a while (weekend, vacation)
+
+```
+/kingdom:update my-app    # audit sweep before resuming
+```
+
+The 4-specialist fan-out surfaces:
+- **Gap A** — project docs claim work was done; kingdom has no log of it (out-of-band commits while you were away)
+- **Gap B** — kingdom shipped work but project docs didn't get updated
+- Stale task files, orphan logs, broken cross-refs
+
+Run this on Monday morning. Then `/kingdom:start` to spin lanes back up.
 
 ---
 
@@ -368,8 +411,31 @@ The King reads this at `/kingdom:start` to:
 | `/kingdom:doctor` | Check prerequisites — `cmux.app`, `tmux`, `jq`, `gh`, `git ≥ 2.5`, user-global + workspace `settings.json` (auto-patches both with diff + ask), `tasks/` writable, orphan audit artifacts, git state across projects. 10 checks. Re-run anytime. |
 | `/kingdom:init` | Workspace scaffold only — `.kingdom/.setting/` role docs + `.claude/settings.json` permissions. |
 | `/kingdom:init <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Workspace scaffold (if missing) + project scaffold — `.kingdom/<project>/kingdom.json` + `tasks/` + `logs/`. |
-| `/kingdom:start <project> [workers=N] [co-workers=M] [watchman=K]` | Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Reads shape from `kingdom.json`; the optional args are one-shot overrides only (don't persist). Idempotent — re-running resumes existing worktrees. |
+| `/kingdom:start <project>` | Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Reads shape from `kingdom.json` (no override args — change shape via `kingdom.json` or `/kingdom:init`). Idempotent — re-running resumes existing worktrees. |
 | `/kingdom:update [project=<name>] [--force]` | Audit sweep — auto-switches to `kingdom` branch + spawns 4 parallel specialists + Haiku scanner fan-out. Surfaces gaps between project doc claims and kingdom logs. Idempotent. Current project only. |
+
+---
+
+## 🔄 Updating the plugin
+
+Two layers, different routines:
+
+```bash
+/plugin update kingdom    # 1. pull new plugin code (slash commands + templates)
+/kingdom:doctor           # 2. (optional) check for new env requirements
+/kingdom:init             # 3. (optional) re-sync workspace role docs from new templates
+```
+
+| Asset | Survives plugin update? |
+|---|---|
+| Slash commands | replaced by new version (immediate) |
+| Role doc templates (in plugin) | replaced by new version |
+| Workspace `.kingdom/.setting/*.md` | ✅ untouched — re-run `/kingdom:init` to sync |
+| Your `kingdom.json` configs | ✅ untouched |
+| `tasks/` + `logs/` audit trail | ✅ untouched (your work is safe) |
+| `.claude/settings.json` permissions | ✅ untouched |
+
+If a release changes the `kingdom.json` schema (e.g., v0.5.0 dropped `focus`+`ownsPaths`), the CHANGELOG entry for that version tells you what to edit. Schema migrations are manual edits right now — a future `/kingdom:migrate` command may automate this.
 
 ---
 

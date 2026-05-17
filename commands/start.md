@@ -1,14 +1,13 @@
 ---
 description: Spawn the kingdom for a project — reads .kingdom/<project>/kingdom.json, creates lane worktrees via git worktree add, then dispatches per MODE (primary/fallback/headless)
-argument-hint: <project> [workers=N] [co-workers=M] [watchman=K]
+argument-hint: <project>
 ---
 
-Parse `$ARGUMENTS` before doing anything:
-
-- First positional token = `<project>` (required). Must match a real subdirectory under `$PWD`.
-- Any `workers=N`, `co-workers=M`, `watchman=K` tokens override the values from `kingdom.json`.
+Parse `$ARGUMENTS`: first positional token = `<project>` (required). Must match a real subdirectory under `$PWD`.
 
 If `<project>` is missing, stop and ask: "Which project? (subdirectory name under $PWD)".
+
+**Shape is read from `kingdom.json` — no override args.** To change worker/co-worker/watchman counts, either edit `.kingdom/<project>/kingdom.json` directly or re-run `/kingdom:init <project> workers=N co-workers=M watchman=K` (which preserves your `gate.*` customisations? — actually it asks before overwriting).
 
 ---
 
@@ -47,13 +46,11 @@ BASE=$(jq -r '.git.base // "develop"'   "$KJSON")
 TASK_SOURCE=$(jq -r '.taskSource // "(not set)"' "$KJSON")
 ```
 
-5. Apply CLI overrides if given in `$ARGUMENTS` (e.g., `workers=2` → `WORKERS=2`).
-
-6. Validate: `WORKERS + COWORKERS + WATCHMEN <= SANITY_CAP`.
+5. Validate: `WORKERS + COWORKERS + WATCHMEN <= SANITY_CAP`.
    - If exceeded: "Total lane count ($((WORKERS+COWORKERS+WATCHMEN))) exceeds sanityCap ($SANITY_CAP). Reduce counts or raise sanityCap in kingdom.json."
    - Stop.
 
-7. Auto-detect outer host mode:
+6. Auto-detect outer host mode:
 
 ```bash
 # Auto-detect outer host mode
@@ -67,7 +64,7 @@ fi
 echo "Kingdom mode: $MODE"
 ```
 
-8. Print the resolved plan and ask for confirmation before proceeding:
+7. Print the resolved plan and ask for confirmation before proceeding:
 
 ```
 Resolved plan for "$PROJECT":
@@ -79,7 +76,7 @@ Resolved plan for "$PROJECT":
   task source:  $TASK_SOURCE
   logs dir:     $WS/.kingdom/$PROJECT/logs/
 
-Proceed? (yes / no / adjust counts)
+Proceed? (yes / no)
 ```
 
 Wait for explicit approval before continuing.
