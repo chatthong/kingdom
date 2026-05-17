@@ -147,7 +147,7 @@ Task lifecycle within a lane:
 
 ```mermaid
 flowchart TB
-    A(["⚙️ King sends task brief\n(cmux send / tmux send-keys / claude -p)"])
+    A(["👷 King sends task brief\n(cmux send / tmux send-keys / claude -p)"])
     A0["Step 0: Create task file\n(status + brief + multi-layer plan)"]
     B["Lane master reads brief\nplans sub-agent strategy"]
     C["Spawn sub-agents\n(parallel if independent, sequential if dependent)"]
@@ -478,7 +478,7 @@ Lifecycle: what the lane master decides after each sub-agent's done flag appears
 
 ```mermaid
 flowchart TB
-    F{{"⚙️ Sub-agent finished\n(done flag present)"}}
+    F{{"👷 Sub-agent finished\n(done flag present)"}}
     S["SPAWN more\nAgent() calls\n(more work remains)"]
     D["SHUTDOWN\nAgent done\n(task complete)"]
     C["COMPACT\nlane master\n(/compact before next task)"]

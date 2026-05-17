@@ -67,11 +67,11 @@ Planning fan-out: the King's own parallel agents run before any lane receives a 
 graph TB
     K([👑 King])
 
-    K --> H1[⚙️ Agent haiku — survey task source]
-    K --> H2[⚙️ Agent haiku — survey open issues]
-    K --> S1[⚙️ Agent sonnet — scan file sets / BE tasks]
-    K --> S2[⚙️ Agent sonnet — scan file sets / FE tasks]
-    K --> S3[⚙️ Agent sonnet — co-worker brief]
+    K --> H1[👷 Agent haiku — survey task source]
+    K --> H2[👷 Agent haiku — survey open issues]
+    K --> S1[👷 Agent sonnet — scan file sets / BE tasks]
+    K --> S2[👷 Agent sonnet — scan file sets / FE tasks]
+    K --> S3[👷 Agent sonnet — co-worker brief]
 
     H1 & H2 & S1 & S2 & S3 --> LOGS[(<LOGS>/)]
 
@@ -481,7 +481,7 @@ sequenceDiagram
     participant U as User
     participant M as 👑 Master
     participant B as Bash (sleep loop)
-    participant W as ⚙️ Sub-agent
+    participant W as 👷 Sub-agent
 
     U->>M: "start the kingdom"
     M->>W: dispatch task brief
@@ -551,7 +551,7 @@ Lifecycle: once the done-sentinel appears, the King must pick exactly one of thr
 
 ```mermaid
 flowchart TB
-    FIN{⚙️ Sub-agent finished\ndone flag present}
+    FIN{👷 Sub-agent finished\ndone flag present}
 
     FIN -->|more independent work| SPAWN[Spawn more\nnew worktree + pane]
     FIN -->|nothing left to do| SHUT[Shutdown / close\nkill pane + remove worktree]

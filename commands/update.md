@@ -1,13 +1,13 @@
 ---
 description: Force a docs/log/task audit pass on the current project — Layer-1 project scan + fan-out Haiku readers, then checkbox/orphan/log reconcile + gap synthesis. Idempotent.
-argument-hint: [project=<name>]
+argument-hint: [project=<name>] [--force]
 ---
 
 You are running a forced audit pass on the kingdom's audit-trail artifacts for ONE project. The goal: bring `.kingdom/<project>/{logs,tasks}/` into a self-consistent state AND surface gaps between the project's actual state and what the kingdom has recorded. Idempotent — safe to run any time.
 
-## Step 0 — Resolve project
+## Step 0 — Resolve project + flags
 
-From `$ARGUMENTS`, extract `project=<name>`. If missing, default to the basename of `$PWD`.
+From `$ARGUMENTS`, extract `project=<name>` (defaults to `basename "$PWD"`) and the optional `--force` flag (defaults to false). `--force` skips the interactive prompts in Step 0.5; warnings still print to the report but never block.
 
 Run:
 ```bash
@@ -15,6 +15,53 @@ ls "$PWD/.kingdom/${project}/" 2>/dev/null && echo "PROJECT_EXISTS" || echo "PRO
 ```
 
 If `PROJECT_MISSING`, tell the user `/kingdom:new ${project}` must be run first, and stop.
+
+## Step 0.5 — Git state precheck
+
+A dirty / off-branch / out-of-date working tree produces noisy audit results — Step 3.1 checkbox-reconcile matches against uncommitted code; Gap synthesis misses fresh upstream work. Verify the project's git state before continuing.
+
+```bash
+cd "$PWD/${project}"
+echo "👑 git state precheck:"
+
+# 1. Clean working tree?
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "  ⚠️  DIRTY  — uncommitted changes present:"
+  git status --short | head -10
+  DIRTY=1
+else
+  echo "  ✅ working tree clean"
+  DIRTY=0
+fi
+
+# 2. On expected branch?
+CURRENT=$(git branch --show-current)
+BASE=$(jq -r '.git.base // "develop"' "$PWD/.kingdom/${project}/kingdom.json")
+case "$CURRENT" in
+  "$BASE"|kingdom|worker-*|co-worker-*|watchman-*) echo "  ✅ on branch: $CURRENT (recognised)"; OFFBRANCH=0 ;;
+  *) echo "  ⚠️  OFF-EXPECTED-BRANCH: $CURRENT (expected: $BASE / kingdom / role-N)"; OFFBRANCH=1 ;;
+esac
+
+# 3. Up to date with origin/<base>?
+git fetch origin "$BASE" --quiet 2>/dev/null
+LOCAL=$(git rev-parse HEAD 2>/dev/null)
+REMOTE=$(git rev-parse "origin/$BASE" 2>/dev/null)
+if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
+  AHEAD=$(git rev-list --count "origin/$BASE..HEAD" 2>/dev/null || echo 0)
+  BEHIND=$(git rev-list --count "HEAD..origin/$BASE" 2>/dev/null || echo 0)
+  echo "  ℹ️  ahead $AHEAD / behind $BEHIND vs origin/$BASE"
+fi
+```
+
+**Behaviour:**
+
+| Check | Result | Action without `--force` | Action with `--force` |
+|---|---|---|---|
+| Dirty working tree | Files modified/staged | Print files + ask `continue anyway? (y/n)`. Stop on `n`. | Warn + continue |
+| Off-expected branch | Branch ∉ {base, kingdom, role-N} | Ask `continue anyway? (y/n)`. Stop on `n`. | Warn + continue |
+| Behind/ahead origin | Local SHA ≠ remote SHA | Info only — don't block | Same |
+
+The Audit Lead receives these flags in its brief — `dirty=true` causes Step 3.1 to add a footnote on every newly-ticked checkbox: `> ⚠️ matched commit while working tree was dirty — verify manually`.
 
 ## Step 1 — Inventory (no edits yet)
 

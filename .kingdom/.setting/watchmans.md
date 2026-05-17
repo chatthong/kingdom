@@ -27,7 +27,7 @@ Tick cycle: each iteration of the watchman's `/loop`, with a dashed return arrow
 
 ```mermaid
 flowchart TB
-    T1["👁 1. cd watchman worktree"]
+    T1["🕵️ 1. cd watchman worktree"]
     T2["2. git fetch origin\ncompare develop SHA\ngit reset --hard origin/develop"]
     T3{{"3. develop moved\nor smoke overdue?"}}
     T4["Run gate.smoke\n+ gate.tests"]

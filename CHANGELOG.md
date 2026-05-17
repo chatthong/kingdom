@@ -4,6 +4,30 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.7.0] — 2026-05-17
+
+The "git-aware + role-themed" release. Two user-driven additions: `/kingdom:update` now sanity-checks git state before auditing (dirty tree or off-branch surfaces immediately), and every role gets a distinctive emoji that flows through tab titles, dispatch templates, and chat conventions.
+
+### Added
+
+- **`/kingdom:update` Step 0.5 — Git state precheck.** Before any audit work, verify the project worktree is clean, on a recognised branch (`base` / `kingdom` / `worker-N` / `co-worker-N` / `watchman-N`), and report drift vs `origin/<base>`. Dirty tree or off-branch triggers an interactive `continue anyway? (y/n)` prompt. New `--force` flag skips prompts (warnings still log to the audit digest). When dirty, Step 3.1 footnotes every newly-ticked checkbox with `verify manually` so you don't trust an audit run against uncommitted code.
+- **`/kingdom:doctor` Check 9 — Git state across projects.** Informational across-the-board sweep — for every project with a `kingdom.json`, reports `clean|DIRTY on <branch>` + drift indicator. Doesn't block; flags projects where `/kingdom:update` will prompt.
+- **Role emoji convention** — new section in `.kingdom/.setting/index.md` documenting:
+  - 👑 King
+  - 👷 Worker
+  - 🧑‍💼 Co-worker
+  - 🕵️ Watchman
+  - 🐱 Sub-agent
+
+  Convention flows through: cmux/tmux tab titles (`👑 King`, `👷 worker-1`, …), dispatch templates, log line prefixes, chat replies relaying role activity, README hero diagram, and all role docs. Emojis are used WITHOUT skin-tone modifiers for cross-terminal stability.
+
+### Changed
+
+- **Role docs and templates** — bulk-swapped `⚙️` → `👷` (Worker), `🤝` → `🧑‍💼` (Co-worker), `👁` → `🕵️` (Watchman), `🧩` → `🐱` (Sub-agent) across `README.md`, `.kingdom/.setting/*.md`, and Mermaid hero diagrams. King's `👑` is unchanged.
+- **`commands/start.md` Phase 6** — pane title setup now uses role-emoji prefixes (`cmux rename-tab "👷 worker-1"`, `tmux select-pane -T "👑 King"`, etc.) for visual scan-ability in the sidebar / pane-border-status row.
+
+---
+
 ## [0.6.0] — 2026-05-17
 
 The "learn first, then update" release. `/kingdom:update` becomes a true Layer-1 Discovery pass — it reads the project's own docs before reconciling logs/tasks, so the audit catches gaps between what the project claims and what the kingdom recorded. Also fixes a real over-count bug in `/kingdom:doctor` Check 8.

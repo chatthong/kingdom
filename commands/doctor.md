@@ -257,9 +257,45 @@ If no `.kingdom/*/kingdom.json` files exist yet, mark this check ✅ (not applic
 
 ---
 
+## Check 9 — Git state across projects (informational)
+
+For each project with a `.kingdom/<project>/kingdom.json`, report the worktree state — dirty / branch / up-to-date with origin. Informational only; doesn't block. `/kingdom:update` runs this same check with prompts.
+
+```bash
+for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
+  PROJ=$(basename "$(dirname "$KJSON")")
+  PROJ_DIR="$PWD/$PROJ"
+  [ -d "$PROJ_DIR/.git" ] || { echo "$PROJ: not a git repo (skipped)"; continue; }
+  (
+    cd "$PROJ_DIR" || exit
+    DIRTY="clean"
+    git diff --quiet && git diff --cached --quiet || DIRTY="DIRTY"
+    BRANCH=$(git branch --show-current)
+    BASE=$(jq -r '.git.base // "develop"' "$KJSON")
+    SYNC=""
+    git fetch origin "$BASE" --quiet 2>/dev/null
+    LOCAL=$(git rev-parse HEAD 2>/dev/null)
+    REMOTE=$(git rev-parse "origin/$BASE" 2>/dev/null)
+    [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ] && SYNC=" / drift vs origin/$BASE"
+    echo "$PROJ: $DIRTY on $BRANCH$SYNC"
+  )
+done
+```
+
+- ✅ if every project reports `clean on <recognised-branch>` (recognised = base / kingdom / worker-N / co-worker-N / watchman-N).
+- ⚠️ if any project is DIRTY or on an unrecognised branch — print exactly:
+  ```
+  Project(s) with non-pristine git state — /kingdom:update will prompt before running on them
+  (or pass --force to skip prompts).
+  ```
+
+Mark ✅ (not applicable) if no `.kingdom/*/kingdom.json` files exist yet.
+
+---
+
 ## Final Summary
 
-After all 8 checks (including any patch outcomes for Check 6), print a single summary block.
+After all 9 checks (including any patch outcomes for Check 6), print a single summary block.
 
 Count results:
 - ✅ = green (met or patched)

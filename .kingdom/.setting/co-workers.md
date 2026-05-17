@@ -43,7 +43,7 @@ Activation: how a co-worker lane goes from dormant to active.
 
 ```mermaid
 flowchart TB
-    A(["🤝 Ter says 'pair on co-worker-N'"])
+    A(["🧑‍💼 Ter says 'pair on co-worker-N'"])
     B["Ter selects the pane\n(cmux.app click or cmux select-pane)"]
     C["Ter types task brief\ndirectly into pane\n(files, goal, constraints)"]
     D["Co-worker reads brief\nassists interactively\n(edits, tests, suggestions)"]

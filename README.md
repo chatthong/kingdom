@@ -4,7 +4,7 @@
 
 **One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.6.0-success)
+![Version](https://img.shields.io/badge/version-0.7.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -19,18 +19,18 @@
 graph TB
     K([👑 King · Opus<br/>your conversation, your gates])
 
-    K ==>|cmux send| W1([⚙️ worker-1 · Opus<br/>backend])
-    K ==>|cmux send| W2([⚙️ worker-2 · Opus<br/>frontend])
-    K ==>|tmux send-keys| W3([⚙️ worker-3 · Opus<br/>ops])
-    K ==>|tmux send-keys| CW([🤝 co-worker-1 · Opus<br/>you-paired])
-    K ==>|claude -p| WM([👁 watchman-1 · Sonnet<br/>/loop monitor])
+    K ==>|cmux send| W1([👷 worker-1 · Opus<br/>backend])
+    K ==>|cmux send| W2([👷 worker-2 · Opus<br/>frontend])
+    K ==>|tmux send-keys| W3([👷 worker-3 · Opus<br/>ops])
+    K ==>|tmux send-keys| CW([🧑‍💼 co-worker-1 · Opus<br/>you-paired])
+    K ==>|claude -p| WM([🕵️ watchman-1 · Sonnet<br/>/loop monitor])
 
-    W1 -->|Agent| SA1([🧩 sub · Sonnet<br/>code])
-    W1 -->|Agent| SA2([🧩 sub · Haiku<br/>doc digest])
-    W1 -->|Agent| SA3([🧩 sub · Sonnet<br/>test])
-    W2 -->|Agent| SA4([🧩 sub · Sonnet<br/>code])
-    W2 -->|Agent| SA5([🧩 sub · Sonnet<br/>storybook])
-    CW -->|Agent| SA6([🧩 sub · Opus<br/>auth review])
+    W1 -->|Agent| SA1([🐱 sub · Sonnet<br/>code])
+    W1 -->|Agent| SA2([🐱 sub · Haiku<br/>doc digest])
+    W1 -->|Agent| SA3([🐱 sub · Sonnet<br/>test])
+    W2 -->|Agent| SA4([🐱 sub · Sonnet<br/>code])
+    W2 -->|Agent| SA5([🐱 sub · Sonnet<br/>storybook])
+    CW -->|Agent| SA6([🐱 sub · Opus<br/>auth review])
 
     SA1 & SA2 & SA3 & SA4 & SA5 & SA6 & W3 & WM -.->|"4-step closer"| LOG[(.kingdom/project/logs/)]
     W1 & W2 & W3 & CW -.->|"task file"| TSK[(.kingdom/project/tasks/)]
@@ -220,19 +220,19 @@ One King, N masters. You talk to the King; the King talks to the masters; the ma
 
 Lives in your primary checkout on a local-only `kingdom` branch. **Holds your conversation.** Plans. Gates. Pushes. **Never edits files directly.** When you say "King, plan today's work," the King spawns parallel planning agents (Haiku to scan tasks, Sonnet to triage), writes its own task file with the multi-layer plan, then dispatches sub-tasks to the masters. Before any `git push`, the King runs the pre-commit gate (typecheck + tests + dry-merge + cross-lane overlap), reports back to you, and waits for explicit approval. **It's the only role with push authority — and only after you say "push."**
 
-### ⚙️ Workers — Opus, autonomous masters
+### 👷 Workers — Opus, autonomous masters
 
 Three (or N) parallel lanes, each a long-lived Claude Code session inside its own `git worktree` on its own local-only `worker-N` branch. Workers pick claimable sub-tasks from your task source (`TODO_Master.csv`, GitHub issues — whatever you configure), then **plan first**: every assignment begins with a task file capturing the multi-layer plan (Discovery → Strategy → Execution → Verification) before any code change happens. Inside each layer, workers spawn their own sub-agent fleet (Sonnet for edits, Haiku for bulk reads, Opus for sensitive files) with no eco-mode cap — N is chosen for best result, not for parallelism's sake. When done, the worker signals the King via a 4-step closer.
 
-### 🤝 Co-workers — Opus, paired with you
+### 🧑‍💼 Co-workers — Opus, paired with you
 
 The lanes you drive yourself. Dormant by default; activate when you say *"pair on co-worker-1 — I'll redesign the checkout flow."* Inside that pane you type the brief, the co-worker assists interactively, you make the calls. Same task file convention. Same pre-commit gate. Same push approval. The difference: **you** set the scope, **you** set the pace.
 
-### 👁 Watchmen — Sonnet, always-on monitors
+### 🕵️ Watchmen — Sonnet, always-on monitors
 
 Passive. Continuous. Each watchman runs `/loop` in dynamic-pacing mode (5–15 min). It watches `origin/develop` tip, runs your smoke tests on every advance, babysits open PRs (CI rollup, review state, mergeability), and writes `WATCH_*.md` reports + sidebar notifications. **Read-only + test-runner + alerter.** Never edits, never pushes.
 
-### 🧩 Sub-agents — Sonnet / Haiku / Opus, one-shot
+### 🐱 Sub-agents — Sonnet / Haiku / Opus, one-shot
 
 The leaves of the tree. Spawned by the King (for planning) or by any master (for execution). `Agent(model=…)` calls — short-lived, single-task. Each runs its own 4-step closer. Model picked per task: Sonnet for standard work (P1), Haiku for bulk reads (P2), Opus for sensitive files (P3). Lane masters fan them out in parallel and synthesise the outputs.
 
@@ -247,10 +247,10 @@ The leaves of the tree. Spawned by the King (for planning) or by any master (for
 | Role | Model | What it does | Spec |
 |---|---|---|---|
 | 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Never edits files. | [`kings.md`](.kingdom/.setting/kings.md) |
-| ⚙️ **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks. Spawns own sub-agents (no eco cap). | [`workers.md`](.kingdom/.setting/workers.md) |
-| 🤝 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-workers.md`](.kingdom/.setting/co-workers.md) |
-| 👁 **Watchman** | Sonnet | Passive monitor (`/loop`, 5–15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchmans.md`](.kingdom/.setting/watchmans.md) |
-| 🧩 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`workers.md`](.kingdom/.setting/workers.md) |
+| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks. Spawns own sub-agents (no eco cap). | [`workers.md`](.kingdom/.setting/workers.md) |
+| 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-workers.md`](.kingdom/.setting/co-workers.md) |
+| 🕵️ **Watchman** | Sonnet | Passive monitor (`/loop`, 5–15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchmans.md`](.kingdom/.setting/watchmans.md) |
+| 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`workers.md`](.kingdom/.setting/workers.md) |
 
 ---
 
@@ -456,7 +456,7 @@ Only audit artifacts under `.kingdom/<project>/{tasks,logs}/`, and only for **lo
 
 ---
 
-## 🤝 Contributing
+## 🧑‍💼 Contributing
 
 The kingdom is opinionated by design — most defaults exist because of a specific failure mode. Before changing a rule, read the role file that owns it ([`.kingdom/.setting/`](.kingdom/.setting/)).
 

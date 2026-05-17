@@ -237,10 +237,17 @@ Print the raw JSON so the user can verify placement. Then, for each lane, run:
 HANDLE=$(cmux list-panes --workspace "$WS_ID" --json \
   | jq -r '.[] | select(.title=="worker-1") | .id')
 cmux pin-pane --pane "$HANDLE" --worktree "$PROJ/.worktrees/worker-1"
-cmux rename-tab --pane "$HANDLE" "worker-1"
+cmux rename-tab --pane "$HANDLE" "👷 worker-1"
 ```
 
-Repeat for every worker, co-worker, and watchman lane.
+Repeat for every worker, co-worker, and watchman lane. Tab title convention (see `.kingdom/.setting/index.md` → "Role emoji convention"):
+
+```text
+👑 King           — primary checkout, kingdom branch
+👷 worker-N       — .worktrees/worker-N
+🧑‍💼 co-worker-N   — .worktrees/co-worker-N
+🕵️ watchman-N     — .worktrees/watchman-N
+```
 
 Note: if `cmux claude-teams` places panes differently than expected, print the discovery
 commands below and wait for the user to verify before continuing:
@@ -255,13 +262,21 @@ This phase may need manual adjustment on the first run of a new `cmux claude-tea
 ### MODE=fallback (raw tmux)
 
 Panes are already pinned by cwd from the `tmux split-window -c` calls in Phase 5.
-Optionally rename each window:
+Rename each window + set pane titles with the role emoji convention:
 
 ```bash
 tmux rename-window -t "$SESSION:$WIN" "kingdom-$PROJECT"
+tmux set -t "$SESSION" -g pane-border-status top
+
+# Set pane titles per role (pane indices depend on split order from Phase 5):
+tmux select-pane -t "$SESSION:$WIN.1" -T "👑 King"
+# For each lane pane, e.g.:
+#   tmux select-pane -t "$SESSION:$WIN.<idx>" -T "👷 worker-1"
+#   tmux select-pane -t "$SESSION:$WIN.<idx>" -T "🧑‍💼 co-worker-1"
+#   tmux select-pane -t "$SESSION:$WIN.<idx>" -T "🕵️ watchman-1"
 ```
 
-No further pinning needed — each pane's cwd is its worktree.
+No further pinning needed — each pane's cwd is its worktree. Emoji prefixes follow `.kingdom/.setting/index.md` → "Role emoji convention".
 
 ### MODE=headless
 

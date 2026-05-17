@@ -22,12 +22,24 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | Role | Writes | Reads | Spawns | Pushes | Edits code | Plans (task files) |
 |---|---|---|---|---|---|---|
 | 👑 King | claims, test reports, push log lines, own task files (for planning sessions) | everything | sub-agents (any model), lane masters via `claude-teams` | ✅ sole pusher | ❌ never | ✅ for own planning sessions |
-| ⚙️ Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
-| 🤝 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (Ter often dictates the brief) |
-| 👁 Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchmans.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
-| 🧩 Sub-agent | own raw + curated + log + flag (4-step closer) | logs, tasks (for context from parent lane master) | none (one-shot leaf) | ❌ | ✅ via Edit/Write tools when assigned | ❌ executes against the task file its parent wrote |
+| 👷 Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
+| 🧑‍💼 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (Ter often dictates the brief) |
+| 🕵️ Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchmans.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
+| 🐱 Sub-agent | own raw + curated + log + flag (4-step closer) | logs, tasks (for context from parent lane master) | none (one-shot leaf) | ❌ | ✅ via Edit/Write tools when assigned | ❌ executes against the task file its parent wrote |
 
 If any role file's procedural section contradicts this table, **this table wins.** Role files document HOW each role does its job; this table defines WHAT each role can do.
+
+### Role emoji convention
+
+| Role | Emoji | Used in |
+|---|---|---|
+| King | 👑 | cmux/tmux tab title (`👑 King`); chat replies relaying King decisions; dispatch templates; log line prefixes |
+| Worker | 👷 | cmux/tmux tab title (`👷 worker-1`); dispatch templates; chat status when describing worker activity |
+| Co-worker | 🧑‍💼 | cmux/tmux tab title (`🧑‍💼 co-worker-1`); dispatch templates; paired-work chat |
+| Watchman | 🕵️ | cmux/tmux tab title (`🕵️ watchman-1`); `WATCH_*.md` report headers (filenames stay ASCII); alert chat |
+| Sub-agent | 🐱 | Sub-agent spawn lines; chat status (`🐱 Sonnet · code`); short-lived — no cmux tab |
+
+Emojis are used **without** skin-tone modifiers (`🏻` `🏼` `🏽` `🏾` `🏿`) for cross-terminal compatibility — some terminals strip ZWJ sequences and render variant-selector glyphs inconsistently.
 
 ---
 
@@ -207,11 +219,11 @@ Hierarchy: the King orchestrates five default lanes; every lane writes artifacts
 graph TB
     K([👑 King\nOpus · primary checkout · branch=kingdom])
 
-    K -->|"dispatches via cmux send / tmux send-keys / claude -p"| W1[⚙️ worker-1\nautonomous task work]
-    K --> W2[⚙️ worker-2\nautonomous task work]
-    K --> W3[⚙️ worker-3\nautonomous task work]
-    K --> CW[🤝 co-worker-1\nTer-paired · interactive]
-    K --> WM[👁 watchman-1\npassive /loop monitor]
+    K -->|"dispatches via cmux send / tmux send-keys / claude -p"| W1[👷 worker-1\nautonomous task work]
+    K --> W2[👷 worker-2\nautonomous task work]
+    K --> W3[👷 worker-3\nautonomous task work]
+    K --> CW[🧑‍💼 co-worker-1\nTer-paired · interactive]
+    K --> WM[🕵️ watchman-1\npassive /loop monitor]
 
     W1 & W2 & W3 & CW & WM --> LOGS[(<WS>/.kingdom/&lt;project&gt;/logs/)]
 

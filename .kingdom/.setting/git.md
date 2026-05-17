@@ -37,11 +37,11 @@ graph LR
         LM["main\ntracks origin/main"]
         LD["develop\ntracks origin/develop"]
         LK["👑 kingdom\nintegration view · NEVER PUSHED"]
-        LW1["⚙️ worker-1\nbackend · autonomous"]
-        LW2["⚙️ worker-2\nfrontend · autonomous"]
-        LW3["⚙️ worker-3\nops · autonomous"]
-        LC1["🤝 co-worker-1\nTer-paired"]
-        LWM["👁 watchman-1\ntracks develop tip · resets each /loop"]
+        LW1["👷 worker-1\nbackend · autonomous"]
+        LW2["👷 worker-2\nfrontend · autonomous"]
+        LW3["👷 worker-3\nops · autonomous"]
+        LC1["🧑‍💼 co-worker-1\nTer-paired"]
+        LWM["🕵️ watchman-1\ntracks develop tip · resets each /loop"]
     end
 
     OD -->|"git fetch / pull"| LD
@@ -65,11 +65,11 @@ graph TB
     DB[("🗄 .git/\nshared DB\nrefs · objects · config")]
 
     PRI["👑 primary checkout\n&lt;project&gt;/\nbranch: kingdom 🏠"]
-    WT1["⚙️ .worktrees/worker-1/\nbranch: worker-1 🏠\ncmux tab: worker-1"]
-    WT2["⚙️ .worktrees/worker-2/\nbranch: worker-2 🏠\ncmux tab: worker-2"]
-    WT3["⚙️ .worktrees/worker-3/\nbranch: worker-3 🏠\ncmux tab: worker-3"]
-    WC1["🤝 .worktrees/co-worker-1/\nbranch: co-worker-1 🏠\ncmux tab: co-worker-1"]
-    WWM["👁 .worktrees/watchman-1/\nbranch: watchman-1 🏠\ncmux tab: watchman-1\nresets to origin/develop each /loop"]
+    WT1["👷 .worktrees/worker-1/\nbranch: worker-1 🏠\ncmux tab: worker-1"]
+    WT2["👷 .worktrees/worker-2/\nbranch: worker-2 🏠\ncmux tab: worker-2"]
+    WT3["👷 .worktrees/worker-3/\nbranch: worker-3 🏠\ncmux tab: worker-3"]
+    WC1["🧑‍💼 .worktrees/co-worker-1/\nbranch: co-worker-1 🏠\ncmux tab: co-worker-1"]
+    WWM["🕵️ .worktrees/watchman-1/\nbranch: watchman-1 🏠\ncmux tab: watchman-1\nresets to origin/develop each /loop"]
 
     DB --- PRI
     DB --- WT1
@@ -118,10 +118,10 @@ gitGraph
 ```mermaid
 graph TB
     OD["⬇ origin/develop\n(pulled)"]
-    W1["⚙️ worker-1 🏠"]
-    W2["⚙️ worker-2 🏠"]
-    W3["⚙️ worker-3 🏠"]
-    C1["🤝 co-worker-1 🏠"]
+    W1["👷 worker-1 🏠"]
+    W2["👷 worker-2 🏠"]
+    W3["👷 worker-3 🏠"]
+    C1["🧑‍💼 co-worker-1 🏠"]
     KG["👑 kingdom 🏠\nmerged integration view\nNEVER PUSHED\nadvisory — Ter can checkout to inspect"]
 
     OD --> KG
