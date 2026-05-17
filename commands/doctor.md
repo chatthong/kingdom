@@ -6,7 +6,7 @@ Run 6 checks in order. Report ✅/⚠️/❌ for each. At the end, summarise gre
 
 ---
 
-## Check 1 — manaflow/cmux app installed
+## Check 1 — manaflow/cmux app + required commands
 
 Run:
 ```bash
@@ -18,16 +18,33 @@ Also check whether `$CMUX_CLAUDE_PID` is set:
 echo "${CMUX_CLAUDE_PID:-unset}"
 ```
 
-- ✅ PRIMARY if `found` is returned AND `$CMUX_CLAUDE_PID` is set — print exactly:
+If cmux.app is found, verify the specific commands kingdom uses:
+```bash
+for CMD in new-workspace new-split tab-action send notify rename-tab identify tree list-panes; do
+  if cmux "$CMD" --help >/dev/null 2>&1; then
+    echo "  ✅ cmux $CMD"
+  else
+    echo "  ❌ cmux $CMD MISSING"
+  fi
+done
+```
+
+- ✅ PRIMARY if cmux.app is `found` AND `$CMUX_CLAUDE_PID` is set AND all 9 commands above return ✅ — print exactly:
   ```
-  manaflow/cmux.app detected + $CMUX_CLAUDE_PID set → MODE: PRIMARY
+  manaflow/cmux.app detected + $CMUX_CLAUDE_PID set + required commands present → MODE: PRIMARY
   ```
-- ⚠️ if `found` is returned but `$CMUX_CLAUDE_PID` is unset — print exactly:
+- ⚠️ if cmux.app is `found` but `$CMUX_CLAUDE_PID` is unset — print exactly:
   ```
   manaflow/cmux.app is installed but $CMUX_CLAUDE_PID is not set.
   Launch kingdom sessions from inside cmux.app to activate PRIMARY mode.
   ```
-- ❌ if not found — print exactly:
+- ⚠️ if any of the 9 commands is MISSING — print exactly:
+  ```
+  Your cmux is too old for kingdom v0.13+. Required commands missing.
+  Upgrade: brew upgrade --cask cmux
+  Minimum version: 0.64.6 (manaflow/cmux).
+  ```
+- ❌ if cmux.app not found — print exactly:
   ```
   cmux.app (manaflow-ai/cmux) is NOT installed. PRIMARY mode unavailable.
   Install via Homebrew:

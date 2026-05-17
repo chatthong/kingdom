@@ -4,6 +4,50 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.13.0] — 2026-05-18
+
+The "three-tier cmux hierarchy" release. Big spec correction + new cmux reference doc. PRIMARY mode now uses cmux.app properly: each master gets its own workspace (sidebar entry), sub-agents spawn as tabs (auto-close on sentinel) when visibility is wanted, watchman gets a predefined dual-view split. Fixes the broken `cmux claude-teams` flow from prior versions.
+
+### Added
+
+- **`.kingdom/.setting/cmux.md`** — new canonical cmux reference doc for every role. 300+ lines covering: three-tier hierarchy (Workspace → Tab → Split), every cmux command kingdom uses (`new-workspace`, `tab-action`, `new-split`, `send`, `notify`, `rename-tab`, `identify`, `tree`, `list-panes`), env vars (`CMUX_WORKSPACE_ID`, `CMUX_SURFACE_ID`), common pitfalls, and reference URLs. All other role docs link here for cmux details instead of repeating commands inline. Scaffolded by `/kingdom:init` into every workspace.
+- **Three-tier hierarchy** (PRIMARY mode):
+  - 🏢 **Workspace** per master — King + every worker + co-worker + watchman gets its own cmux.app workspace (sidebar entry, full screen, native session restore).
+  - 📑 **Tab** for visible sub-agent spawns inside a master's workspace — auto-closes on sentinel flag (new 5-step closer).
+  - 🪟 **Split** for predefined dual-view (watchman's claude + `gh pr watch`).
+- **`kingdom.json.cmux` block** — controls layout behaviour: `pinKingWorkspace` (true), `workspaceColors` (per role), `subAgentSpawnDefault` ("background" — Agent calls; alternative "tab"), `watchmanLayout` (vertical split with top=claude, bottom=`gh pr list --watch`).
+- **5-step closer for tab-spawned sub-agents** — extends the standard 4-step closer with Step 5: `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`. Tabs self-destruct after the sentinel flag; master doesn't clean up. Agent-spawned sub-agents (default, headless) skip Step 5 (no tab to close).
+- **`commands/start.md` Phase 5 + 6 rewrite** — PRIMARY mode uses `cmux new-workspace --name --cwd --command "claude"` per lane (no more broken `cmux claude-teams`). Returns workspace refs which persist to `$LOGS/workspace-refs.env` so King + watchman can address lanes by stable refs across session restarts.
+- **`commands/doctor.md` Check 1 expanded** — now verifies the 9 specific cmux commands kingdom uses (`new-workspace`, `new-split`, `tab-action`, `send`, `notify`, `rename-tab`, `identify`, `tree`, `list-panes`). Catches cmux versions too old for kingdom v0.13.
+- **King dispatch via workspace refs** — `kings.md` updated: `cmux send --workspace "$WORKER_WS_1" -- "<brief>"` replaces the broken `cmux send --lane "worker-1"` (which doesn't exist in manaflow/cmux).
+
+### Changed
+
+- **`commands/start.md` Phase 5 + 6** — full rewrite. PRIMARY mode uses workspace-per-master; FALLBACK (raw tmux) tightened with pane-title emoji prefixes; HEADLESS unchanged.
+- **`.kingdom/.setting/kings.md` dispatch templates** — `--lane <name>` → `--workspace <ref>` everywhere; ref sourced from `$LOGS/workspace-refs.env`.
+- **`.kingdom/.setting/workers.md`** — new "Spawning sub-agents — Tab vs Agent decision" section at top; 5-step closer added inline after the 4-step closer doc (5-step applies only to tab-spawned sub-agents).
+- **`.kingdom/.setting/watchmans.md`** — documents the optional vertical split layout for the watchman workspace.
+- **`commands/init.md`** — also scaffolds the new `cmux.md` role doc.
+
+### Fixed
+
+- **Broken `cmux claude-teams` reference** in `commands/start.md` — that command exists in manaflow/cmux but is a thin pass-through to `claude --print` requiring a prompt arg; kingdom doesn't use it. Replaced with `cmux new-workspace --command "claude"`.
+- **`cmux pin-pane` reference** — that command doesn't exist in manaflow/cmux (it was from `craigsc/cmux`, an unrelated tool). Pinning is implicit via `--cwd` at workspace creation.
+- **`cmux current-workspace` reference** — replaced with `cmux identify --json` (the actual command name).
+- **`cmux send --lane <name>` reference** — `--lane` flag doesn't exist; correct flag is `--workspace <ref>` or `--surface <ref>`.
+
+### Why this matters
+
+Real test feedback: `/kingdom:start` errored in PRIMARY mode because `cmux claude-teams` needed a prompt arg the spec didn't provide. Investigation revealed several other commands in the spec (`cmux new`, `cmux start`, `cmux pin-pane`, `cmux current-workspace`, `--lane`) belonged to a different cmux tool entirely. v0.13.0 corrects every cmux reference + adds a central reference doc so this doesn't drift again.
+
+### Compatibility notes
+
+- **Breaking** for anyone who ran kingdom in PRIMARY mode on prior versions — the spec was broken; PRIMARY actually only worked if you manually edited the start.md to use tmux fallback. v0.13.0 makes PRIMARY work for the first time.
+- **`kingdom.json` schema additive** — new optional `cmux` block; existing configs without it use sensible defaults (workspace-per-master, watchman split enabled, sub-agents headless).
+- **Workspace refs are NOT stable across cmux.app force-quit** — kingdom persists refs to `$LOGS/workspace-refs.env`, but if cmux.app was killed (not gracefully closed), refs may need rebuilding. Doctor Check 1 flags this scenario.
+
+---
+
 ## [0.12.0] — 2026-05-18
 
 The "everyday workflow" release. Three small UX cleanups that fall out of real testing.

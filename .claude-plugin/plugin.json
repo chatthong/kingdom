@@ -1,7 +1,7 @@
 {
   "name": "kingdom",
-  "version": "0.12.0",
-  "description": "Multi-agent orchestration kit for Claude Code: a King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own git worktree on its own branch. Workers are interchangeable capacity; King assigns task scope per-dispatch. Domain-agnostic: code, research, finance, science, manuscripts — anything you version in git. Bootstrap with one command: /kingdom:init scaffolds workspace + project. /kingdom:start <project> spawns the lanes (shape from kingdom.json). /kingdom:update auto-switches to the kingdom integration branch + spawns 4 parallel specialists (Sonnet) + Haiku 🐱 scanner fan-out for fast Layer-1 audits. Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable.",
+  "version": "0.13.0",
+  "description": "Multi-agent orchestration kit for Claude Code: a King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own cmux.app workspace. Three-tier hierarchy: Workspace per master, Tab for visible sub-agent spawns (auto-close on sentinel), Split for predefined dual-view (watchman). Workers are interchangeable capacity; King assigns task scope per-dispatch. Domain-agnostic: code, research, finance, science, manuscripts. Bootstrap with /kingdom:init; spawn lanes with /kingdom:start; audit gaps with /kingdom:update (parallel Sonnet Lead + Haiku 🐱 scanner fan-out). Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable.",
   "author": {
     "name": "kingdom contributors"
   },

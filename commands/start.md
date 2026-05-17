@@ -150,32 +150,97 @@ Idempotent: `git worktree add` fails silently if the worktree already exists; th
 
 ## Phase 5 — Spawn the team (MODE-branched)
 
-Show the planned command for the detected $MODE and ask for confirmation before running.
+Three-tier hierarchy on cmux.app:
 
-### MODE=primary (manaflow/cmux)
-
-Pre-req check: verify `~/.claude/settings.json` contains:
-
-```json
-"teammateMode": "tmux"
+```text
+🏢 Workspace per master (King · workers · co-workers · watchman)
+   ├── 📑 Tab — visible sub-agent spawns (auto-close on sentinel)
+   └── 🪟 Split — predefined dual-view (watchman top: claude, bottom: gh pr watch)
 ```
 
-and environment:
+Default sub-agent spawn = `Agent(...)` headless (cheaper, no UI noise). Override to **Tab** only when the user wants to watch the sub-agent work. Override controlled by `kingdom.json.cmux.subAgentSpawnDefault` and per-task `--visible` flag in dispatch.
 
-```
-CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-```
+Show the planned commands for the detected $MODE and ask for confirmation before running.
 
-- If either is missing: "Pre-req not met — run `/kingdom:doctor` to configure, then retry Phase 5."
-  Stop here; do not call `cmux claude-teams`.
+### MODE=primary (manaflow/cmux) — workspace-per-master
 
-On approval:
+Pre-req checks:
+
+1. `~/.claude/settings.json` has `env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"` and `teammateMode = "tmux"` (Doctor Check 6 handles this).
+2. `cmux new-workspace --help` returns OK (Doctor Check 1 verifies).
+3. `$CMUX_WORKSPACE_ID` is set (you're inside cmux.app — that's the King's workspace).
+
+If any pre-req fails: "Pre-req not met — run `/kingdom:doctor` to configure, then retry Phase 5." Stop.
+
+On approval, spawn each master as its own workspace:
 
 ```bash
-cmux claude-teams
-# Dispatches prompts per lane via:
-# cmux send --lane "worker-$I" -l "$PROMPT"
+KING_WS="${CMUX_WORKSPACE_ID:-workspace:1}"
+declare -A WORKER_WS COWORKER_WS WATCHMAN_WS
+
+# Pin the King's workspace so it stays at top of sidebar (per cmux.json config)
+PIN_KING=$(jq -r '.cmux.pinKingWorkspace // true' "$KJSON")
+[ "$PIN_KING" = "true" ] && cmux tab-action --action pin --workspace "$KING_WS" 2>/dev/null
+
+spawn_master_workspace () {
+  local label="$1" path="$2"
+  # Returns "OK workspace:N" — capture the ref
+  cmux new-workspace \
+    --name "$label" \
+    --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
+    --cwd "$path" \
+    --command "claude" \
+    --focus false \
+    | awk '/workspace:/ {print $2}'
+}
+
+# Spawn workers
+for I in $(seq 1 "$WORKERS"); do
+  WORKER_WS["$I"]=$(spawn_master_workspace "👷 worker-$I" "$PROJ/.worktrees/worker-$I")
+done
+
+# Spawn co-workers
+for I in $(seq 1 "$COWORKERS"); do
+  COWORKER_WS["$I"]=$(spawn_master_workspace "🧑‍💼 co-worker-$I" "$PROJ/.worktrees/co-worker-$I")
+done
+
+# Spawn watchmen — with optional dual-view split layout from kingdom.json
+WATCHMAN_LAYOUT=$(jq -c '.cmux.watchmanLayout // null' "$KJSON")
+for I in $(seq 1 "$WATCHMEN"); do
+  if [ "$WATCHMAN_LAYOUT" != "null" ]; then
+    # Build inline layout JSON from config
+    TOP_CMD=$(jq -r '.cmux.watchmanLayout.topCommand // "claude"' "$KJSON")
+    BOT_CMD=$(jq -r '.cmux.watchmanLayout.bottomCommand // "gh pr list --watch --interval 30"' "$KJSON")
+    DIR=$(jq -r '.cmux.watchmanLayout.direction // "vertical"' "$KJSON")
+    SPLIT=$(jq -r '.cmux.watchmanLayout.split // 0.6' "$KJSON")
+    LAYOUT_JSON=$(jq -n --arg t "$TOP_CMD" --arg b "$BOT_CMD" --arg d "$DIR" --argjson s "$SPLIT" '
+      {direction: $d, split: $s, children: [
+        {pane: {surfaces: [{type: "terminal", command: $t}]}},
+        {pane: {surfaces: [{type: "terminal", command: $b}]}}
+      ]}')
+    WATCHMAN_WS["$I"]=$(cmux new-workspace \
+      --name "🕵️ watchman-$I" \
+      --description "Kingdom monitor · $(date -u +%Y-%m-%dT%H%MZ)" \
+      --cwd "$PROJ/.worktrees/watchman-$I" \
+      --layout "$LAYOUT_JSON" \
+      --focus false \
+      | awk '/workspace:/ {print $2}')
+  else
+    WATCHMAN_WS["$I"]=$(spawn_master_workspace "🕵️ watchman-$I" "$PROJ/.worktrees/watchman-$I")
+  fi
+done
+
+# Save the workspace ref map to logs/ for King + watchman to use in dispatch
+{
+  echo "# Workspace refs — populated by /kingdom:start at $(date -u +%Y-%m-%dT%H%MZ)"
+  echo "KING_WS=$KING_WS"
+  for I in $(seq 1 "$WORKERS"); do echo "WORKER_WS_$I=${WORKER_WS[$I]}"; done
+  for I in $(seq 1 "$COWORKERS"); do echo "COWORKER_WS_$I=${COWORKER_WS[$I]}"; done
+  for I in $(seq 1 "$WATCHMEN"); do echo "WATCHMAN_WS_$I=${WATCHMAN_WS[$I]}"; done
+} > "$LOGS/workspace-refs.env"
 ```
+
+The `workspace-refs.env` file lets the King + watchman dispatch via stable refs across the session (and on resume — `/kingdom:start` re-reads it instead of re-spawning).
 
 ### MODE=fallback (raw tmux)
 
@@ -198,6 +263,11 @@ for I in $(seq 1 "$WATCHMEN"); do
 done
 tmux select-layout -t "$SESSION:$WIN" main-vertical
 
+# Set pane titles with role emojis
+tmux set -t "$SESSION" -g pane-border-status top
+tmux select-pane -t "$SESSION:$WIN.1" -T "👑 King"
+# Loop the rest: select-pane -T "👷 worker-$I" / "🧑‍💼 co-worker-$I" / "🕵️ watchman-$I"
+
 # Dispatch prompts inside each pane:
 tmux send-keys -t "$SESSION:$WIN.<PANE>" -l "$PROMPT"
 tmux send-keys -t "$SESSION:$WIN.<PANE>" Enter
@@ -205,56 +275,64 @@ tmux send-keys -t "$SESSION:$WIN.<PANE>" Enter
 
 ### MODE=headless (no panes)
 
-Run each lane as a blocking subprocess; no persistent splits:
+Run each lane as a blocking subprocess; no persistent panes/workspaces:
 
 ```bash
 ( cd "$PROJ/.worktrees/worker-1" && claude -p "$PROMPT" )
 # Repeat per lane, sequentially or via background jobs as needed.
 ```
 
-The artifact protocol (4-step closer, sentinel flag, log writes) is identical across all three modes.
+The artifact protocol (4-step closer, sentinel flag, log writes) is identical across all three modes. The hierarchy (workspace → tab → split) only manifests in PRIMARY mode; fallback uses tmux panes, headless uses no UI at all.
 
 ---
 
-## Phase 6 — Pin each teammate to its lane + name tabs (MODE-branched)
+## Phase 6 — Verify the layout (MODE-branched)
 
 ### MODE=primary (manaflow/cmux)
 
-Discover the workspace layout:
+No pinning step needed — `cmux new-workspace --name --cwd --command` in Phase 5 already labels, sets cwd, and launches Claude in one call.
+
+Verify the resulting layout:
 
 ```bash
-WS_ID=$(cmux current-workspace --json | jq -r .id)
-cmux list-panes --workspace "$WS_ID" --json
+cmux tree --all 2>&1 | grep -E 'workspace|surface' | head -30
+cat "$LOGS/workspace-refs.env"
 ```
 
-Print the raw JSON so the user can verify placement. Then, for each lane, run:
-
-```bash
-# Example for worker-1:
-HANDLE=$(cmux list-panes --workspace "$WS_ID" --json \
-  | jq -r '.[] | select(.title=="worker-1") | .id')
-cmux pin-pane --pane "$HANDLE" --worktree "$PROJ/.worktrees/worker-1"
-cmux rename-tab --pane "$HANDLE" "👷 worker-1"
-```
-
-Repeat for every worker, co-worker, and watchman lane. Tab title convention (see `.kingdom/.setting/index.md` → "Role emoji convention"):
+Expected: one workspace per master, each with a Claude session running in its worktree. Sidebar shows:
 
 ```text
-👑 King           — primary checkout, kingdom branch
-👷 worker-N       — .worktrees/worker-N
-🧑‍💼 co-worker-N   — .worktrees/co-worker-N
-🕵️ watchman-N     — .worktrees/watchman-N
+👑 King              — workspace:1 (or current $CMUX_WORKSPACE_ID, pinned at top)
+👷 worker-1          — workspace:N
+👷 worker-2          — workspace:N+1
+...
+🧑‍💼 co-worker-1     — workspace:N+M
+🕵️ watchman-1        — workspace:N+M+1   (vertical split if watchmanLayout set)
 ```
 
-Note: if `cmux claude-teams` places panes differently than expected, print the discovery
-commands below and wait for the user to verify before continuing:
+If any workspace is missing or its Claude session didn't auto-launch, print the recovery command and ask:
 
 ```bash
-cmux tree --json
-cmux list-panes --workspace "$WS_ID" --json | jq '[.[] | {id, title, worktree}]'
+# Missing example:
+# Recovery (manual): cmux send --workspace <missing-ref> -- "claude" && \
+#                    cmux send --workspace <missing-ref> Enter
 ```
 
-This phase may need manual adjustment on the first run of a new `cmux claude-teams` layout.
+The discovery commands for debugging:
+
+```bash
+cmux tree --all
+cmux list-panes --workspace <ref> --json | jq '[.panes[] | {ref, surface_refs, focused}]'
+cmux identify --json
+```
+
+### MODE=fallback (raw tmux)
+
+Panes are already pinned by cwd from the `tmux split-window -c` calls in Phase 5. Pane titles are set in Phase 5 too. No further setup needed — each pane's cwd is its worktree.
+
+### MODE=headless
+
+No panes/workspaces to verify. Skip this phase.
 
 ### MODE=fallback (raw tmux)
 

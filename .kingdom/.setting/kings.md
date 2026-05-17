@@ -217,23 +217,32 @@ See [`index.md`](index.md) → Session start for the detection logic that picks 
 
 ## Dispatching a task to a lane
 
-### Primary (`cmux send` via cmux.app)
+### Primary (`cmux send --workspace` via cmux.app)
+
+In PRIMARY mode each master owns its own workspace (see `commands/start.md` Phase 5). Workspace refs are persisted at `$LOGS/workspace-refs.env` (sourced by King at session start):
 
 ```bash
-HANDLE=$(cmux list-panes --workspace "$WS_ID" --json | jq -r '.[] | select(.title=="worker-1") | .id')
+source "$LOGS/workspace-refs.env"     # exposes KING_WS, WORKER_WS_1..N, COWORKER_WS_*, WATCHMAN_WS_*
+
 PROMPT="Claim sub-task <SUBTASK_ID> from <task-source>. Work it in this worktree.
 When you finish, run the 4-step closer (see workers.md):
   1) raw     -> $LOGS/raw/<ID>__opus-worker-1.md
   2) curated -> $LOGS/<ID>.md  (## TL;DR first)
   3) one-line status -> $LOGS/master_agent.log
   4) touch    $LOGS/done/<ID>__opus-worker-1.flag
-     ALSO run: cmux notify --pane <self> 'lane worker-1 done: <ID>'
-Spawn sub-agents freely (P1/P2/P3 chain, no eco cap). Sonnet for edits,
-Haiku for bulk reads, Opus only for sensitive files."
-cmux send --pane "$HANDLE" "$PROMPT"
+     ALSO run: cmux notify --workspace $KING_WS \\
+       --title '👑 ' --body 'lane worker-1 done: <ID>'
+Spawn sub-agents via Agent(...) by default (cheaper, no UI). Spawn as a
+tab (cmux tab-action --action new-terminal-right --workspace $WORKER_WS_1)
+ONLY when you want me to see the sub-agent work in real time. Tab-spawned
+sub-agents follow the 5-step closer (Step 5 = close own tab via
+cmux tab-action --action close --surface \$CMUX_SURFACE_ID)."
+
+cmux send --workspace "$WORKER_WS_1" -- "$PROMPT"
+cmux send --workspace "$WORKER_WS_1" Enter
 ```
 
-No `-l` flag, no Enter ceremony, no escaping fights.
+No `-l` flag, no Enter ceremony, no escaping fights. The workspace ref is stable across the session — King addresses lanes by `$WORKER_WS_N` not by pane title.
 
 ### Fallback (`tmux send-keys -l` via raw tmux)
 

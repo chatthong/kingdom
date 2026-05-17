@@ -67,6 +67,7 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/workers.md"    "$PWD/.kingdom/.setti
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/co-workers.md" "$PWD/.kingdom/.setting/co-workers.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/watchmans.md"  "$PWD/.kingdom/.setting/watchmans.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md"        "$PWD/.kingdom/.setting/git.md"
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cmux.md"       "$PWD/.kingdom/.setting/cmux.md"
 
 wc -l "$PWD/.kingdom/.setting/"*.md
 ```

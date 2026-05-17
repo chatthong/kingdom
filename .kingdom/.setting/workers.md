@@ -6,12 +6,25 @@ See [`index.md`](index.md) for entry-point context, [`kings.md`](kings.md) for w
 
 ---
 
+## Spawning sub-agents — Tab vs Agent decision
+
+A lane master spawns sub-agents in one of two ways. The choice is per-task, made by the master:
+
+| Choice | When to use | How |
+|---|---|---|
+| 🐱 **Agent (background, no UI)** | Default. Cheaper, no tab clutter, sentinel poll resolves them. Use for: planning fan-outs, Layer-1 Discovery scans, `/kingdom:update` specialists, Layer-3 parallel edits where visibility isn't needed. | `Agent(model="sonnet", prompt=…, run_in_background=true)` — Claude Code's native sub-agent call. |
+| 📑 **Tab (visible in master's workspace)** | Use when: (1) user explicitly says "show me", (2) the sub-agent is long-running (>5 min) and progress visibility matters, (3) debugging a stuck spawn. | `cmux tab-action --action new-terminal-right --workspace "$CMUX_WORKSPACE_ID"` then `cmux send --surface <new> -- "claude --model … -p …"`. Tab auto-closes via Step 5 of the 4-step closer (see below). |
+
+Default policy: **Agent for everything unless explicitly requested visible.** Override per-task via the master's dispatch logic (e.g., user said "watch worker-1 do BE-AUTH-3 — open it in a tab").
+
+---
+
 ## Worker lane role
 
 - **Generic autonomous task workers.** No preset focus, no path locks. Every worker starts as identical capacity — `worker-1` and `worker-2` are interchangeable. The King assigns each task at dispatch time; the same worker can be doing backend today and frontend tomorrow.
 - Lane master itself runs **Opus** by default (override per-lane in `kingdom.json.workers[i].model` if you want Sonnet for cost reasons). Executes via its own sub-agent fleet (P1 Sonnet / P2 Haiku / P3 Opus, unbounded parallel — see Spawn rights below).
 - **Domain-agnostic.** A worker can edit code, run financial-model checks, run lab notebooks, draft manuscripts — whatever the task brief describes. The kingdom's only assumption is that work is versioned in git.
-- Signals the King via the standard 4-step closer (raw + curated + log + sentinel flag).
+- Signals the King via the standard 4-step closer (raw + curated + log + sentinel flag). Sub-agents spawned as **Tabs** add Step 5 (auto-close own tab) — see § "5-step closer for tab-spawned sub-agents" below.
 - Cross-lane conflict prevention happens at the King's level — Layer 1 planning detects overlapping tasks before dispatch, and the FINAL `git merge-tree` check at the push gate catches anything that slipped through. Workers don't need configured `ownsPaths` to stay out of each other's way.
 
 ---
@@ -213,6 +226,16 @@ flowchart LR
 ```
 
 Master writes nothing under `<LOGS>/`. The worker is the only writer for its task's artifacts.
+
+### 5-step closer for tab-spawned sub-agents (PRIMARY mode only)
+
+When a master spawns a sub-agent as a **visible tab** (`cmux tab-action --action new-terminal-right …` — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
+
+5. **Close own tab** — `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` (the env var is auto-set in every cmux terminal)
+
+The tab self-destructs after the sentinel flag is written. The master doesn't need to clean up; the sidebar/tab-strip stays tidy automatically.
+
+For **Agent-spawned** sub-agents (the default — background, no UI), Step 5 is a no-op because `$CMUX_SURFACE_ID` isn't set in the Agent's process context.
 
 ### Required curated-artifact header (mandatory schema)
 
