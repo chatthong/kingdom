@@ -1,7 +1,7 @@
 {
   "name": "kingdom",
-  "version": "0.4.0",
-  "description": "Multi-agent orchestration kit for Claude Code: a King (Opus) coordinates workers, co-workers, and watchmen — each in its own git worktree on its own branch. Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable. /kingdom:update sweeps for drift; watchman does idle-time docs cleanup. Project-aware config, no extra runtime.",
+  "version": "0.5.0",
+  "description": "Multi-agent orchestration kit for Claude Code: a King (Opus) coordinates generic workers, co-workers, and watchmen — each in its own git worktree on its own branch. Workers are interchangeable capacity; King assigns task scope per-dispatch. Domain-agnostic: code, research, finance, science, manuscripts — anything you version in git. Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable.",
   "author": {
     "name": "kingdom contributors"
   },

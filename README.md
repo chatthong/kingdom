@@ -2,9 +2,9 @@
 
 # 👑 kingdom
 
-**One King. N workers. Auditable parallel coding with Claude Code.**
+**One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.4.0-success)
+![Version](https://img.shields.io/badge/version-0.5.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -52,6 +52,8 @@ graph TB
 ```
 
 A Claude Code plugin that turns one Claude session into a coordinated team — each lane in its own git worktree on its own branch. **You stay in one chat with the King.** The King runs gates, asks before every push, and writes audit artifacts you can grep next month. No new runtime, no daemons. Just Claude + git worktrees + a clean discipline.
+
+**Domain-agnostic by design.** Code, research, finance models, scientific notebooks, manuscripts — anything you version in git, the kingdom can orchestrate. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
 
 ---
 
@@ -201,11 +203,12 @@ Soft cap: total lanes ≤ `sanityCap` (default `10`). Past 10 the UI gets crampe
 
 **Declare ≠ launch.** `/kingdom:new` only *declares* the shape. Before running `/kingdom:start my-app`, open the generated `kingdom.json` and customise:
 
-- `workers[i].focus` + `ownsPaths` — what each worker owns (component label + file globs)
-- `gate.*` command lists — your project's typecheck / tests / smoke / lint (King runs these before every push)
+- `gate.*` command lists — what King runs before every push. Keys are arbitrary — dev stacks use `typecheck`/`tests`/`smoke`/`lint`; finance work might use `validate`/`audit`; science work might use `reproduce`/`peer-review`. Rename / add / remove freely.
 - `git.base` — your PR target branch (default `develop`; many repos use `main`)
 
-> **Re-running `/kingdom:new` on an existing project** is safe — it shows the existing config and asks before overwriting. Useful for bumping the shape without blowing away your `ownsPaths` / `gate.*` customisations.
+That's the entire customisation surface. **Workers are generic capacity** — no preset focus or path locks. The King assigns each task at dispatch time (see [`kings.md`](.kingdom/.setting/kings.md) → "Dispatch brief schema"), so `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, financial-model audit the day after.
+
+> **Re-running `/kingdom:new` on an existing project** shows the existing config and asks before overwriting. Re-running replaces the whole file — back up your `gate.*` customisations first if you've filled them in.
 
 ---
 

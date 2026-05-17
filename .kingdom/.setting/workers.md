@@ -8,10 +8,11 @@ See [`index.md`](index.md) for entry-point context, [`kings.md`](kings.md) for w
 
 ## Worker lane role
 
-- Autonomous task workers. Each lane master picks an unclaimed sub-task from the project's task source (declared in `kingdom.json.taskSource` — CSV path, GH issues filter, Linear project ID, etc.).
-- Lane focus (which component a worker owns) is configured per project via `kingdom.json.workers[i].focus` + `ownsPaths`. The King uses these to match claimable sub-tasks to lanes.
-- Lane master itself runs **Opus** (high-quality coding inside the lane). Executes via its own sub-agent fleet (P1 Sonnet / P2 Haiku / P3 Opus, unbounded parallel — see Spawn rights below).
+- **Generic autonomous task workers.** No preset focus, no path locks. Every worker starts as identical capacity — `worker-1` and `worker-2` are interchangeable. The King assigns each task at dispatch time; the same worker can be doing backend today and frontend tomorrow.
+- Lane master itself runs **Opus** by default (override per-lane in `kingdom.json.workers[i].model` if you want Sonnet for cost reasons). Executes via its own sub-agent fleet (P1 Sonnet / P2 Haiku / P3 Opus, unbounded parallel — see Spawn rights below).
+- **Domain-agnostic.** A worker can edit code, run financial-model checks, run lab notebooks, draft manuscripts — whatever the task brief describes. The kingdom's only assumption is that work is versioned in git.
 - Signals the King via the standard 4-step closer (raw + curated + log + sentinel flag).
+- Cross-lane conflict prevention happens at the King's level — Layer 1 planning detects overlapping tasks before dispatch, and the FINAL `git merge-tree` check at the push gate catches anything that slipped through. Workers don't need configured `ownsPaths` to stay out of each other's way.
 
 ---
 
@@ -28,7 +29,7 @@ echo "worker-1 | $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOGS/claims/$SUBTASK_ID.lan
 - Cleared when the lane's PR is merged
 - King checks `<LOGS>/claims/` before picking any new task — if a claim exists, skip that sub-task
 
-Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt.
+Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt — see [`kings.md`](kings.md) → "Dispatch brief schema" for what King sends to each worker.
 
 ---
 

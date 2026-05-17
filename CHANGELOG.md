@@ -4,6 +4,32 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.5.0] — 2026-05-17
+
+The "generic workers, any domain" release. Workers are no longer pre-specialised — every worker is identical capacity. King assigns task scope at dispatch time. Bonus: the kit is now explicitly domain-agnostic — code, research, finance, science, manuscripts.
+
+### Changed
+
+- **Workers are generic capacity.** Removed `workers[i].focus` and `workers[i].ownsPaths` from `kingdom.json` (and the same for `coworkers[i]`). Every worker starts identical; `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, finance-model audit the day after.
+- **King assigns task scope per dispatch**, not per config. New "Dispatch brief schema" section in `kings.md` documents what King sends each worker. Cross-lane conflict prevention shifted entirely to (a) King's Layer-1 planning (sub-agents scan candidate task overlap) + (b) FINAL `git merge-tree` check at push gate. The combination replaces what `ownsPaths` did in v0.4.0 without the path-staleness problem.
+- **`gate.*` keys are now explicitly arbitrary.** Template still ships `typecheck`/`tests`/`smoke`/`lint` as dev-friendly defaults, but role docs + template comments make clear the keys are user-defined. Finance kingdoms use `validate`/`audit`; science kingdoms use `reproduce`/`peer-review`; writing kingdoms use `spellcheck`/`fact-check`. Same `kingdom.json` schema, different vocabulary.
+- **Domain-agnostic framing.** README hero + tagline + workers.md now state explicitly: kingdom works for any domain that uses git for versioning, not just software dev.
+- **`kingdom.json.template` simplified.** Per-lane entries now have only `slug` + `model` (was: `slug` + `model` + `focus` + `ownsPaths`). Significantly smaller, faster to read.
+
+### Compatibility notes
+
+- **Breaking** for anyone who has filled in `workers[i].focus` or `workers[i].ownsPaths` in their `kingdom.json` for v0.4.0 or earlier. Migration:
+  ```bash
+  # Open .kingdom/<project>/kingdom.json
+  # Delete every "focus" and "ownsPaths" key from workers[] and coworkers[]
+  # Leave shape + git + gate untouched
+  ```
+  No re-install needed; the schema change is read-side only.
+- **Non-breaking** for v0.4.0 users who did NOT customise focus/ownsPaths.
+- **Behavioural change:** King now writes scope into each dispatch brief (lives in the task file at `tasks/<UTC>__<lane>__<id>.md`, not in `kingdom.json`). Audit trail is per-task instead of per-config — finer-grained, no staleness.
+
+---
+
 ## [0.4.0] — 2026-05-17
 
 The "rename" release. Drops the `claude-` prefix everywhere — plugin name, marketplace name, GitHub repo, and command names. Slash commands now read `/kingdom:doctor` instead of `/claude-kingdom:kingdom-doctor`.

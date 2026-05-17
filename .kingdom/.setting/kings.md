@@ -97,6 +97,44 @@ Slugs for planning fan-out: `king-plan-survey`, `king-plan-files-be`, `king-plan
 
 ---
 
+## Dispatch brief schema (what King sends each worker)
+
+Workers are generic capacity — no preset `focus` or `ownsPaths` in `kingdom.json`. The King's dispatch brief is what tells a worker what to do for THIS task. Same worker can do backend today, frontend tomorrow, finance model audit the day after.
+
+Minimum brief contents:
+
+```text
+worker-1, task <sub-task-id>:
+
+  Brief:        <2-4 lines — what to do + acceptance criteria>
+  Source link:  <CSV row / GH issue URL / file path / anything pointing to the canonical task spec>
+  Gate:         runs kingdom.json.gate.* after completion (standard)
+  Closer:       4-step (raw + curated + log + sentinel flag) per workers.md
+  Task file:    Step 0 — write <workspace>/.kingdom/<project>/tasks/<UTC>__worker-1__<id>.md before any sub-agent dispatch
+```
+
+**No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:
+
+1. **Planning (Layer 1 of King's own task file)** — King's planning sub-agents scan each candidate task's likely file impact. If two candidate tasks overlap, King either serialises them (assign to same worker as task #1 then task #2) or splits the file set explicitly in each brief.
+2. **FINAL conflict check at push gate** — after Ter's "push" OK, King runs `git merge-tree --write-tree --no-messages origin/develop <role>-<n>` to dry-merge against the latest `origin/develop`. If conflicts, push is blocked.
+
+Together these replace what `ownsPaths` did in v0.4.0 — without the staleness problem (paths drift; workers stay generic).
+
+### Domain notes
+
+The brief format is the same regardless of what kind of work the kingdom is doing. For non-code work, swap the gate vocabulary accordingly in `kingdom.json.gate.*`:
+
+| Domain | Example `gate.*` keys |
+|---|---|
+| Software dev | `typecheck`, `tests`, `smoke`, `lint` |
+| Finance / analysis | `validate`, `audit`, `cross-check`, `format` |
+| Science / research | `reproduce`, `peer-review`, `lint-notebook`, `data-integrity` |
+| Writing / docs | `spellcheck`, `fact-check`, `link-check`, `style` |
+
+Keys are arbitrary; the King runs each list as bash commands inside the lane's worktree before approving a push.
+
+---
+
 ## Spawning the kingdom — PRIMARY path (manaflow/cmux.app + claude-teams)
 
 Done once at the start of a kingdom session. Idempotent. Reads shape from `kingdom.json`.

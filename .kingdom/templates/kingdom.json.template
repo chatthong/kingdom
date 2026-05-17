@@ -1,5 +1,5 @@
 {
-  "_comment": "Kingdom config for this project. Read by the King at /kingdom-start to determine shape, focus, and gate commands. Static config only — dynamic state lives in adjacent dirs: logs/ (raw/curated/log/flag artifacts via 4-step closer), tasks/ (per-task multi-layer plans + checkbox progress + final summaries; one file per task, written by lane master, read-only for everyone else).",
+  "_comment": "Kingdom config for this project. Read by the King at /kingdom:start. Workers/co-workers are GENERIC capacity — no preset focus or path locks. King assigns each task at dispatch time. Domain-agnostic: works for code, research, finance, science, manuscripts, anything you version with git.",
 
   "shape": {
     "workers": 3,
@@ -16,66 +16,24 @@
   },
 
   "workers": [
-    {
-      "name": "worker-1",
-      "model": "opus",
-      "focus": "backend",
-      "ownsPaths": [
-        "apps/backend/**",
-        "scripts/backend/**"
-      ]
-    },
-    {
-      "name": "worker-2",
-      "model": "opus",
-      "focus": "frontend",
-      "ownsPaths": [
-        "apps/frontend/**",
-        "packages/ui/**"
-      ]
-    },
-    {
-      "name": "worker-3",
-      "model": "opus",
-      "focus": "ops",
-      "ownsPaths": [
-        "infra/**",
-        "scripts/ops/**",
-        ".github/workflows/**"
-      ]
-    }
+    { "slug": "worker-1", "model": "opus" },
+    { "slug": "worker-2", "model": "opus" },
+    { "slug": "worker-3", "model": "opus" }
   ],
 
   "coworkers": [
-    {
-      "name": "co-worker-1",
-      "model": "opus",
-      "focus": "interactive paired work (UI iteration, design exploration, ad-hoc investigation)"
-    }
+    { "slug": "co-worker-1", "model": "opus" }
   ],
 
   "watchmen": [
-    {
-      "name": "watchman-1",
-      "model": "sonnet",
-      "cadence": "dynamic",
-      "watches": ["origin/develop", "all open PRs in this repo"]
-    }
+    { "slug": "watchman-1", "model": "sonnet", "cadence": "dynamic", "docsAudit": true }
   ],
 
   "gate": {
-    "_comment": "King runs these inside the lane's worktree as the pre-commit gate. Replace with your project's actual commands. Categories are universal; commands are project-specific.",
-    "typecheck": [
-      "pnpm -r typecheck"
-    ],
-    "tests": [
-      "pnpm -r test"
-    ],
-    "smoke": [
-      "echo 'add your smoke command here'"
-    ],
-    "lint": [
-      "pnpm -r lint"
-    ]
+    "_comment": "King runs these inside the lane's worktree before approving a push. Keys are arbitrary — rename, add, or remove to fit your domain. Defaults below assume a dev stack; for finance use 'validate' / 'audit', for science 'reproduce' / 'peer-review', for writing 'spellcheck' / 'fact-check'. Each value is a list of bash commands.",
+    "typecheck": [],
+    "tests": [],
+    "smoke": [],
+    "lint": []
   }
 }
