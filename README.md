@@ -47,11 +47,14 @@ A Claude Code plugin that turns one Claude session into a coordinated team — e
 
 ## 🚀 Install (30 seconds)
 
-In **any** Claude Code session:
+In **any** Claude Code session, register the marketplace then install the plugin:
 
 ```
-/plugin install github.com/chatthong/claude-kingdom
+/plugin marketplace add chatthong/claude-kingdom
+/plugin install claude-kingdom@claude-kingdom
 ```
+
+> First command adds this repo as a marketplace; second installs the plugin from it (plugin-name @ marketplace-name). Local-path install also works for development: `/plugin install /path/to/claude-kingdom`.
 
 Then run the doctor to verify your machine:
 
