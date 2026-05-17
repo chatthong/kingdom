@@ -54,6 +54,53 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/watchmans.md"  "$PWD/.kingdom/.setti
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md"        "$PWD/.kingdom/.setting/git.md"
 ```
 
+## Step 4.5 — Ensure workspace `.claude/settings.json` has sub-agent permissions
+
+Background sub-agents (used by `/kingdom:update`'s parallel fan-out, by worker dispatches, by watchman alerts, etc.) need an explicit `permissions.allow` list in the workspace-scoped `.claude/settings.json` or they stall on permission prompts that nobody sees. Set this up at scaffold time so the kingdom is usable on first dispatch.
+
+Read the current state:
+```bash
+WS_SETTINGS="$PWD/.claude/settings.json"
+mkdir -p "$PWD/.claude"
+[ -f "$WS_SETTINGS" ] || echo '{}' > "$WS_SETTINGS"
+cat "$WS_SETTINGS"
+```
+
+Check whether `permissions.allow` already includes `Bash, Read, Write, Edit, Grep, Glob, Agent`:
+```bash
+REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent"]'
+HAS_ALL=$(jq --argjson req "$REQUIRED" '
+  if .permissions.allow then ($req - .permissions.allow | length == 0) else false end
+' "$WS_SETTINGS")
+```
+
+If `HAS_ALL` is `true`, report: "`.claude/settings.json` permissions OK — skipping."
+
+If `HAS_ALL` is `false`, show the diff and ask:
+
+```
+Proposed change to .claude/settings.json (workspace-scoped):
+
++ permissions.allow ← merge in [Bash, Read, Write, Edit, Grep, Glob, Agent]
+
+Apply? [y/N]
+```
+
+On `y`, merge with `jq` (preserves any existing keys + dedupes):
+```bash
+tmp=$(mktemp)
+jq '.permissions.allow = (((.permissions.allow // []) + ["Bash","Read","Write","Edit","Grep","Glob","Agent"]) | unique)' \
+  "$WS_SETTINGS" > "$tmp" && mv "$tmp" "$WS_SETTINGS"
+```
+
+Then verify and print the result:
+```bash
+jq '.permissions' "$WS_SETTINGS"
+```
+
+On `N`, warn:
+> ⚠️ Skipped. `/kingdom:update` and `/kingdom:start` background sub-agents will stall on permission prompts. Re-run `/kingdom:doctor` and approve Check 10 to fix.
+
 ## Step 5 — Report what was created
 
 For each file, print its path and line count:

@@ -4,6 +4,26 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.10.0] — 2026-05-18
+
+The "settings permissions + branch tree polish" release. Fixes a real failure mode where background sub-agents stalled silently because workspace `.claude/settings.json` had no `permissions.allow` list. Also polishes the README branch model diagram and fixes a stale config example.
+
+### Added
+
+- **`/kingdom:doctor` Check 10 — Workspace `.claude/settings.json` permissions.** Verifies the workspace-scoped settings file has `permissions.allow ⊇ {Bash, Read, Write, Edit, Grep, Glob, Agent}`. Without this, background sub-agents spawned by `/kingdom:update`'s parallel fan-out, by worker dispatches, by watchman alerts, etc., stall on permission prompts that nobody sees — sentinels never appear, audits never complete. Auto-patches with `jq` after user approval; preserves any existing keys; dedupes the allow-list.
+- **`/kingdom:init` Step 4.5 — Workspace permissions scaffold.** Same check + patch as doctor's Check 10, but runs at scaffold time so the kingdom is usable on first dispatch without a separate doctor visit. Asks before writing.
+
+### Changed
+
+- **README hero branch diagram** — was a minimal abstract sketch (worker-1..N → feature/topic with one arrow). Now shows a concrete worked example: 3 features in flight (`feature/auth-refactor` from worker-1, `feature/checkout-flow` from co-worker-1, `feature/db-migrate` from worker-2) with every transition labelled: `git fetch + merge` (develop → kingdom), `git worktree add` (kingdom → lanes), `King carves + push + gh pr create` (lane → feature), `PR review → squash merge` (feature → develop), `release cycle` (develop → main). Uses role emojis (👑 👷 🧑‍💼 🕵️). Adds a "What lives where" table summarising each branch's lifetime + writer + whether it reaches origin.
+- **README configure example** — stale v0.4-era config with `workers[i].focus` + `ownsPaths` removed (those were deprecated in v0.5.0 — workers are now generic capacity). Example now shows the actual current schema: `workers: [{slug, model}]`, `coworkers: [{slug, model}]`, `watchmen: [{slug, model, docsAudit}]`.
+
+### Why this matters
+
+Real failure: a user ran `/kingdom:update bfg-swt`, the Lead dispatched 4 parallel specialists in background, and nothing ever completed. Workspace `.claude/settings.json` was empty `{}` — every Bash call from each specialist hit a permission prompt, but background mode doesn't surface them. Sentinels never wrote. The fix (add `permissions.allow`) is one line of JSON; the cost of forgetting it is total system stall. Now both `/kingdom:init` and `/kingdom:doctor` check it.
+
+---
+
 ## [0.9.0] — 2026-05-18
 
 The "fan out the audit, stop waiting" release. Restructures `/kingdom:update` from "Lead does steps 3.1-3.7 sequentially" to "Lead spawns 4 specialists in parallel, then synthesizes gaps". Target wall-clock: under 2 minutes for typical mid-size projects (was ~5 min sequential).

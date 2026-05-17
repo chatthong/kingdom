@@ -293,9 +293,85 @@ Mark ✅ (not applicable) if no `.kingdom/*/kingdom.json` files exist yet.
 
 ---
 
+## Check 10 — Workspace `.claude/settings.json` permissions (background sub-agents)
+
+Background sub-agents (spawned by `/kingdom:update`'s Lead + specialists, by Workers' fan-outs, etc.) need an explicit `permissions.allow` list in the **workspace-scoped** `.claude/settings.json` (NOT user-global). Without it, every Bash / Edit / Agent call from a background agent prompts indefinitely and fan-outs stall silently.
+
+Real failure mode you'd see: `/kingdom:update` dispatches specialists, then nothing ever completes — sentinels never appear because each sub-agent is stuck on a permission prompt that no one sees.
+
+```bash
+WS_SETTINGS="$PWD/.claude/settings.json"
+
+# 1. File exists?
+if [ ! -f "$WS_SETTINGS" ]; then
+  echo "missing — kingdom workspace needs $WS_SETTINGS"
+  STATE=missing
+elif [ ! -s "$WS_SETTINGS" ] || ! jq empty "$WS_SETTINGS" 2>/dev/null; then
+  echo "empty or invalid JSON — needs the permissions block"
+  STATE=invalid
+else
+  # 2. permissions.allow includes the kingdom-essential tools?
+  REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent"]'
+  HAS_ALL=$(jq --argjson req "$REQUIRED" '
+    if .permissions.allow then ($req - .permissions.allow | length == 0) else false end
+  ' "$WS_SETTINGS")
+  if [ "$HAS_ALL" = "true" ]; then
+    STATE=ok
+    echo "✅ permissions.allow contains Bash/Read/Write/Edit/Grep/Glob/Agent"
+  else
+    STATE=incomplete
+    echo "⚠️  permissions.allow missing one or more of Bash/Read/Write/Edit/Grep/Glob/Agent"
+  fi
+fi
+```
+
+- ✅ if `STATE=ok`.
+- ⚠️ if `STATE=missing` / `invalid` / `incomplete` — show this proposed file content + diff + ask before writing:
+
+  ```json
+  {
+    "enabledPlugins": {},
+    "permissions": {
+      "allow": [
+        "Bash",
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Agent"
+      ]
+    }
+  }
+  ```
+
+  Print exactly:
+  ```
+  Proposed change to .claude/settings.json (workspace-scoped):
+
+  + permissions.allow = [Bash, Read, Write, Edit, Grep, Glob, Agent]
+
+  Apply? [y/N]
+  ```
+
+  On `y`: merge the permissions into the existing JSON (or write fresh if missing/invalid). Use `jq` to preserve any other keys:
+
+  ```bash
+  tmp=$(mktemp)
+  [ -f "$WS_SETTINGS" ] || echo '{}' > "$WS_SETTINGS"
+  jq '.permissions.allow = (((.permissions.allow // []) + ["Bash","Read","Write","Edit","Grep","Glob","Agent"]) | unique)' \
+    "$WS_SETTINGS" > "$tmp" && mv "$tmp" "$WS_SETTINGS"
+  ```
+
+  Then report ✅ applied. On `N`: ⚠️ skipped — warn the user that `/kingdom:update` and `/kingdom:start` will stall on background sub-agent prompts.
+
+**Important scope:** this is the **workspace-local** `.claude/settings.json` (`$PWD/.claude/settings.json`), NOT the user-global `~/.claude/settings.json` (which Check 6 handles). The two are independent — both must be correct.
+
+---
+
 ## Final Summary
 
-After all 9 checks (including any patch outcomes for Check 6), print a single summary block.
+After all 10 checks (including any patch outcomes for Check 6 + Check 10), print a single summary block.
 
 Count results:
 - ✅ = green (met or patched)

@@ -4,7 +4,7 @@
 
 **One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.9.0-success)
+![Version](https://img.shields.io/badge/version-0.10.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -256,34 +256,73 @@ The leaves of the tree. Spawned by the King (for planning) or by any master (for
 
 ## 🌳 Branch model
 
-Five 🏠 LOCAL-ONLY branches never leave your laptop. Only `feature/<topic>` reaches origin.
+Five 🖥️ LOCAL-only branches never leave your laptop. Only `feature/<topic>` ever reaches origin. The King is the **sole pusher** — lanes are private workshops, features are the public surface.
+
+### Worked example — 3 lanes in flight
 
 ```mermaid
-graph LR
-    subgraph ONLINE ["⬆ ONLINE (origin)"]
-        main([main\nprotected · prod])
-        develop([develop\nlead-controlled PR target])
-        feature([feature/topic\nKing pushes · deleted after merge])
+graph TB
+    subgraph ONLINE ["☁️ ONLINE — origin, visible to your team"]
+        direction TB
+        MAIN([main<br/>🔒 protected · production])
+        DEV([develop<br/>👥 lead-controlled · PR target])
+        F1([feature/auth-refactor<br/>📤 from 👷 worker-1])
+        F2([feature/checkout-flow<br/>📤 from 🧑‍💼 co-worker-1])
+        F3([feature/db-migrate<br/>📤 from 👷 worker-2])
     end
 
-    subgraph LOCAL ["🏠 LOCAL (laptop only)"]
-        kingdom([kingdom\nKing's integration view\ndevelop ⊕ all lane tips])
-        workers([worker-1..N\nlane work surfaces\nreset per PR])
-        coworkers([co-worker-1..M\nyour paired lanes])
-        watchmen([watchman-1..K\ntracks origin/develop tip\nreset every /loop tick])
+    subgraph LOCAL ["🖥️ LOCAL — laptop only, never pushed"]
+        direction TB
+        K([👑 kingdom<br/>integration view<br/>develop ⊕ all lane tips])
+        W1([👷 worker-1<br/>BE-AUTH-3])
+        W2([👷 worker-2<br/>OPS-DB-7])
+        W3([👷 worker-3<br/>idle])
+        CW1([🧑‍💼 co-worker-1<br/>UI-CHK-12 · paired])
+        WM1([🕵️ watchman-1<br/>tracks origin/develop])
     end
 
-    workers -- "carved at push time ⬆" --> feature
+    DEV -.->|"git fetch + merge<br/>(/kingdom:start, /kingdom:update)"| K
+    K -.->|"git worktree add<br/>from origin/develop"| W1 & W2 & W3 & CW1 & WM1
 
-    classDef online stroke:#6366f1,stroke-width:1px
-    classDef local  stroke:#10b981,stroke-width:1px
-    class main,develop,feature online
-    class kingdom,workers,coworkers,watchmen local
+    W1 ==>|"👑 King carves<br/>git push + gh pr create"| F1
+    CW1 ==>|"same flow"| F2
+    W2 ==>|"same flow"| F3
+
+    F1 & F2 & F3 ==>|"PR review →<br/>squash merge"| DEV
+    DEV ==>|"release cycle"| MAIN
+
+    classDef online stroke:#6366f1,stroke-width:2px,fill:#eef2ff,color:#1e1b4b
+    classDef local stroke:#10b981,stroke-width:2px,fill:#ecfdf5,color:#064e3b
+    classDef protected stroke:#dc2626,stroke-width:3px,fill:#fef2f2,color:#7f1d1d
+    classDef feature stroke:#f59e0b,stroke-width:1.5px,fill:#fffbeb,color:#78350f
+
+    class MAIN protected
+    class DEV online
+    class F1,F2,F3 feature
+    class K,W1,W2,W3,CW1,WM1 local
 ```
 
-PR surface (`feature/*`) is **decoupled** from work surface (`worker-N`). Lane numbers are slot identities — they reset between PRs. PR branches are descriptive + one-shot. The King carves a fresh `feature/<topic>` at push time and deletes it after merge.
+### What lives where
 
-Full diagram + commit flow: [`git.md`](.kingdom/.setting/git.md).
+| Branch | Lives | Lifetime | Touched by | Reaches origin? |
+|---|---|---|---|---|
+| `main` | online (protected) | permanent | release manager | ✅ origin/main |
+| `develop` | online | permanent | lead via PR merge | ✅ origin/develop |
+| `feature/<topic>` | online | one PR, then deleted | 👑 King (carve + push + PR) | ✅ origin/feature/* |
+| `kingdom` | local only | permanent | 👑 King (fetch + merge from origin/develop) | ❌ never |
+| `worker-N` | local only | slot identity — reset per PR | 👷 worker-N | ❌ never |
+| `co-worker-N` | local only | slot identity — reset per PR | 🧑‍💼 co-worker-N | ❌ never |
+| `watchman-N` | local only | reset every `/loop` tick to `origin/develop` | 🕵️ watchman-N (read-only) | ❌ never |
+
+### The two-surface decoupling
+
+**Work surface** (`worker-N`, `co-worker-N`) — long-lived local slots. They get hard-reset to a fresh tip per PR, but the slot itself persists across many tasks. Same `worker-1` does BE-AUTH-3 this week and FE-ICONS-9 next week.
+
+**PR surface** (`feature/<topic>`) — one PR, one branch. Carved fresh at push time, deleted after merge. The branch name is descriptive (`feature/auth-refactor`, not `feature/worker-1-week-15`) so reviewers see what they're reviewing, not who.
+
+This decoupling means lane numbers are **operational identifiers** (which tmux pane, which worktree directory) — not **content identifiers**. The repo history stays clean because no `worker-N` ever leaves the laptop.
+
+Full commit flow + push gate + FINAL conflict check: [`git.md`](.kingdom/.setting/git.md).
 
 ---
 
@@ -295,11 +334,11 @@ Full diagram + commit flow: [`git.md`](.kingdom/.setting/git.md).
 {
   "shape": { "workers": 3, "co-workers": 1, "watchman": 1, "sanityCap": 10 },
   "git":   { "base": "develop", "integrationBranch": "kingdom", "pushPolicy": "always-ask" },
-  "workers": [
-    { "name": "worker-1", "focus": "backend",  "ownsPaths": ["apps/api/**", "lib/auth/**"] },
-    { "name": "worker-2", "focus": "frontend", "ownsPaths": ["apps/web/**", "packages/ui/**"] },
-    { "name": "worker-3", "focus": "ops",      "ownsPaths": ["infra/**", ".github/workflows/**"] }
-  ],
+  "workers":   [ { "slug": "worker-1", "model": "opus" },
+                 { "slug": "worker-2", "model": "opus" },
+                 { "slug": "worker-3", "model": "opus" } ],
+  "coworkers": [ { "slug": "co-worker-1", "model": "opus" } ],
+  "watchmen":  [ { "slug": "watchman-1", "model": "sonnet", "docsAudit": true } ],
   "gate": {
     "typecheck": ["pnpm -r typecheck"],
     "tests":     ["pnpm -r test", "pytest -q"],
@@ -310,9 +349,11 @@ Full diagram + commit flow: [`git.md`](.kingdom/.setting/git.md).
 ```
 
 The King reads this at `/kingdom:start` to:
-- Spawn the right number of lanes
-- Match claimable sub-tasks to lanes by `focus` + `ownsPaths`
+- Spawn the right number of lanes (`shape` counts)
+- Pick a model per lane (Opus for masters, Sonnet for watchman — override if you want cheaper)
 - Run YOUR exact gate commands inside each lane's worktree before any PR
+
+> **Workers are generic.** No per-worker `focus` or `ownsPaths` — the King assigns scope at dispatch time (any worker can do any task; same worker does backend today, frontend tomorrow). `gate.*` keys are arbitrary — rename for non-dev domains (`validate`/`audit` for finance, `reproduce`/`peer-review` for science).
 
 ---
 
