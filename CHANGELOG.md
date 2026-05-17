@@ -4,6 +4,35 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.11.0] — 2026-05-18
+
+The "one init to rule them all" release. Consolidates `/kingdom:init` (workspace) + `/kingdom:new` (project) into a single smart `/kingdom:init` that handles both layers args-driven. One fewer command in the kit.
+
+### Changed
+
+- **`/kingdom:init` now does both workspace + project scaffolding.** Args determine which mode:
+  - `/kingdom:init` (no args) — workspace layer only: `.kingdom/.setting/` role docs + `.claude/settings.json` permissions allow-list (the Step 4.5 check from v0.10.0).
+  - `/kingdom:init <project>` — workspace scaffold (if missing) + project layer: `.kingdom/<project>/kingdom.json` + `tasks/` + `logs/`. Optional `workers=N co-workers=M watchman=K base=<branch>` shape overrides.
+  - Idempotent in both modes — re-running on existing scaffolding prints status without overwriting unless explicitly confirmed.
+- **README install/setup flow simplified.** The 90-second setup section now shows `/kingdom:init my-app` as a single call that handles both layers, with a callout for users who want to run them separately. Slash command table consolidated.
+- **All cross-references updated** — `commands/start.md`, `commands/update.md`, `commands/doctor.md`, `.kingdom/.setting/*.md` swept for `/kingdom:new` → `/kingdom:init` where appropriate. CHANGELOG historical entries (pre-v0.11) keep the original `/kingdom:new` names since they describe past releases.
+
+### Removed
+
+- **`/kingdom:new`** — retired. Its functionality is now under `/kingdom:init <project>`. The file `commands/new.md` is deleted from the plugin. Any scripts / aliases / muscle memory pointing at `/kingdom:new` need to update to `/kingdom:init <project>`.
+
+### Compatibility notes
+
+- **Breaking** for anyone with scripts or aliases pointing at `/kingdom:new`. Migration is a search/replace — same arg syntax (`<project> workers=N co-workers=M watchman=K base=<branch>`), just a different command name.
+- **Non-breaking** for `kingdom.json` schema — same template, same fields.
+- **Non-breaking** for the workspace + project scaffold output — same file layout (`.kingdom/.setting/`, `.kingdom/<project>/{kingdom.json,tasks/,logs/}`, `.claude/settings.json` permissions).
+
+### Why this matters
+
+Two-step setup (`init` then `new`) was an artificial split that surfaced "wait, which one do I run?" friction every time. One command, two args-driven modes — fewer things to remember, same end state, idempotent re-runs.
+
+---
+
 ## [0.10.0] — 2026-05-18
 
 The "settings permissions + branch tree polish" release. Fixes a real failure mode where background sub-agents stalled silently because workspace `.claude/settings.json` had no `permissions.allow` list. Also polishes the README branch model diagram and fixes a stale config example.

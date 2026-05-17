@@ -135,12 +135,12 @@ done
 - ✅ if all projects print `OK` (directory exists or was created successfully).
 - ⚠️ if any project prints `FAIL` — filesystem permissions prevent creation. Report the affected project path and stop; do not auto-fix.
 
-Note: this is an informational check — the `tasks/` directory is auto-created by `/kingdom:new` and `/kingdom:start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
+Note: this is an informational check — the `tasks/` directory is auto-created by `/kingdom:init <project>` and `/kingdom:start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
 
 If no `.kingdom/*/kingdom.json` files exist yet (kingdom not yet initialised), print:
 
 ```
-No kingdom.json found — tasks/ check skipped (run /kingdom:new first).
+No kingdom.json found — tasks/ check skipped (run /kingdom:init first).
 ```
 
 and mark this check ✅ (not applicable).

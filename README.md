@@ -4,7 +4,7 @@
 
 **One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.10.0-success)
+![Version](https://img.shields.io/badge/version-0.11.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -115,28 +115,32 @@ cd ~/code/my-workspace
 claude                   # launch Claude Code AT THE WORKSPACE ROOT
 ```
 
-Inside Claude, scaffold once per workspace:
+Inside Claude, scaffold the workspace (once) AND your first project — same command, args-driven:
 
 ```
-/kingdom:init
+/kingdom:init my-app
 ```
 
-Creates `.kingdom/.setting/` with the 6 role docs. **Run once; never again** unless the role specs change.
+This single call does **both** layers:
+- **Workspace layer** (once per workspace): creates `.kingdom/.setting/` with the 6 role docs + verifies `.claude/settings.json` has the sub-agent permissions allow-list.
+- **Project layer** (per project): creates `.kingdom/my-app/kingdom.json` + `.kingdom/my-app/{logs,tasks}/`. Default shape: **3 workers + 1 co-worker + 1 watchman**.
 
-Then create a config per project:
+Or run them separately if you prefer:
 
 ```
-/kingdom:new my-app
+/kingdom:init                # workspace layer only
+/kingdom:init my-app         # project layer (workspace done already)
+/kingdom:init other-app      # another project, same workspace
 ```
 
-Creates `.kingdom/my-app/kingdom.json` + `.kingdom/my-app/{logs,tasks}/`. Default shape: **3 workers + 1 co-worker + 1 watchman**.
+Idempotent — re-running on existing scaffolding just prints status.
 
 ---
 
-## `/kingdom:new` — pick your shape
+## `/kingdom:init <project>` — pick your shape
 
 ```
-/kingdom:new <project> [workers=N] [co-workers=M] [watchman=K]
+/kingdom:init <project> [workers=N] [co-workers=M] [watchman=K]
 ```
 
 Each parameter is independent — set what you need, the rest fall to defaults.
@@ -144,7 +148,7 @@ Each parameter is independent — set what you need, the rest fall to defaults.
 #### 🏢 Mid-size project — the default
 
 ```
-/kingdom:new my-app
+/kingdom:init my-app
 ```
 
 Equivalent to `workers=3 co-workers=1 watchman=1`. One worker per component (backend / frontend / ops), one paired lane reserved for you, one watchman over everything. **Start here unless you have a specific reason not to.**
@@ -152,7 +156,7 @@ Equivalent to `workers=3 co-workers=1 watchman=1`. One worker per component (bac
 #### 🏭 Large project — specialized workers
 
 ```
-/kingdom:new my-app workers=5 co-workers=2 watchman=1
+/kingdom:init my-app workers=5 co-workers=2 watchman=1
 ```
 
 Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two paired tracks (e.g., design exploration + content review), one watchman. Useful when one developer is steering many concurrent threads.
@@ -160,7 +164,7 @@ Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two 
 #### 🚀 Solo side-project — single autonomous lane
 
 ```
-/kingdom:new my-app workers=1 co-workers=0 watchman=0
+/kingdom:init my-app workers=1 co-workers=0 watchman=0
 ```
 
 One worker, no monitoring, no paired track. Best for rapid prototypes or one-person repos where parallelism + audit overhead isn't worth it.
@@ -168,7 +172,7 @@ One worker, no monitoring, no paired track. Best for rapid prototypes or one-per
 #### 🎨 UI-heavy day — everything paired
 
 ```
-/kingdom:new my-app workers=0 co-workers=2 watchman=1
+/kingdom:init my-app workers=0 co-workers=2 watchman=1
 ```
 
 No autonomous work — every lane is paired with you (e.g., redesigning the navbar in `co-worker-1` while iterating on the checkout flow in `co-worker-2`). One watchman keeps you informed of anything moving on `develop`.
@@ -176,7 +180,7 @@ No autonomous work — every lane is paired with you (e.g., redesigning the navb
 #### 🌙 Unattended overnight — autonomous + heavy monitoring
 
 ```
-/kingdom:new my-app workers=3 co-workers=0 watchman=2
+/kingdom:init my-app workers=3 co-workers=0 watchman=2
 ```
 
 Three workers grinding a sub-task queue; two watchmen (one on backend smoke, one on frontend smoke). No paired track — you're not at the keyboard. `WATCH_*.md` reports give you the morning recap.
@@ -195,20 +199,20 @@ Soft cap: total lanes ≤ `sanityCap` (default `10`). Past 10 the UI gets crampe
 
 ---
 
-### What happens when you run `/kingdom:new`
+### What happens when you run `/kingdom:init <project>`
 
 1. **Creates** `.kingdom/<project>/kingdom.json` from the template, shape pre-filled.
 2. **Creates** `.kingdom/<project>/{logs,tasks}/` directories — the audit-trail homes.
 3. **Prints** the resulting JSON for you to review.
 
-**Declare ≠ launch.** `/kingdom:new` only *declares* the shape. Before running `/kingdom:start my-app`, open the generated `kingdom.json` and customise:
+**Declare ≠ launch.** `/kingdom:init <project>` only *declares* the shape. Before running `/kingdom:start my-app`, open the generated `kingdom.json` and customise:
 
 - `gate.*` command lists — what King runs before every push. Keys are arbitrary — dev stacks use `typecheck`/`tests`/`smoke`/`lint`; finance work might use `validate`/`audit`; science work might use `reproduce`/`peer-review`. Rename / add / remove freely.
 - `git.base` — your PR target branch (default `develop`; many repos use `main`)
 
 That's the entire customisation surface. **Workers are generic capacity** — no preset focus or path locks. The King assigns each task at dispatch time (see [`kings.md`](.kingdom/.setting/kings.md) → "Dispatch brief schema"), so `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, financial-model audit the day after.
 
-> **Re-running `/kingdom:new` on an existing project** shows the existing config and asks before overwriting. Re-running replaces the whole file — back up your `gate.*` customisations first if you've filled them in.
+> **Re-running `/kingdom:init <project>` on an existing project** shows the existing config and asks before overwriting. Re-running replaces the whole file — back up your `gate.*` customisations first if you've filled them in.
 
 ---
 
@@ -328,7 +332,7 @@ Full commit flow + push gate + FINAL conflict check: [`git.md`](.kingdom/.settin
 
 ## ⚙️ Configure your project
 
-`/kingdom:new <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom:start`:
+`/kingdom:init <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom:start`:
 
 ```json
 {
@@ -361,11 +365,11 @@ The King reads this at `/kingdom:start` to:
 
 | Command | What it does |
 |---|---|
-| `/kingdom:doctor` | Check prerequisites; auto-patch `~/.claude/settings.json` (diff + ask per field). Re-run anytime. |
-| `/kingdom:init` | Scaffold `.kingdom/.setting/` in the current workspace (copies 6 role docs from the plugin). |
-| `/kingdom:new <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Create `.kingdom/<project>/kingdom.json` from template. |
-| `/kingdom:start <project> [shape overrides]` | Spawn the kingdom: lane worktrees + `cmux claude-teams` + sidebar tags + watchman `/loop`. |
-| `/kingdom:update [project=<name>]` | Force a docs/log/task audit sweep — re-check checkboxes against git log, backfill orphan digests, flag stale digests + merge candidates. Idempotent; current project only. |
+| `/kingdom:doctor` | Check prerequisites — `cmux.app`, `tmux`, `jq`, `gh`, `git ≥ 2.5`, user-global + workspace `settings.json` (auto-patches both with diff + ask), `tasks/` writable, orphan audit artifacts, git state across projects. 10 checks. Re-run anytime. |
+| `/kingdom:init` | Workspace scaffold only — `.kingdom/.setting/` role docs + `.claude/settings.json` permissions. |
+| `/kingdom:init <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Workspace scaffold (if missing) + project scaffold — `.kingdom/<project>/kingdom.json` + `tasks/` + `logs/`. |
+| `/kingdom:start <project> [workers=N] [co-workers=M] [watchman=K]` | Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Reads shape from `kingdom.json`; the optional args are one-shot overrides only (don't persist). Idempotent — re-running resumes existing worktrees. |
+| `/kingdom:update [project=<name>] [--force]` | Audit sweep — auto-switches to `kingdom` branch + spawns 4 parallel specialists + Haiku scanner fan-out. Surfaces gaps between project doc claims and kingdom logs. Idempotent. Current project only. |
 
 ---
 

@@ -33,7 +33,7 @@ SETTING="$WS/.kingdom/.setting/index.md"
    - Stop.
 
 3. Verify `$KJSON` exists.
-   - If not: "`.kingdom/$PROJECT/kingdom.json` not found — run `/kingdom:new $PROJECT` first, then retry."
+   - If not: "`.kingdom/$PROJECT/kingdom.json` not found — run `/kingdom:init $PROJECT` first, then retry."
    - Stop.
 
 4. Read shape + git config via `jq`:

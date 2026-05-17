@@ -14,7 +14,7 @@ Run:
 ls "$PWD/.kingdom/${project}/" 2>/dev/null && echo "PROJECT_EXISTS" || echo "PROJECT_MISSING"
 ```
 
-If `PROJECT_MISSING`, tell the user `/kingdom:new ${project}` must be run first, and stop.
+If `PROJECT_MISSING`, tell the user `/kingdom:init ${project}` must be run first, and stop.
 
 ## Step 0.5 — Git state precheck (auto-switch to kingdom)
 
