@@ -16,52 +16,66 @@ ls "$PWD/.kingdom/${project}/" 2>/dev/null && echo "PROJECT_EXISTS" || echo "PRO
 
 If `PROJECT_MISSING`, tell the user `/kingdom:new ${project}` must be run first, and stop.
 
-## Step 0.5 — Git state precheck
+## Step 0.5 — Git state precheck (auto-switch to kingdom)
 
-A dirty / off-branch / out-of-date working tree produces noisy audit results — Step 3.1 checkbox-reconcile matches against uncommitted code; Gap synthesis misses fresh upstream work. Verify the project's git state before continuing.
+The audit runs cleanest when the project worktree is on the `kingdom` integration branch (an always-local view that mirrors `origin/<base>` plus any in-flight lanes). Switch to it automatically — never prompt. Switching to kingdom has zero side effects on the user's work: uncommitted changes follow the checkout (git refuses only on direct conflicts), and kingdom is local-only so no remote state changes.
 
 ```bash
 cd "$PWD/${project}"
 echo "👑 git state precheck:"
 
-# 1. Clean working tree?
-if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "  ⚠️  DIRTY  — uncommitted changes present:"
-  git status --short | head -10
-  DIRTY=1
-else
-  echo "  ✅ working tree clean"
-  DIRTY=0
-fi
-
-# 2. On expected branch?
 CURRENT=$(git branch --show-current)
 BASE=$(jq -r '.git.base // "develop"' "$PWD/.kingdom/${project}/kingdom.json")
-case "$CURRENT" in
-  "$BASE"|kingdom|worker-*|co-worker-*|watchman-*) echo "  ✅ on branch: $CURRENT (recognised)"; OFFBRANCH=0 ;;
-  *) echo "  ⚠️  OFF-EXPECTED-BRANCH: $CURRENT (expected: $BASE / kingdom / role-N)"; OFFBRANCH=1 ;;
-esac
 
-# 3. Up to date with origin/<base>?
+# 1. Fetch latest base
 git fetch origin "$BASE" --quiet 2>/dev/null
-LOCAL=$(git rev-parse HEAD 2>/dev/null)
-REMOTE=$(git rev-parse "origin/$BASE" 2>/dev/null)
-if [ -n "$LOCAL" ] && [ -n "$REMOTE" ] && [ "$LOCAL" != "$REMOTE" ]; then
-  AHEAD=$(git rev-list --count "origin/$BASE..HEAD" 2>/dev/null || echo 0)
-  BEHIND=$(git rev-list --count "HEAD..origin/$BASE" 2>/dev/null || echo 0)
-  echo "  ℹ️  ahead $AHEAD / behind $BEHIND vs origin/$BASE"
+
+# 2. Auto-switch to kingdom (create if missing); merge origin/<base>
+if [ "$CURRENT" != "kingdom" ]; then
+  echo "  ℹ️  was on '$CURRENT' — auto-switching to 'kingdom' integration branch"
+  if ! git checkout kingdom 2>/dev/null; then
+    if ! git checkout -b kingdom "origin/$BASE" 2>/dev/null; then
+      echo "  ❌ git checkout kingdom failed — likely uncommitted changes conflict with kingdom"
+      echo "      Resolve with: git stash    (then re-run /kingdom:update)"
+      exit 1
+    fi
+  fi
+fi
+
+# 3. Merge origin/<base> into kingdom (idempotent — no-op if already current)
+if ! git merge --no-edit "origin/$BASE" 2>&1 | tail -5; then
+  echo "  ❌ merge origin/$BASE → kingdom failed (likely conflict). Resolve manually, then re-run."
+  exit 1
+fi
+echo "  ✅ on kingdom · merged origin/$BASE"
+
+# 4. Dirty working tree? Informational only — never blocks.
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "  ℹ️  working tree has uncommitted changes (followed from $CURRENT) — Step 3.1 will footnote checkbox matches"
+  DIRTY=1
+else
+  DIRTY=0
 fi
 ```
 
-**Behaviour:**
+**Behaviour summary:**
 
-| Check | Result | Action without `--force` | Action with `--force` |
-|---|---|---|---|
-| Dirty working tree | Files modified/staged | Print files + ask `continue anyway? (y/n)`. Stop on `n`. | Warn + continue |
-| Off-expected branch | Branch ∉ {base, kingdom, role-N} | Ask `continue anyway? (y/n)`. Stop on `n`. | Warn + continue |
-| Behind/ahead origin | Local SHA ≠ remote SHA | Info only — don't block | Same |
+| Situation | Action |
+|---|---|
+| Already on `kingdom` | Fetch + merge `origin/<base>`. No prompt. |
+| On any other branch (`develop`, `working`, `worker-N`, `feature/*`, anything) | Auto-checkout `kingdom`, merge `origin/<base>`. No prompt. Uncommitted changes follow the checkout. |
+| `git checkout kingdom` refused (conflicting uncommitted changes) | STOP. Print: "Resolve with: `git stash`, then re-run". Don't override the user's working state. |
+| Merge `origin/<base>` → `kingdom` produces conflicts | STOP. User resolves manually, re-runs. Don't auto-resolve. |
+| Working tree dirty after switch | Informational only — audit proceeds. Step 3.1 footnotes every newly-ticked checkbox: `> ⚠️ matched commit while working tree was dirty — verify manually`. |
 
-The Audit Lead receives these flags in its brief — `dirty=true` causes Step 3.1 to add a footnote on every newly-ticked checkbox: `> ⚠️ matched commit while working tree was dirty — verify manually`.
+**Why auto-switch is safe:**
+
+- `kingdom` is a **local-only integration branch**. It is never pushed; nothing outside your machine sees it.
+- A checkout doesn't lose uncommitted changes — git either carries them over (no conflict) or refuses the switch (conflict) without modifying them.
+- The merge from `origin/<base>` is idempotent: if `kingdom` is already up-to-date, the merge is a no-op.
+- Audit results are more accurate on `kingdom` because `git log` reflects the latest `origin/<base>` plus integrated lane tips.
+
+The `--force` flag still exists for one purpose only: skip the conflict-stop behaviour and continue auditing on whatever branch you ended up on (typically used when investigating a stuck merge — rare).
 
 ## Step 1 — Inventory (no edits yet)
 

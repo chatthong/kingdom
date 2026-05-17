@@ -9,7 +9,7 @@
         "url": "https://github.com/chatthong/kingdom.git"
       },
       "description": "Multi-agent orchestration kit — 👑 King + 👷 workers + 🧑‍💼 co-workers + 🕵️ watchmen + 🐱 sub-agents. Git-aware audits. Domain-agnostic.",
-      "version": "0.7.0"
+      "version": "0.8.0"
     }
   ]
 }

@@ -4,6 +4,22 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.8.0] — 2026-05-17
+
+The "auto-switch" patch on top of v0.7.0. Refines `/kingdom:update` Step 0.5 to remove the off-branch prompt entirely — switching to `kingdom` is a local-only no-side-effect operation, so the audit just does it.
+
+### Changed
+
+- **`/kingdom:update` Step 0.5 — auto-switch to `kingdom`, never prompt.** Was: prompted `continue anyway? (y/n)` on off-expected-branch (e.g., `working` / `feature/*`). Now: auto-checkout `kingdom` (creates from `origin/<base>` if missing) + merges `origin/<base>` into it. No prompt. Reasoning: `kingdom` is local-only (never pushed), so switching to it has zero side effects on the user's work — uncommitted changes either follow the checkout cleanly or git refuses the switch (in which case audit STOPS and tells the user to `git stash`, not retry-on-press-Y).
+- **Dirty working tree is now informational only.** No prompt — audit always proceeds. Step 3.1 footnotes every newly-ticked checkbox with `verify manually` when matching against a dirty tree, so the trust signal is in the audit output rather than a gate at the start.
+- **`--force` flag scope narrowed.** v0.7.0 used `--force` to skip dirty/off-branch prompts (now removed since there are no prompts). `--force` now serves one purpose: continue auditing on the current branch when an `origin/<base>` merge into `kingdom` produces conflicts — used for stuck-merge investigation, rare.
+
+### Why this matters
+
+Real test case: bfg-swt was on its sanctioned scratch branch `working` (per `bfg-swt/SPEC-Git.md`). v0.7.0 flagged this as "off-expected-branch" and asked. v0.8.0 just switches to `kingdom`, pulls develop, and runs the audit — same answer the user would have given anyway, without the round-trip.
+
+---
+
 ## [0.7.0] — 2026-05-17
 
 The "git-aware + role-themed" release. Two user-driven additions: `/kingdom:update` now sanity-checks git state before auditing (dirty tree or off-branch surfaces immediately), and every role gets a distinctive emoji that flows through tab titles, dispatch templates, and chat conventions.
