@@ -4,7 +4,10 @@
   "plugins": [
     {
       "name": "claude-kingdom",
-      "source": "./",
+      "source": {
+        "source": "github",
+        "repo": "chatthong/claude-kingdom"
+      },
       "description": "Multi-agent orchestration kit — King + lanes + audit trail.",
       "version": "0.3.0"
     }
