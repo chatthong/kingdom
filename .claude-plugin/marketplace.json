@@ -4,7 +4,7 @@
   "plugins": [
     {
       "name": "claude-kingdom",
-      "source": ".",
+      "source": "./",
       "description": "Multi-agent orchestration kit — King + lanes + audit trail.",
       "version": "0.3.0"
     }
