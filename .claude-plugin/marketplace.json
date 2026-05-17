@@ -5,8 +5,8 @@
     {
       "name": "claude-kingdom",
       "source": {
-        "source": "github",
-        "repo": "chatthong/claude-kingdom"
+        "source": "url",
+        "url": "https://github.com/chatthong/claude-kingdom.git"
       },
       "description": "Multi-agent orchestration kit — King + lanes + audit trail.",
       "version": "0.3.0"
