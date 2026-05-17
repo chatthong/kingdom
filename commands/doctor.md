@@ -215,6 +215,8 @@ If `~/.claude/settings.json` does not exist, create it with `{}` as the base bef
 
 For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest — a sign that a lane closer was interrupted or that `/kingdom:update` is due.
 
+ID extraction strips known shard suffixes (`__kimi-p<N>`, `__shard-<N>`, `__pane<N>`) and falls back to `<UTC>` prefix match when the full ID doesn't resolve. This avoids the over-count when many lane-shard raws are covered by a single parent digest at the same UTC + base slug.
+
 ```bash
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
   PROJ=$(basename "$(dirname "$KJSON")")
@@ -222,10 +224,23 @@ for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
   CURATED_DIR="$PWD/.kingdom/$PROJ/logs"
   [ -d "$RAW_DIR" ] || continue
   ORPHANS=0
-  for RAW in "$RAW_DIR"/*.md; do
+  for RAW in "$RAW_DIR"/*.md "$RAW_DIR"/*.txt; do
     [ -f "$RAW" ] || continue
-    ID=$(basename "$RAW" | cut -d'_' -f1-2)   # adjust if your ID separator differs
-    [ -f "$CURATED_DIR/$ID.md" ] || ORPHANS=$((ORPHANS + 1))
+    BASE=$(basename "$RAW")
+    BASE="${BASE%.md}"
+    BASE="${BASE%.txt}"
+    # Strip known shard suffixes
+    STRIPPED=$(echo "$BASE" | sed -E 's/__(kimi-p[0-9]+|shard-[0-9]+|pane[0-9]+(-[a-z0-9-]+)?)$//')
+    # Exact match?
+    if [ -f "$CURATED_DIR/$STRIPPED.md" ]; then
+      continue
+    fi
+    # Fallback: UTC prefix match (first YYYY-MM-DDTHHMMZ token)
+    UTC=$(echo "$BASE" | grep -oE '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{4}Z' | head -1)
+    if [ -n "$UTC" ] && ls "$CURATED_DIR/${UTC}__"*.md >/dev/null 2>&1; then
+      continue
+    fi
+    ORPHANS=$((ORPHANS + 1))
   done
   echo "$PROJ: $ORPHANS orphan(s)"
 done

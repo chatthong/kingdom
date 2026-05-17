@@ -4,7 +4,7 @@
 
 **One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.5.0-success)
+![Version](https://img.shields.io/badge/version-0.6.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)

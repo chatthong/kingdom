@@ -323,6 +323,12 @@ When `/loop` has nothing else to do (no PRs to babysit, no `develop` movement, n
 Low-risk: watchman just does it; one-line note in its next `WATCH_*.md` report.
 High-risk: watchman writes findings to `WATCH_DOCS_AUDIT.md` (single rolling file per project) — King's next attention pulls from it.
 
+### Project state scan (idle, bounded)
+
+In addition to scanning `tasks/` + `logs/`, watchman also performs a **bounded** project-state scan during idle ticks. Same pattern as `/kingdom:update` Step 3.0, but smaller: at most 5 project doc files per tick (newest by mtime), `.md` + `.txt` + `.csv`. For each, watchman extracts completion markers and cross-refs against `master_agent.log`. Findings are **flag-only** → appended to `WATCH_DOCS_AUDIT.md` under `## Gap A` / `## Gap B`. Watchman NEVER edits project source code based on a gap — only flags. King runs `/kingdom:update` for a full sweep when the gap list grows.
+
+This keeps the doc-audit honest without making watchman expensive — full project scans happen on demand via `/kingdom:update`, not on every `/loop` tick.
+
 ### `WATCH_DOCS_AUDIT.md` schema
 
 ```text
@@ -341,9 +347,15 @@ Last scan: <UTC>
 
 ## Suspect (checked but no commit)
 - `tasks/<UTC>__co-worker-1__redesign.md`: item "wire up auth" — no commit trace
+
+## Gap A — project says done, kingdom has no record
+- `docs/STEP.md:42` claims "Phase 0 API smoke shipped 2026-04-28" — no master_agent.log entry on that date for `phase0-api-smoke`
+
+## Gap B — kingdom done, docs don't reflect it
+- `master_agent.log:89` shipped `kc26-script-patches` 2026-04-28T2110Z — `STEP.md` still lists it as pending
 ```
 
-King reviews → dispatches `/kingdom:update` or a targeted sub-agent. Watchman never edits high-risk items itself.
+King reviews → dispatches `/kingdom:update` or a targeted sub-agent. Watchman never edits high-risk items, never edits project source code; the Gap sections are flag-only.
 
 ### Boundary
 

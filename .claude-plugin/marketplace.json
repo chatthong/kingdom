@@ -8,8 +8,8 @@
         "source": "url",
         "url": "https://github.com/chatthong/kingdom.git"
       },
-      "description": "Multi-agent orchestration kit — King + generic worker capacity + audit trail. Domain-agnostic (code, research, finance, science, manuscripts).",
-      "version": "0.5.0"
+      "description": "Multi-agent orchestration kit — King + generic worker capacity + Layer-1 project scan + audit trail. Domain-agnostic (code, research, finance, science, manuscripts).",
+      "version": "0.6.0"
     }
   ]
 }

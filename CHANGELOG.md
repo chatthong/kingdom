@@ -4,6 +4,30 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.6.0] — 2026-05-17
+
+The "learn first, then update" release. `/kingdom:update` becomes a true Layer-1 Discovery pass — it reads the project's own docs before reconciling logs/tasks, so the audit catches gaps between what the project claims and what the kingdom recorded. Also fixes a real over-count bug in `/kingdom:doctor` Check 8.
+
+### Added
+
+- **`/kingdom:update` Step 3.0 — Project state scan (Layer-1 fan-out).** Audit Lead (Sonnet) now spawns Haiku scanners in parallel (≤10) to read every `.md` / `.txt` / `.csv` file in the project tree. Each scanner extracts completion markers (`[x]`, `✅`, `Status: done`, "Shipped on YYYY-MM-DD", dated done-bullets), pending markers, and cross-file references. **Transitive read (1 hop):** when a file flags a referenced doc as load-bearing for completion status, the scanner reads that doc too — but no deeper, preventing recursion blow-up. Excluded dirs: `.git/`, `node_modules/`, `.next/`, `dist/`, `build/`, `.venv/`, `__pycache__/`, `.kingdom/`.
+- **`/kingdom:update` Step 3.7 — Gap synthesis.** Cross-references the project reality picture against `master_agent.log` + `tasks/*` + curated digests. Two new sections in every audit digest:
+  - `## Gap A — Project says done, kingdom has no record` — surfaces out-of-band work (manual commits, ad-hoc changes) where the project doc claims completion but no kingdom log entry exists.
+  - `## Gap B — Kingdom logged it, project docs don't reflect it` — surfaces docs that need updating after shipped work.
+- **King action table** (in `kings.md` → "Reviewing watchman audit findings") gets two new rows for Gap A and Gap B with the recommended follow-up per row (backfill log line vs dispatch doc-update task).
+- **Watchman project-state scan (bounded)** — watchman's idle docs audit now does a small 5-file scan of project docs per tick, contributing to `## Gap A` / `## Gap B` sections of `WATCH_DOCS_AUDIT.md`. Flag-only — never edits project source.
+
+### Changed
+
+- **`/kingdom:update` is now Sonnet Lead + Haiku fan-out.** Mechanical reconcile (Steps 3.1-3.6) still happens, but the new Step 3.0 fan-out and Step 3.7 gap synthesis make the audit a proper Discovery pass — not just a mechanical sweep. Lead stays Sonnet; Haiku for parallel reads; Opus reserved for King-dispatched digest rewrites (Step 3.5 follow-up).
+- **`/kingdom:doctor` Check 8 orphan-counting heuristic** — was using naïve `cut -d'_' -f1-2` which over-counted when raw filenames had lane-shard suffixes (e.g. `__kimi-p<N>`). Now strips known shard suffixes (`__kimi-p<N>`, `__shard-<N>`, `__pane<N>(-…)?`) before matching, then falls back to `<UTC>` timestamp-prefix match for leftovers. Tested case: bfg-swt audit dropped from 19 false-orphans → 12 actual orphans.
+
+### Fixed
+
+- File-path corruption from the v0.4.0 rename — `kingdom-update-<UTC>.md` filenames in `commands/update.md` had been incorrectly rewritten to `kingdom:update-<UTC>.md` (colon) by an over-broad sed. Restored to hyphen form.
+
+---
+
 ## [0.5.0] — 2026-05-17
 
 The "generic workers, any domain" release. Workers are no longer pre-specialised — every worker is identical capacity. King assigns task scope at dispatch time. Bonus: the kit is now explicitly domain-agnostic — code, research, finance, science, manuscripts.
