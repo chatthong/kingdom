@@ -1,0 +1,389 @@
+# watchmans.md — Watchman lanes (`/loop` monitor)
+
+> Plural filename anticipates multi-watchman setups (one per project area — e.g., backend smoke + frontend smoke + ops smoke). Typical setup is one watchman per kingdom.
+
+Watchmen are **passive, continuous monitors**. NOT task workers. They run Claude Code with the `/loop` skill in dynamic-pacing mode (5 min when there's churn, 15 min when quiet). They track `origin/develop` tip + babysit open PRs.
+
+**Model: Sonnet (explicit exception).** Workers and co-workers run on Opus because they edit code, reason over large diffs, and write curated artifacts. Watchman is the lighter Sonnet exception — it does not edit code; it only runs smoke commands, reads PR state, and fires notifications. Sonnet is sufficient for this read-only + test-runner + alerter loop, and keeps the long-running `/loop` cost proportionate. Slug convention: `sonnet-watchman-1`, `sonnet-watchman-2`, … (never Opus).
+
+See [`index.md`](index.md) for the entry-point overview, [`kings.md`](kings.md) for the King's gate (which is separate from Watchman monitoring), [`workers.md`](workers.md) for the 4-step closer pattern that Watchman ALSO follows for state-change reports, [`git.md`](git.md) for branch model.
+
+---
+
+## Watchman role
+
+- **Continuous monitor**, not a worker. Does NOT claim TODOs, edit code, push, or open PRs.
+- Lives in `.worktrees/watchman-N/`, branch `watchman-N` (a local-only branch that's hard-reset to `origin/develop` tip on every `/loop` tick).
+- Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet.
+- Reads `kingdom.json.gate.smoke` + `gate.tests` for the smoke command list to run on each develop advance.
+- Writes `WATCH_*.md` reports to `<project>/docs/test-reports/` (separate prefix from King's `KING_*.md` gate reports).
+- Posts `cmux notify` when something needs the King's or Ter's attention.
+
+---
+
+## `/loop` body (the 8-step tick)
+
+Tick cycle: each iteration of the watchman's `/loop`, with a dashed return arrow showing the loop.
+
+```mermaid
+flowchart TB
+    T1["👁 1. cd watchman worktree"]
+    T2["2. git fetch origin\ncompare develop SHA\ngit reset --hard origin/develop"]
+    T3{{"3. develop moved\nor smoke overdue?"}}
+    T4["Run gate.smoke\n+ gate.tests"]
+    T5{{"Smoke\npass?"}}
+    T6["Write WATCH_…_develop_green.md\n(heartbeat)"]
+    T7["Write WATCH_…_develop_RED_….md\ncmux notify 'develop RED'"]
+    T8["4. gh pr list --state open\ncompare to previous snapshot"]
+    T9["5. Write WATCH_*.md\nfor each state change"]
+    T10["6. cmux notify\n(CI fail → King, ready-to-merge → Ter)"]
+    T11["7. cmux set-status\n'develop: green|RED | PRs: N'"]
+    T12["8. Write watchman_state.json\n(sha, smoke_ts, pr_states)"]
+    PACE{{"Any transition\nthis tick?"}}
+    WAIT5["Schedule next tick\n5 min"]
+    WAIT15["Schedule next tick\n15 min"]
+
+    T1 --> T2 --> T3
+    T3 -- yes --> T4 --> T5
+    T5 -- pass --> T6 --> T8
+    T5 -- fail --> T7 --> T8
+    T3 -- no --> T8
+    T8 --> T9 --> T10 --> T11 --> T12 --> PACE
+    PACE -- yes --> WAIT5
+    PACE -- quiet --> WAIT15
+
+    WAIT5 -.->|"next tick"| T1
+    WAIT15 -.->|"next tick"| T1
+
+    classDef step stroke:#6b7280,stroke-width:1.5px
+    classDef decision stroke:#1e40af,stroke-width:1.5px
+    classDef alert stroke:#b91c1c,stroke-width:1.5px
+    classDef ok stroke:#15803d,stroke-width:1.5px
+    class T1,T2,T8,T9,T10,T11,T12 step
+    class T3,T5,PACE decision
+    class T7,WAIT5 alert
+    class T6,WAIT15 ok
+```
+
+Each `/loop` tick does:
+
+```bash
+WS=/Users/ter/Desktop/Bonfire
+PROJ=$WS/<project>
+LOGS=$WS/.kingdom/$(basename "$PROJ")/logs
+
+# (1) cd to the watchman worktree
+cd "$PROJ/.worktrees/watchman-1"
+
+# (2) Fetch + compare develop SHA to previous tick (state stored in <LOGS>/watchman_state.json)
+git fetch origin
+PREV_DEVELOP_SHA=$(jq -r .develop_sha "$LOGS/watchman_state.json" 2>/dev/null || echo '')
+NEW_DEVELOP_SHA=$(git rev-parse origin/develop)
+git reset --hard origin/develop                       # always track develop tip
+
+# (3) If develop moved OR no prior smoke recorded today: run smoke
+if [ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] || [ daily_smoke_overdue ]; then
+  KJSON="$WS/.kingdom/$(basename "$PROJ")/kingdom.json"
+  # Run gate.smoke + gate.tests command list from kingdom.json
+  SMOKE_PASS=true
+  jq -r '.gate.smoke[] // empty, .gate.tests[]' "$KJSON" | while read cmd; do
+    eval "$cmd" || { SMOKE_PASS=false; break; }
+  done
+
+  if [ "$SMOKE_PASS" = "true" ]; then
+    # Write heartbeat / pass report
+    UTC=$(date -u +%Y-%m-%dT%H%MZ)
+    echo "# develop smoke pass at $UTC" > "$PROJ/docs/test-reports/WATCH_${UTC}__develop_green.md"
+  else
+    # Develop is RED — write report + alert King/Ter
+    UTC=$(date -u +%Y-%m-%dT%H%MZ)
+    cat > "$PROJ/docs/test-reports/WATCH_${UTC}__develop_RED__<short-reason>.md" <<EOF
+    ## TL;DR
+    - **Status:** fail
+    - develop tip ${NEW_DEVELOP_SHA:0:8} broke smoke
+    - Failing: <which command(s)>
+    - **Next action:** King investigates; lanes paused until develop is green again.
+    EOF
+    cmux notify --workspace kingdom "develop RED: <reason>"
+  fi
+fi
+
+# (4) Babysit open PRs
+gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,mergeable > /tmp/prs.json
+# Compare to previous PR state snapshot in <LOGS>/watchman_state.json
+# Detect transitions: CI passed/failed, lead approved/requested-changes, mergeable+green+idle
+
+# (5) Write WATCH_*.md for any state change
+# e.g., WATCH_<UTC>__pr-<N>_CI_failed.md, WATCH_<UTC>__pr-<N>_ready_to_merge.md, …
+
+# (6) cmux notify on alert-worthy transitions
+# - CI just failed → notify King
+# - PR mergeable + green + lead-approved + idle ≥30 min → notify Ter "PR #N ready to merge"
+
+# (7) Update sidebar status
+cmux set-status --pane <self> "develop: <green|RED> | open PRs: <n> (<g> green, <r> red)"
+
+# (8) Write new snapshot + schedule next tick
+jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
+  '{develop_sha: $sha, last_smoke_ts: now|todate, pr_states: $prs}' \
+  > "$LOGS/watchman_state.json"
+
+# Dynamic pacing: 5 min if any transition this tick, 15 min if quiet
+```
+
+---
+
+## Dispatch (King spawns this once at kingdom startup)
+
+Inside the kingdom spawn checklist (see [`kings.md`](kings.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux send` (or `tmux send-keys -l` in fallback mode):
+
+```bash
+HANDLE=$(cmux list-panes --workspace "$WS_ID" --json | jq -r '.[] | select(.title=="watchman-1") | .id')
+
+LANE_WATCHMAN_PROMPT="You are the Watchman for project <project>. Run /loop with this body
+every 5-15 min (dynamic pacing) until I tell you to stop. Each tick:
+
+1. cd $PROJ/.worktrees/watchman-1
+2. git fetch origin
+   PREV_DEVELOP_SHA=\$(jq -r .develop_sha $LOGS/watchman_state.json 2>/dev/null || echo '')
+   NEW_DEVELOP_SHA=\$(git rev-parse origin/develop)
+   git reset --hard origin/develop
+3. If NEW_DEVELOP_SHA != PREV_DEVELOP_SHA OR no prior smoke today:
+     Run <kingdom.json.gate.smoke + gate.tests command list>.
+     On fail: write WATCH_<UTC>__develop_RED__<reason>.md + cmux notify 'develop RED: <reason>'
+     On pass: write WATCH_<UTC>__develop_green.md (TL;DR only)
+4. gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,mergeable > /tmp/prs.json
+   Compare to previous snapshot in $LOGS/watchman_state.json:
+     CI just failed     → WATCH_<UTC>__pr-<N>_CI_failed.md + cmux notify King
+     CI just passed     → WATCH_<UTC>__pr-<N>_CI_green.md (log only)
+     lead approved      → cmux notify Ter 'PR #<N> approved'
+     mergeable + green + approved + idle 30min → cmux notify Ter 'PR #<N> ready to merge'
+5. cmux set-status --pane <self> \"develop: <green|RED> | open PRs: <n> (<g> green, <r> red)\"
+6. Write new snapshot to $LOGS/watchman_state.json (develop_sha, last_smoke_ts, pr_states)
+7. Schedule next tick via /loop dynamic pacing (5 min if any transition, 15 min if quiet)
+
+You DO NOT edit code, claim TODO tasks, or push anything. Read-only + test runner + alerter."
+
+cmux send --pane "$HANDLE" "$LANE_WATCHMAN_PROMPT"
+```
+
+---
+
+## WATCH_*.md report naming convention
+
+Watchman writes to `<project>/docs/test-reports/` alongside human-written `SMOKE_*.md` / `DEBUG_*.md` / `POSTMORTEM_*.md` and King's `KING_*.md` gate reports. Watchman uses the `WATCH_*` prefix:
+
+```text
+<project>/docs/test-reports/
+├── KING_<UTC>__<lane-name>__<sub-task-id>.md     ← King's per-lane pre-commit gate (one per push-decision)
+├── WATCH_<UTC>__develop_green.md                  ← heartbeat / develop pass
+├── WATCH_<UTC>__develop_RED__<short-reason>.md    ← develop break detected
+├── WATCH_<UTC>__pr-<N>_CI_failed.md               ← PR CI just turned red
+├── WATCH_<UTC>__pr-<N>_CI_green.md                ← PR CI just turned green (log only, no notify)
+├── WATCH_<UTC>__pr-<N>_lead_approved.md           ← lead just approved a PR
+├── WATCH_<UTC>__pr-<N>_ready_to_merge.md          ← PR green + approved + idle ≥30 min
+└── (existing) SMOKE_*.md / DEBUG_*.md / POSTMORTEM_*.md  ← human-written
+```
+
+`<UTC>` = `YYYY-MM-DDTHHMMZ` (no colons, trailing `Z`).
+
+The Watchman's reports follow the same TL;DR-first header schema as the rest of the kingdom — first 15 lines must give the master enough to decide whether to read further.
+
+---
+
+## PR transition state machine
+
+State machine: the transitions Watchman watches for on each open PR, and the alert it fires at each transition.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : PR opened
+
+    pending --> CI_green : CI passes
+    pending --> CI_failed : CI fails
+
+    CI_failed --> pending : dev pushes fix\n(re-runs CI)
+    CI_green --> approved : lead approves
+
+    approved --> idle : no activity ≥ 30 min
+    idle --> ready_to_merge : mergeable + green\n+ approved + idle ≥30 min
+
+    ready_to_merge --> [*] : Ter merges
+
+    pending --> CI_failed : CI fails (re-run)
+    CI_green --> pending : new commit pushed\n(CI re-runs)
+
+    note right of CI_failed
+        cmux notify King\n"CI failed on PR #N"
+    end note
+    note right of approved
+        cmux notify Ter\n"PR #N approved"
+    end note
+    note right of ready_to_merge
+        cmux notify Ter\n"PR #N ready to merge"
+    end note
+```
+
+## Watchman state snapshot
+
+Watchman maintains its own state file (NOT mixed with master_agent.log):
+
+```text
+<LOGS>/watchman_state.json
+```
+
+Schema:
+
+```json
+{
+  "develop_sha": "abc1234...",
+  "last_smoke_ts": "2026-05-17T10:30:00Z",
+  "pr_states": {
+    "247": { "ci": "green", "reviews": "approved", "mergeable": true, "first_ready_at": "2026-05-17T09:55:00Z" },
+    "248": { "ci": "red", "reviews": "pending", "mergeable": true },
+    "249": { "ci": "pending", "reviews": "pending", "mergeable": true }
+  }
+}
+```
+
+Watchman writes; King reads (for alert context); no human edit. Cleared/reset when watchman is torn down.
+
+---
+
+## Why Watchman doesn't replace King's per-lane pre-commit gate
+
+- **Gate is lane-specific + blocking:** runs against `<role>-<n>` (which has the lane's commits not yet in develop), runs once, blocks the push decision. Watchman only knows about develop tip + open PRs — no view of in-flight lane work.
+- **Gate is fresh at push time:** runs after Ter's "push" approval (via `git merge-tree` for the FINAL conflict check). Watchman runs at `/loop` ticks; by push time, the last Watchman result could be 15 minutes stale.
+- **Watchman is develop-wide + non-blocking:** catches drift, CI failures on open PRs, lead-review transitions — none of which the King's per-lane gate sees.
+
+The two complement: **King keeps push-time freshness; Watchman keeps develop-wide visibility.**
+
+---
+
+## Watchman lifecycle
+
+| Action | Trigger | How |
+|---|---|---|
+| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `cmux send --pane <self> "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
+| **Pause** | Ter says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux send --pane <self> "/loop cancel"` |
+| **Resume** | Ter says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
+| **Teardown** | Kingdom close | `cmux send --pane <self> "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
+
+The watchman's worktree + branch + state file persist across pauses; only the `/loop` schedule is suspended.
+
+---
+
+## Multiple watchmen (one per project area)
+
+`kingdom.json.shape.watchman` can be >1. Use case: per-area smoke — one watchman runs backend smoke + watches backend PRs, another runs frontend smoke + watches frontend PRs:
+
+```json
+{
+  "shape": { "workers": 3, "co-workers": 1, "watchman": 2 },
+  "watchmen": [
+    { "name": "watchman-1", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:backend"] },
+    { "name": "watchman-2", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:frontend"] }
+  ]
+}
+```
+
+Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the same `origin/develop` tip, but with different PR filter scopes. They write to the same `<project>/docs/test-reports/` dir but with distinct `WATCH_<UTC>__watchman-<N>__...md` filenames to avoid collision.
+
+---
+
+## Task file access (read-only)
+
+Watchman does NOT create task files. The watchman role has no per-task work — it's a continuous monitor (`/loop`), not an executor.
+
+Watchman MAY read task files at `<workspace>/.kingdom/<project>/tasks/*.md` for situational awareness:
+
+- When alerting the King about a develop break, watchman can check whether any in-flight lane's task file is affected (e.g., lane currently editing the broken module).
+- When detecting a PR ready-to-merge, watchman can include in its notification: "PR #N (from `worker-1`, task `BE-P0-CICD.1`) is mergeable + green + idle for 30m." — pulled from the task file's brief.
+
+Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify` events, sidebar status pills. It never writes to task files, raw artifacts, master_agent.log, or anything outside its own WATCH_ namespace.
+
+---
+
+## Docs audit duty (idle-time work)
+
+When `/loop` has nothing else to do (no PRs to babysit, no `develop` movement, no smoke break), watchman runs a docs audit pass over `<workspace>/.kingdom/<project>/{tasks,logs}/`. This is the ONLY scenario where watchman has WRITE authority — and only on audit artifacts, never project source code.
+
+### Split by risk
+
+| Action | Risk | Watchman does | King reviews |
+|---|---|---|---|
+| Tick a stale checkbox when a matching commit is found in `git log` | Low | ✅ writes (`tasks/*.md`) | informed via WATCH_*.md |
+| Backfill a missing summary line in `master_agent.log` | Low | ✅ writes | informed |
+| Fix dead `[[name]]` link / formatting drift | Low | ✅ writes | informed |
+| Re-understand & rewrite a digest from raw | **High** | ❌ flag only | ✅ dispatches Opus sub-agent |
+| Merge two task files into one | **High** | ❌ flag only | ✅ decides + dispatches |
+| Rewrite role doc to match landed code | **High** | ❌ flag only | ✅ decides |
+| Archive task files older than 30 days | **High** | ❌ flag only | ✅ moves to `tasks/archive/` |
+
+Low-risk: watchman just does it; one-line note in its next `WATCH_*.md` report.
+High-risk: watchman writes findings to `WATCH_DOCS_AUDIT.md` (single rolling file per project) — King's next attention pulls from it.
+
+### `WATCH_DOCS_AUDIT.md` schema
+
+```text
+# Docs audit findings — <project>
+
+Last scan: <UTC>
+
+## Digest re-understanding candidates
+- `logs/<ID>.md` — raw mentions X which is now load-bearing (X was added <YYYY-MM-DD> to <file>)
+
+## Merge candidates
+- `tasks/<UTC-a>__worker-1__feat-x.md` + `tasks/<UTC-b>__worker-2__feat-x-followup.md` — overlap on the same module
+
+## Archive candidates
+- `tasks/<UTC>__co-worker-1__redesign.md` — all boxes checked, last edit 2026-04-10 (>30d)
+
+## Suspect (checked but no commit)
+- `tasks/<UTC>__co-worker-1__redesign.md`: item "wire up auth" — no commit trace
+```
+
+King reviews → dispatches `/kingdom-update` or a targeted sub-agent. Watchman never edits high-risk items itself.
+
+### Boundary
+
+Watchman's write authority is scoped to `<workspace>/.kingdom/<project>/{tasks,logs}/` only. It NEVER touches:
+- Project source code
+- `.kingdom/.setting/*.md` (role specs)
+- `kingdom.json`
+- `.git/` or branches
+
+If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom-update` sweeps it); cost of a wrong autonomous edit is reputational.
+
+### Cadence
+
+Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom-update` (explicit) rather than continuously.
+
+---
+
+## What watchmen DO
+
+- Read project files.
+- Run smoke / typecheck / test commands from `kingdom.json.gate.*`.
+- Query `gh pr list` / `gh pr view` / `gh pr checks`.
+- Write `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md`.
+- Call `cmux notify` to alert King / Ter.
+- Update `cmux set-status` for sidebar visibility.
+- Maintain `<LOGS>/watchman_state.json`.
+- Read task files (`<workspace>/.kingdom/<project>/tasks/`) for situational awareness when issuing alerts.
+- Apply **low-risk** fixes to `tasks/` + `logs/` during idle docs audit (see § Docs audit duty).
+
+## What watchmen DO NOT do
+
+| ❌ Forbidden | Why |
+|---|---|
+| Claim TODOs | Not a task worker; passive monitor |
+| Edit project source code | Read-only on project files |
+| `git push` / `git commit` to anything | King-only push authority |
+| `gh pr create` | King-only |
+| Authoritative gate | That's King's pre-commit gate; Watchman just informs |
+| Read `<LOGS>/raw/*` directly | Tier-3 banned for everyone — including watchman |
+| Apply **high-risk** docs fixes (digest rewrite, task-file merge, role-doc rewrite, archive) | Flag-only — King decides; see § Docs audit duty |
+| Edit `.kingdom/.setting/*.md`, `kingdom.json`, or `.git/` | Out of scope; watchman writes only to its own audit-artifact namespace |
+
+Watchman is **read-only on source + test runner + alerter + low-risk audit janitor**. Nothing more.

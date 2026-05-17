@@ -1,0 +1,81 @@
+{
+  "_comment": "Kingdom config for this project. Read by the King at /kingdom-start to determine shape, focus, and gate commands. Static config only — dynamic state lives in adjacent dirs: logs/ (raw/curated/log/flag artifacts via 4-step closer), tasks/ (per-task multi-layer plans + checkbox progress + final summaries; one file per task, written by lane master, read-only for everyone else).",
+
+  "shape": {
+    "workers": 3,
+    "co-workers": 1,
+    "watchman": 1,
+    "sanityCap": 10
+  },
+
+  "git": {
+    "base": "develop",
+    "integrationBranch": "kingdom",
+    "pushPolicy": "always-ask",
+    "branchNamingPattern": "feature/<topic>"
+  },
+
+  "workers": [
+    {
+      "name": "worker-1",
+      "model": "opus",
+      "focus": "backend",
+      "ownsPaths": [
+        "apps/backend/**",
+        "scripts/backend/**"
+      ]
+    },
+    {
+      "name": "worker-2",
+      "model": "opus",
+      "focus": "frontend",
+      "ownsPaths": [
+        "apps/frontend/**",
+        "packages/ui/**"
+      ]
+    },
+    {
+      "name": "worker-3",
+      "model": "opus",
+      "focus": "ops",
+      "ownsPaths": [
+        "infra/**",
+        "scripts/ops/**",
+        ".github/workflows/**"
+      ]
+    }
+  ],
+
+  "coworkers": [
+    {
+      "name": "co-worker-1",
+      "model": "opus",
+      "focus": "interactive paired work (UI iteration, design exploration, ad-hoc investigation)"
+    }
+  ],
+
+  "watchmen": [
+    {
+      "name": "watchman-1",
+      "model": "sonnet",
+      "cadence": "dynamic",
+      "watches": ["origin/develop", "all open PRs in this repo"]
+    }
+  ],
+
+  "gate": {
+    "_comment": "King runs these inside the lane's worktree as the pre-commit gate. Replace with your project's actual commands. Categories are universal; commands are project-specific.",
+    "typecheck": [
+      "pnpm -r typecheck"
+    ],
+    "tests": [
+      "pnpm -r test"
+    ],
+    "smoke": [
+      "echo 'add your smoke command here'"
+    ],
+    "lint": [
+      "pnpm -r lint"
+    ]
+  }
+}
