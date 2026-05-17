@@ -248,7 +248,7 @@ Lane numbering: workers fill `worker-1..W`, co-workers fill `co-worker-1..C`, wa
 
 ### Auto-create kingdom.json on first launch
 
-`/kingdom-start project=<name> workers=N co-workers=M watchman=K` will:
+`/kingdom:start project=<name> workers=N co-workers=M watchman=K` will:
 1. Read `<workspace-root>/.kingdom/<name>/kingdom.json` if it exists.
 2. If absent: create it with the args + sane defaults (base=develop, integrationBranch=kingdom, pushPolicy=always-ask). Then proceed with the spawn.
 

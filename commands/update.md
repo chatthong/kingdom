@@ -14,7 +14,7 @@ Run:
 ls "$PWD/.kingdom/${project}/" 2>/dev/null && echo "PROJECT_EXISTS" || echo "PROJECT_MISSING"
 ```
 
-If `PROJECT_MISSING`, tell the user `/kingdom-new ${project}` must be run first, and stop.
+If `PROJECT_MISSING`, tell the user `/kingdom:new ${project}` must be run first, and stop.
 
 ## Step 1 — Inventory (no edits yet)
 
@@ -36,14 +36,14 @@ Spawn ONE Sonnet sub-agent via the Agent tool, `run_in_background=true`. Escalat
 
 Sub-agent brief (substitute `<PROJECT>` + `<PWD>` + `<UTC>` where shown):
 
-> You are the `/kingdom-update` audit agent for project `<PROJECT>`. Working dir: `<PWD>`. Audit root: `<PWD>/.kingdom/<PROJECT>/`. You are **read-mostly + low-risk-write**. NEVER edit project source code. NEVER push. ONLY edit files under `.kingdom/<PROJECT>/{tasks,logs}/`. Idempotent: if a fix is already applied, skip it silently.
+> You are the `/kingdom:update` audit agent for project `<PROJECT>`. Working dir: `<PWD>`. Audit root: `<PWD>/.kingdom/<PROJECT>/`. You are **read-mostly + low-risk-write**. NEVER edit project source code. NEVER push. ONLY edit files under `.kingdom/<PROJECT>/{tasks,logs}/`. Idempotent: if a fix is already applied, skip it silently.
 >
-> Execute every step in order. Write a final summary report to `.kingdom/<PROJECT>/logs/kingdom-update-<UTC>.md`.
+> Execute every step in order. Write a final summary report to `.kingdom/<PROJECT>/logs/kingdom:update-<UTC>.md`.
 >
 > **Step 3.1 — Task file checkbox reconciliation.** For each `tasks/*.md`:
 > - Parse the checkbox list (`- [ ]` / `- [x]`).
 > - For each unchecked item, `git log --all --oneline` in the project's primary checkout for a commit message matching the item's keywords. If found, tick the box and append `→ <SHA>` inline.
-> - For each checked item, verify a commit exists. If none, leave checked but add a footnote: `> ⚠️ flagged by /kingdom-update <UTC>: claimed done but no commit trace`.
+> - For each checked item, verify a commit exists. If none, leave checked but add a footnote: `> ⚠️ flagged by /kingdom:update <UTC>: claimed done but no commit trace`.
 >
 > **Step 3.2 — Orphan raw artifacts.** For each `logs/raw/<ID>__*.md` with NO corresponding `logs/<ID>.md`:
 > - Generate a curated digest (TL;DR + key decisions + files touched) from the raw.
@@ -64,7 +64,7 @@ Sub-agent brief (substitute `<PROJECT>` + `<PWD>` + `<UTC>` where shown):
 >
 > **Closer (mandatory):**
 > - Raw log: `logs/raw/<UTC>__sonnet-kingdom-update.md`
-> - Curated digest: `logs/kingdom-update-<UTC>.md` (must include `## Counts: fixed=N re-understood-flagged=N suspect=N merge-candidates=N archive-candidates=N`)
+> - Curated digest: `logs/kingdom:update-<UTC>.md` (must include `## Counts: fixed=N re-understood-flagged=N suspect=N merge-candidates=N archive-candidates=N`)
 > - Master log line: append to `master_agent.log`
 > - Sentinel: `logs/done/<UTC>__sonnet-kingdom-update.flag`
 
@@ -76,7 +76,7 @@ Poll the sentinel flag in a single blocking Bash call (zero token cost while wai
 until [ -f "$PWD/.kingdom/${project}/logs/done/${UTC}__sonnet-kingdom-update.flag" ]; do
   sleep 5
 done
-cat "$PWD/.kingdom/${project}/logs/kingdom-update-${UTC}.md"
+cat "$PWD/.kingdom/${project}/logs/kingdom:update-${UTC}.md"
 ```
 
 Show the digest to the user. Highlight any `⚠️ flagged` entries and the `## Digest re-understanding candidates` section — those need King's attention.
@@ -98,4 +98,4 @@ Stop. King drives next steps from the report.
 - **Idempotent.** Re-running re-fixes nothing already fixed. Safe to invoke daily / weekly / pre-release.
 - **Current project only.** This command never touches sibling projects under `.kingdom/`.
 - **Sonnet default.** Mechanical checking is well within Sonnet capability; Opus only for digest rewrites (King-dispatched follow-up).
-- **Watchman overlap.** Watchman runs continuous low-risk audit during idle `/loop` time (see `.kingdom/.setting/watchmans.md` → "Docs audit duty"). `/kingdom-update` is the explicit one-shot version when King wants a forced full sweep.
+- **Watchman overlap.** Watchman runs continuous low-risk audit during idle `/loop` time (see `.kingdom/.setting/watchmans.md` → "Docs audit duty"). `/kingdom:update` is the explicit one-shot version when King wants a forced full sweep.

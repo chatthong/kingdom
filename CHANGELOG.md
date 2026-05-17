@@ -1,22 +1,54 @@
 # Changelog
 
-All notable changes to `claude-kingdom` are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/).
+All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here. Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions follow [SemVer](https://semver.org/).
+
+---
+
+## [0.4.0] — 2026-05-17
+
+The "rename" release. Drops the `claude-` prefix everywhere — plugin name, marketplace name, GitHub repo, and command names. Slash commands now read `/kingdom:doctor` instead of `/claude-kingdom:kingdom-doctor`.
+
+### Changed
+
+- **Plugin name** — `claude-kingdom` → `kingdom`. The slash-command namespace prefix is now `/kingdom:` instead of `/claude-kingdom:`. Reads cleaner and matches the brand.
+- **Marketplace name** — `claude-kingdom` → `kingdom`. Install becomes `/plugin install kingdom@kingdom` (plugin@marketplace, both `kingdom`).
+- **GitHub repo** — `chatthong/claude-kingdom` → `chatthong/kingdom`. Old URL auto-redirects via GitHub.
+- **Command files** — dropped the redundant `kingdom-` prefix. The plugin namespace already provides the qualifier:
+  - `commands/kingdom-doctor.md` → `commands/doctor.md` (slash: `/kingdom:doctor`)
+  - `commands/kingdom-init.md` → `commands/init.md` (slash: `/kingdom:init`)
+  - `commands/kingdom-new.md` → `commands/new.md` (slash: `/kingdom:new`)
+  - `commands/kingdom-start.md` → `commands/start.md` (slash: `/kingdom:start`)
+  - `commands/kingdom-update.md` → `commands/update.md` (slash: `/kingdom:update`)
+- **All docs** — README, CHANGELOG intro, role docs in `.kingdom/.setting/`, CMUX-Guide.md, TMUX-Guide.md — all references to `/kingdom-<cmd>` updated to `/kingdom:<cmd>`.
+
+### Compatibility notes
+
+- **Breaking** for anyone on v0.3.x or earlier. To upgrade:
+  ```
+  /plugin marketplace remove claude-kingdom
+  /plugin uninstall claude-kingdom
+  /plugin marketplace add chatthong/kingdom
+  /plugin install kingdom@kingdom
+  ```
+  Any of your scripts, aliases, or notes referencing `/kingdom-doctor` (etc.) need to become `/kingdom:doctor`.
+- **GitHub auto-redirect** — `github.com/chatthong/claude-kingdom` still resolves to the new location, so old clones can `git remote set-url origin https://github.com/chatthong/kingdom.git` to keep working.
+- **No functional changes** — every command does exactly what it did in v0.3.0. Pure rename.
 
 ---
 
 ## [0.3.0] — 2026-05-17
 
-The "audit safety net" release. Adds a forced sweep command + extends watchman with scoped write authority for idle-time docs cleanup. Also adds `marketplace.json` so the repo is installable directly via `/plugin marketplace add chatthong/claude-kingdom`.
+The "audit safety net" release. Adds a forced sweep command + extends watchman with scoped write authority for idle-time docs cleanup. Also adds `marketplace.json` so the repo is installable directly via `/plugin marketplace add chatthong/kingdom`.
 
 ### Added
 
-- **`.claude-plugin/marketplace.json`** — makes this repo serve as its own single-plugin marketplace. Install flow is now `/plugin marketplace add chatthong/claude-kingdom` followed by `/plugin install claude-kingdom@claude-kingdom`. (Local-path install — `/plugin install /path/to/repo` — still works for development.)
-- **`/kingdom-update`** — new slash command that forces a docs/log/task audit pass on one project. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests, merge candidates, archive candidates, suspect entries) for King review. Idempotent; current project only.
+- **`.claude-plugin/marketplace.json`** — makes this repo serve as its own single-plugin marketplace. Install flow is now `/plugin marketplace add chatthong/kingdom` followed by `/plugin install kingdom@kingdom`. (Local-path install — `/plugin install /path/to/repo` — still works for development.)
+- **`/kingdom:update`** — new slash command that forces a docs/log/task audit pass on one project. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests, merge candidates, archive candidates, suspect entries) for King review. Idempotent; current project only.
 - **Watchman docs audit duty** — new section in `watchmans.md` granting watchman scoped write authority on its own project's `tasks/`+`logs/` for low-risk fixes during idle `/loop` time (stale checkboxes, missing log lines, dead `[[name]]` links). Higher-risk findings (digest rewrites, task-file merges, archive moves) are flagged to `WATCH_DOCS_AUDIT.md` for King review.
 - **`WATCH_DOCS_AUDIT.md`** — new single-file-per-project rolling artifact at `<workspace>/.kingdom/<project>/logs/WATCH_DOCS_AUDIT.md`. Watchman appends findings; King reviews + clears bullets after acting.
 - **"Reviewing watchman audit findings" section** in `kings.md` — documents how/when King consumes `WATCH_DOCS_AUDIT.md` and what to do with each finding category.
-- **`/kingdom-doctor` Check 8** — informational scan for orphan raw artifacts (raw with no curated digest). Suggests `/kingdom-update` when found.
-- **README FAQ entries** — `/kingdom-update` purpose + watchman write-authority scope.
+- **`/kingdom:doctor` Check 8** — informational scan for orphan raw artifacts (raw with no curated digest). Suggests `/kingdom:update` when found.
+- **README FAQ entries** — `/kingdom:update` purpose + watchman write-authority scope.
 
 ### Changed
 
@@ -41,7 +73,7 @@ The "actually opinionated" release. Major architectural changes that lock in how
 - **Task files** — new per-task audit artifact at `<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`. Checkbox doc capturing the multi-layer plan (Discovery → Strategy → Execution → Verification), in-progress progress notes, and final summary. Lane master is sole writer; sub-agents and everyone else read only. One file per task; never deleted, never reused.
 - **Multi-layer planning** — explicit recursive fan-out pattern in lane master execution. Layer 1 (Discovery, Haiku fan-out) → Layer 2 (Strategy, Sonnet/Opus) → Layer 3 (Execution, Sonnet parallel) → Layer 4 (Verification). Documented as the canonical pattern in `workers.md`; cross-referenced from `kings.md`, `co-workers.md`, `index.md`.
 - **Role Control authoritative table** in `index.md` — single source of truth for what each role can/can't do (writes / reads / spawns / pushes / edits / plans). Per-role files now document HOW; this table defines WHAT.
-- **Auto-detect outer host mode** — `/kingdom-start` and `/kingdom-doctor` now auto-detect PRIMARY (manaflow/cmux.app) vs FALLBACK (raw tmux) vs HEADLESS (`claude -p`). No user config needed; King adapts to what's installed.
+- **Auto-detect outer host mode** — `/kingdom:start` and `/kingdom:doctor` now auto-detect PRIMARY (manaflow/cmux.app) vs FALLBACK (raw tmux) vs HEADLESS (`claude -p`). No user config needed; King adapts to what's installed.
 - **Native Mermaid diagrams** — every ASCII chart in role docs, README, and git.md converted to Mermaid (16 diagrams total: 2 in README + 4 in git.md + 4 in kings.md + 3 in workers.md + 2 in watchmans.md + 1 in co-workers.md + 1 in index.md). No theme directive — GitHub auto-adapts to user's light/dark theme.
 - **King's own task files for planning sessions** — slug `king-plan` (e.g., `2026-05-17T0900Z__king-plan__pick-todays-3-tasks.md`). Same schema as lane-master task files.
 - **CHANGELOG.md** (this file).
@@ -54,7 +86,7 @@ The "actually opinionated" release. Major architectural changes that lock in how
   - `templates/role-files/*.md` → `.kingdom/.setting/*.md`
   - `templates/kingdom.json.template` → `.kingdom/templates/kingdom.json.template`
   - Slash commands updated to reference the new paths.
-- **README rewritten** — replaced the "What a session looks like" transcript with role intros ("Meet the King — and the masters that work for it"). Expanded `/kingdom-new` documentation to a 5-use-case block (mid-size, large, solo, UI-heavy, unattended) with concrete `workers=N co-workers=M watchman=K` examples. Added FAQ entry for task files.
+- **README rewritten** — replaced the "What a session looks like" transcript with role intros ("Meet the King — and the masters that work for it"). Expanded `/kingdom:new` documentation to a 5-use-case block (mid-size, large, solo, UI-heavy, unattended) with concrete `workers=N co-workers=M watchman=K` examples. Added FAQ entry for task files.
 - **All worker / co-worker slug examples** swapped from `sonnet-worker-1` to `opus-worker-1` to match the new model defaults. Watchman slugs remain `sonnet-watchman-1`.
 - **kingdom.json.template** — each `workers[i]` and `coworkers[i]` entry now has explicit `"model": "opus"`; each `watchmen[i]` entry has `"model": "sonnet"`. `_comment` documents the convention.
 
@@ -62,7 +94,7 @@ The "actually opinionated" release. Major architectural changes that lock in how
 
 - **craigsc/cmux dependency** — kingdom no longer requires the worktree-CLI wrapper. Worktree management now uses plain `git worktree add/remove` (built into git ≥ 2.5). One less install step; no PATH collision risk.
 - **"What a session looks like" transcript** in README — replaced with the role intro section (see Changed).
-- **Common shapes table** in README's `/kingdom-new` section — replaced with 5 per-use-case blocks (each its own emoji + heading + code block) for cleaner rendering at narrow widths.
+- **Common shapes table** in README's `/kingdom:new` section — replaced with 5 per-use-case blocks (each its own emoji + heading + code block) for cleaner rendering at narrow widths.
 - **AGENTS.md mirror pattern** — never used in v0.x; kit is Claude-only. Documented retirement in role files.
 
 ### Fixed
@@ -73,7 +105,7 @@ The "actually opinionated" release. Major architectural changes that lock in how
 
 ### Compatibility notes
 
-- **Breaking** for anyone who installed v0.1.x and customised paths under `templates/role-files/` — those moved to `.kingdom/.setting/`. Re-run `/kingdom-init` after upgrading to pick up the new layout.
+- **Breaking** for anyone who installed v0.1.x and customised paths under `templates/role-files/` — those moved to `.kingdom/.setting/`. Re-run `/kingdom:init` after upgrading to pick up the new layout.
 - **Non-breaking** for anyone who used v0.1's `kingdom.json` — schema is additive (new optional fields, defaults kept compatible).
 - **Behaviour change**: Worker / Co-worker lanes now spawn Opus by default. Cost-per-lane increases. Override in `kingdom.json.workers[i].model` if you want Sonnet for cost reasons (Sonnet is still valid for these roles; just no longer the default).
 
@@ -85,7 +117,7 @@ Initial public release.
 
 ### Added
 
-- 4 slash commands: `/kingdom-doctor`, `/kingdom-init`, `/kingdom-new`, `/kingdom-start`.
+- 4 slash commands: `/kingdom:doctor`, `/kingdom:init`, `/kingdom:new`, `/kingdom:start`.
 - 6 role docs in `templates/role-files/`: `index.md`, `kings.md`, `workers.md`, `co-workers.md`, `watchmans.md`, `git.md`.
 - `kingdom.json.template` config template.
 - `CMUX-Guide.md` (manaflow/cmux reference).

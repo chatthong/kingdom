@@ -1,11 +1,11 @@
 {
-  "name": "claude-kingdom",
-  "version": "0.3.0",
-  "description": "Multi-agent orchestration kit for Claude Code: a King (Opus) coordinates workers, co-workers, and watchmen — each in its own git worktree on its own branch. Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable. /kingdom-update sweeps for drift; watchman does idle-time docs cleanup. Project-aware config, no extra runtime.",
+  "name": "kingdom",
+  "version": "0.4.0",
+  "description": "Multi-agent orchestration kit for Claude Code: a King (Opus) coordinates workers, co-workers, and watchmen — each in its own git worktree on its own branch. Per-task multi-layer task files + 4-step closer artifact pipeline make the work auditable. /kingdom:update sweeps for drift; watchman does idle-time docs cleanup. Project-aware config, no extra runtime.",
   "author": {
-    "name": "claude-kingdom contributors"
+    "name": "kingdom contributors"
   },
-  "homepage": "https://github.com/chatthong/claude-kingdom",
+  "homepage": "https://github.com/chatthong/kingdom",
   "license": "see LICENSE",
   "keywords": ["claude-code", "orchestration", "multi-agent", "cmux", "tmux", "git-worktree", "kingdom", "tasks", "audit"]
 }

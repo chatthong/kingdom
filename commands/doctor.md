@@ -75,7 +75,7 @@ which jq
 - ✅ if a path is returned.
 - ❌ if not found — print exactly:
   ```
-  jq is REQUIRED by /kingdom-start to read kingdom.json. Install:
+  jq is REQUIRED by /kingdom:start to read kingdom.json. Install:
     brew install jq
   ```
 
@@ -92,7 +92,7 @@ gh auth status
 - ✅ if `which gh` returns a path AND `gh auth status` exits 0.
 - ⚠️ if `gh` is missing or `gh auth status` fails — print exactly:
   ```
-  gh CLI is missing or not authenticated. It is required by /kingdom-start
+  gh CLI is missing or not authenticated. It is required by /kingdom:start
   and the Watchman agent for PR babysitting. Install and authenticate:
     brew install gh
     gh auth login
@@ -135,12 +135,12 @@ done
 - ✅ if all projects print `OK` (directory exists or was created successfully).
 - ⚠️ if any project prints `FAIL` — filesystem permissions prevent creation. Report the affected project path and stop; do not auto-fix.
 
-Note: this is an informational check — the `tasks/` directory is auto-created by `/kingdom-new` and `/kingdom-start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
+Note: this is an informational check — the `tasks/` directory is auto-created by `/kingdom:new` and `/kingdom:start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
 
 If no `.kingdom/*/kingdom.json` files exist yet (kingdom not yet initialised), print:
 
 ```
-No kingdom.json found — tasks/ check skipped (run /kingdom-new first).
+No kingdom.json found — tasks/ check skipped (run /kingdom:new first).
 ```
 
 and mark this check ✅ (not applicable).
@@ -213,7 +213,7 @@ If `~/.claude/settings.json` does not exist, create it with `{}` as the base bef
 
 ## Check 8 — Orphan audit artifacts (informational)
 
-For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest — a sign that a lane closer was interrupted or that `/kingdom-update` is due.
+For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest — a sign that a lane closer was interrupted or that `/kingdom:update` is due.
 
 ```bash
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
@@ -234,7 +234,7 @@ done
 - ✅ if every project reports `0 orphan(s)`.
 - ⚠️ if any project has orphans — print exactly:
   ```
-  Found orphan raw artifacts in <project>. Run /kingdom-update <project>
+  Found orphan raw artifacts in <project>. Run /kingdom:update <project>
   to backfill curated digests + master_agent.log lines.
   ```
 
@@ -255,7 +255,7 @@ Then print ONE of:
 
 **All green:**
 ```
-Kingdom is ready. Run /kingdom-start to launch your first session.
+Kingdom is ready. Run /kingdom:start to launch your first session.
 ```
 
 **Some yellow/red but no critical ❌:**
@@ -266,7 +266,7 @@ Kingdom partially ready — install the following to enable the full feature set
 
 **Any critical ❌ (manaflow/cmux app, jq, git < 2.5):**
 ```
-Kingdom not ready — install the following before running /kingdom-start:
+Kingdom not ready — install the following before running /kingdom:start:
   - <item> (<reason>)
 ```
 

@@ -83,4 +83,4 @@ Created:
 
 Tell the user:
 
-> Done. Next: run `/kingdom-new <project-name>` to create a `kingdom.json` for a specific project, then `/kingdom-doctor` to verify your machine is set up correctly.
+> Done. Next: run `/kingdom:new <project-name>` to create a `kingdom.json` for a specific project, then `/kingdom:doctor` to verify your machine is set up correctly.

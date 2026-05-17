@@ -9,13 +9,13 @@ You are creating a `kingdom.json` for a specific project. Parse `$ARGUMENTS`, th
 
 From `$ARGUMENTS`, extract:
 
-- `project` — the first positional argument (required). If missing, tell the user "Usage: /kingdom-new <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]" and stop.
+- `project` — the first positional argument (required). If missing, tell the user "Usage: /kingdom:new <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]" and stop.
 - `workers` — value from `workers=N` (default: `3`)
 - `co-workers` — value from `co-workers=M` (default: `1`)
 - `watchman` — value from `watchman=K` (default: `1`)
 - `base` — value from `base=<branch>` (default: `develop`)
 
-Example: `/kingdom-new td-rep workers=4 base=main` → project=`td-rep`, workers=`4`, co-workers=`1`, watchman=`1`, base=`main`.
+Example: `/kingdom:new td-rep workers=4 base=main` → project=`td-rep`, workers=`4`, co-workers=`1`, watchman=`1`, base=`main`.
 
 ## Step 1 — Verify kingdom-init has been run
 
@@ -26,7 +26,7 @@ ls "$PWD/.kingdom/.setting/" 2>/dev/null && echo "SETTING_EXISTS" || echo "SETTI
 
 If `SETTING_MISSING`, tell the user:
 
-> `.kingdom/.setting/` not found. Run `/kingdom-init` first to scaffold the role docs, then retry.
+> `.kingdom/.setting/` not found. Run `/kingdom:init` first to scaffold the role docs, then retry.
 
 Stop. Do not continue.
 
@@ -123,4 +123,4 @@ Print the output so the user can verify.
 
 Tell the user:
 
-> Done. Next: edit `.kingdom/<project>/kingdom.json` to set per-worker `focus` + `ownsPaths` and the `gate.*` command lists for your project's stack. Then run `/kingdom-start <project>` to spawn the kingdom. Lane masters will create task files in `.kingdom/<project>/tasks/` as work is assigned.
+> Done. Next: edit `.kingdom/<project>/kingdom.json` to set per-worker `focus` + `ownsPaths` and the `gate.*` command lists for your project's stack. Then run `/kingdom:start <project>` to spawn the kingdom. Lane masters will create task files in `.kingdom/<project>/tasks/` as work is assigned.

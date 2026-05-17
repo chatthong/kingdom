@@ -1,10 +1,10 @@
 <div align="center">
 
-# 👑 claude-kingdom
+# 👑 kingdom
 
 **One King. N workers. Auditable parallel coding with Claude Code.**
 
-![Version](https://img.shields.io/badge/version-0.3.0-success)
+![Version](https://img.shields.io/badge/version-0.4.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -36,7 +36,7 @@ A Claude Code plugin that turns one Claude session into a coordinated team — e
 
 ---
 
-## ✨ Why claude-kingdom?
+## ✨ Why kingdom?
 
 - **Real parallelism** — 3–10 lanes editing different branches simultaneously, isolated by `git worktree`
 - **One conversation** — you talk to the King; the King talks to the lanes; you never juggle panes
@@ -50,21 +50,21 @@ A Claude Code plugin that turns one Claude session into a coordinated team — e
 In **any** Claude Code session, register the marketplace then install the plugin:
 
 ```
-/plugin marketplace add chatthong/claude-kingdom
-/plugin install claude-kingdom@claude-kingdom
+/plugin marketplace add chatthong/kingdom
+/plugin install kingdom@kingdom
 ```
 
-> First command adds this repo as a marketplace; second installs the plugin from it (plugin-name @ marketplace-name). Local-path install also works for development: `/plugin install /path/to/claude-kingdom`.
+> First command adds this repo as a marketplace; second installs the plugin from it (plugin-name @ marketplace-name). Local-path install also works for development: `/plugin install /path/to/kingdom`.
 
 Then run the doctor to verify your machine:
 
 ```
-/kingdom-doctor
+/kingdom:doctor
 ```
 
-`/kingdom-doctor` checks `cmux.app`, `tmux`, `jq`, `gh`, and `~/.claude/settings.json`. For anything missing it prints the exact `brew install` command. For `settings.json` it shows a diff and asks before patching. **It never auto-installs system deps.**
+`/kingdom:doctor` checks `cmux.app`, `tmux`, `jq`, `gh`, and `~/.claude/settings.json`. For anything missing it prints the exact `brew install` command. For `settings.json` it shows a diff and asks before patching. **It never auto-installs system deps.**
 
-Dependencies (`/kingdom-start` auto-detects PRIMARY → FALLBACK → HEADLESS and dispatches accordingly):
+Dependencies (`/kingdom:start` auto-detects PRIMARY → FALLBACK → HEADLESS and dispatches accordingly):
 
 ```bash
 brew tap manaflow-ai/cmux && brew install --cask cmux   # macOS primary dispatch
@@ -77,7 +77,7 @@ gh auth login                                             # for PR babysitting
 Update anytime:
 
 ```
-/plugin update claude-kingdom
+/plugin update kingdom
 ```
 
 ---
@@ -97,7 +97,7 @@ claude                   # launch Claude Code AT THE WORKSPACE ROOT
 Inside Claude, scaffold once per workspace:
 
 ```
-/kingdom-init
+/kingdom:init
 ```
 
 Creates `.kingdom/.setting/` with the 6 role docs. **Run once; never again** unless the role specs change.
@@ -105,17 +105,17 @@ Creates `.kingdom/.setting/` with the 6 role docs. **Run once; never again** unl
 Then create a config per project:
 
 ```
-/kingdom-new my-app
+/kingdom:new my-app
 ```
 
 Creates `.kingdom/my-app/kingdom.json` + `.kingdom/my-app/{logs,tasks}/`. Default shape: **3 workers + 1 co-worker + 1 watchman**.
 
 ---
 
-## `/kingdom-new` — pick your shape
+## `/kingdom:new` — pick your shape
 
 ```
-/kingdom-new <project> [workers=N] [co-workers=M] [watchman=K]
+/kingdom:new <project> [workers=N] [co-workers=M] [watchman=K]
 ```
 
 Each parameter is independent — set what you need, the rest fall to defaults.
@@ -123,7 +123,7 @@ Each parameter is independent — set what you need, the rest fall to defaults.
 #### 🏢 Mid-size project — the default
 
 ```
-/kingdom-new my-app
+/kingdom:new my-app
 ```
 
 Equivalent to `workers=3 co-workers=1 watchman=1`. One worker per component (backend / frontend / ops), one paired lane reserved for you, one watchman over everything. **Start here unless you have a specific reason not to.**
@@ -131,7 +131,7 @@ Equivalent to `workers=3 co-workers=1 watchman=1`. One worker per component (bac
 #### 🏭 Large project — specialized workers
 
 ```
-/kingdom-new my-app workers=5 co-workers=2 watchman=1
+/kingdom:new my-app workers=5 co-workers=2 watchman=1
 ```
 
 Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two paired tracks (e.g., design exploration + content review), one watchman. Useful when one developer is steering many concurrent threads.
@@ -139,7 +139,7 @@ Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two 
 #### 🚀 Solo side-project — single autonomous lane
 
 ```
-/kingdom-new my-app workers=1 co-workers=0 watchman=0
+/kingdom:new my-app workers=1 co-workers=0 watchman=0
 ```
 
 One worker, no monitoring, no paired track. Best for rapid prototypes or one-person repos where parallelism + audit overhead isn't worth it.
@@ -147,7 +147,7 @@ One worker, no monitoring, no paired track. Best for rapid prototypes or one-per
 #### 🎨 UI-heavy day — everything paired
 
 ```
-/kingdom-new my-app workers=0 co-workers=2 watchman=1
+/kingdom:new my-app workers=0 co-workers=2 watchman=1
 ```
 
 No autonomous work — every lane is paired with you (e.g., redesigning the navbar in `co-worker-1` while iterating on the checkout flow in `co-worker-2`). One watchman keeps you informed of anything moving on `develop`.
@@ -155,7 +155,7 @@ No autonomous work — every lane is paired with you (e.g., redesigning the navb
 #### 🌙 Unattended overnight — autonomous + heavy monitoring
 
 ```
-/kingdom-new my-app workers=3 co-workers=0 watchman=2
+/kingdom:new my-app workers=3 co-workers=0 watchman=2
 ```
 
 Three workers grinding a sub-task queue; two watchmen (one on backend smoke, one on frontend smoke). No paired track — you're not at the keyboard. `WATCH_*.md` reports give you the morning recap.
@@ -174,19 +174,19 @@ Soft cap: total lanes ≤ `sanityCap` (default `10`). Past 10 the UI gets crampe
 
 ---
 
-### What happens when you run `/kingdom-new`
+### What happens when you run `/kingdom:new`
 
 1. **Creates** `.kingdom/<project>/kingdom.json` from the template, shape pre-filled.
 2. **Creates** `.kingdom/<project>/{logs,tasks}/` directories — the audit-trail homes.
 3. **Prints** the resulting JSON for you to review.
 
-**Declare ≠ launch.** `/kingdom-new` only *declares* the shape. Before running `/kingdom-start my-app`, open the generated `kingdom.json` and customise:
+**Declare ≠ launch.** `/kingdom:new` only *declares* the shape. Before running `/kingdom:start my-app`, open the generated `kingdom.json` and customise:
 
 - `workers[i].focus` + `ownsPaths` — what each worker owns (component label + file globs)
 - `gate.*` command lists — your project's typecheck / tests / smoke / lint (King runs these before every push)
 - `git.base` — your PR target branch (default `develop`; many repos use `main`)
 
-> **Re-running `/kingdom-new` on an existing project** is safe — it shows the existing config and asks before overwriting. Useful for bumping the shape without blowing away your `ownsPaths` / `gate.*` customisations.
+> **Re-running `/kingdom:new` on an existing project** is safe — it shows the existing config and asks before overwriting. Useful for bumping the shape without blowing away your `ownsPaths` / `gate.*` customisations.
 
 ---
 
@@ -267,7 +267,7 @@ Full diagram + commit flow: [`git.md`](.kingdom/.setting/git.md).
 
 ## ⚙️ Configure your project
 
-`/kingdom-new <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom-start`:
+`/kingdom:new <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom:start`:
 
 ```json
 {
@@ -287,7 +287,7 @@ Full diagram + commit flow: [`git.md`](.kingdom/.setting/git.md).
 }
 ```
 
-The King reads this at `/kingdom-start` to:
+The King reads this at `/kingdom:start` to:
 - Spawn the right number of lanes
 - Match claimable sub-tasks to lanes by `focus` + `ownsPaths`
 - Run YOUR exact gate commands inside each lane's worktree before any PR
@@ -298,11 +298,11 @@ The King reads this at `/kingdom-start` to:
 
 | Command | What it does |
 |---|---|
-| `/kingdom-doctor` | Check prerequisites; auto-patch `~/.claude/settings.json` (diff + ask per field). Re-run anytime. |
-| `/kingdom-init` | Scaffold `.kingdom/.setting/` in the current workspace (copies 6 role docs from the plugin). |
-| `/kingdom-new <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Create `.kingdom/<project>/kingdom.json` from template. |
-| `/kingdom-start <project> [shape overrides]` | Spawn the kingdom: lane worktrees + `cmux claude-teams` + sidebar tags + watchman `/loop`. |
-| `/kingdom-update [project=<name>]` | Force a docs/log/task audit sweep — re-check checkboxes against git log, backfill orphan digests, flag stale digests + merge candidates. Idempotent; current project only. |
+| `/kingdom:doctor` | Check prerequisites; auto-patch `~/.claude/settings.json` (diff + ask per field). Re-run anytime. |
+| `/kingdom:init` | Scaffold `.kingdom/.setting/` in the current workspace (copies 6 role docs from the plugin). |
+| `/kingdom:new <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Create `.kingdom/<project>/kingdom.json` from template. |
+| `/kingdom:start <project> [shape overrides]` | Spawn the kingdom: lane worktrees + `cmux claude-teams` + sidebar tags + watchman `/loop`. |
+| `/kingdom:update [project=<name>]` | Force a docs/log/task audit sweep — re-check checkboxes against git log, backfill orphan digests, flag stale digests + merge candidates. Idempotent; current project only. |
 
 ---
 
@@ -337,7 +337,7 @@ Full role specs: [`.kingdom/.setting/index.md`](.kingdom/.setting/index.md).
 
 **Existing fixes:** `git worktree` gives isolated checkouts but no orchestration. Manual tmux gives panes but no audit trail. Headless `claude -p` chains give batch but no visibility.
 
-**claude-kingdom:** an opinionated stack that puts these together:
+**kingdom:** an opinionated stack that puts these together:
 
 - `git worktree` for isolation (built into git ≥ 2.5)
 - tmux-protocol for dispatch (via cmux.app's `__tmux-compat`)
@@ -407,21 +407,21 @@ Every assignment to a lane creates one at `.kingdom/<project>/tasks/<UTC>__<lane
 <details>
 <summary><strong>What happens if a lane crashes?</strong></summary>
 
-State persists in the worktree filesystem. Re-running `/kingdom-start <project>` detects existing worktrees and `cd`s into them (resume) instead of `git worktree add` (create). The 4-step closer's sentinel flag is the source of truth — if the flag is present, the lane finished; if not, dispatch a fix-task.
+State persists in the worktree filesystem. Re-running `/kingdom:start <project>` detects existing worktrees and `cd`s into them (resume) instead of `git worktree add` (create). The 4-step closer's sentinel flag is the source of truth — if the flag is present, the lane finished; if not, dispatch a fix-task.
 
 </details>
 
 <details>
 <summary><strong>Can I run this without manaflow/cmux?</strong></summary>
 
-Yes. `/kingdom-start` auto-detects what's available. If cmux.app isn't running, it falls back to raw tmux automatically — no config change, no extra tools required.
+Yes. `/kingdom:start` auto-detects what's available. If cmux.app isn't running, it falls back to raw tmux automatically — no config change, no extra tools required.
 
 </details>
 
 <details>
-<summary><strong>What is `/kingdom-update` for?</strong></summary>
+<summary><strong>What is `/kingdom:update` for?</strong></summary>
 
-A forced audit sweep. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests to rewrite, task files to merge, suspect "claimed-done-but-no-commit" entries) for King review. Idempotent — safe to run any time. Watchman does the same low-risk fixes continuously during idle `/loop` time; `/kingdom-update` is the explicit one-shot version.
+A forced audit sweep. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests to rewrite, task files to merge, suspect "claimed-done-but-no-commit" entries) for King review. Idempotent — safe to run any time. Watchman does the same low-risk fixes continuously during idle `/loop` time; `/kingdom:update` is the explicit one-shot version.
 
 </details>
 
@@ -440,10 +440,10 @@ The kingdom is opinionated by design — most defaults exist because of a specif
 
 Especially welcome:
 
-- Brew tap formula (`brew install chatthong/tap/claude-kingdom`)
+- Brew tap formula (`brew install chatthong/tap/kingdom`)
 - Linux dev-container preset
 - Per-stack `kingdom.json` examples (Rust, Go, Python+Django, Next.js+TRPC, etc.)
-- VS Code task definitions that wrap `/kingdom-start`
+- VS Code task definitions that wrap `/kingdom:start`
 
 ---
 

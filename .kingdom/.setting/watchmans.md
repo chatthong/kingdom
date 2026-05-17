@@ -343,7 +343,7 @@ Last scan: <UTC>
 - `tasks/<UTC>__co-worker-1__redesign.md`: item "wire up auth" — no commit trace
 ```
 
-King reviews → dispatches `/kingdom-update` or a targeted sub-agent. Watchman never edits high-risk items itself.
+King reviews → dispatches `/kingdom:update` or a targeted sub-agent. Watchman never edits high-risk items itself.
 
 ### Boundary
 
@@ -353,11 +353,11 @@ Watchman's write authority is scoped to `<workspace>/.kingdom/<project>/{tasks,l
 - `kingdom.json`
 - `.git/` or branches
 
-If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom-update` sweeps it); cost of a wrong autonomous edit is reputational.
+If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom:update` sweeps it); cost of a wrong autonomous edit is reputational.
 
 ### Cadence
 
-Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom-update` (explicit) rather than continuously.
+Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom:update` (explicit) rather than continuously.
 
 ---
 

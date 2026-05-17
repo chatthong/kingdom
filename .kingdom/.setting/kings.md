@@ -401,7 +401,7 @@ Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, 
 ### When to read it
 
 - At the start of each planning session (alongside `master_agent.log` tail).
-- Before running `/kingdom-update` — the audit file tells you what the sweep will likely touch.
+- Before running `/kingdom:update` — the audit file tells you what the sweep will likely touch.
 - After a watchman alert mentions docs drift.
 
 ```bash
@@ -422,7 +422,7 @@ WATCH_AUDIT="$LOGS/WATCH_DOCS_AUDIT.md"
 
 Once King has acted on a finding, **delete that bullet from `WATCH_DOCS_AUDIT.md`** (or have the follow-up sub-agent do it as part of its closer). Watchman re-scans each `/loop` tick and re-flags anything still drifting, so the file naturally stays current.
 
-If `WATCH_DOCS_AUDIT.md` grows past ~50 bullets, run `/kingdom-update` for a full sweep instead of triaging item-by-item.
+If `WATCH_DOCS_AUDIT.md` grows past ~50 bullets, run `/kingdom:update` for a full sweep instead of triaging item-by-item.
 
 ---
 

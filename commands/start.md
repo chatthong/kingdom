@@ -25,7 +25,7 @@ SETTING="$WS/.kingdom/.setting/index.md"
 ```
 
 1. Verify `$SETTING` exists.
-   - If not: "`.kingdom/.setting/index.md` not found — run `/kingdom-init` first, then retry."
+   - If not: "`.kingdom/.setting/index.md` not found — run `/kingdom:init` first, then retry."
    - Stop.
 
 2. Verify `$PROJ` exists as a directory.
@@ -33,7 +33,7 @@ SETTING="$WS/.kingdom/.setting/index.md"
    - Stop.
 
 3. Verify `$KJSON` exists.
-   - If not: "`.kingdom/$PROJECT/kingdom.json` not found — run `/kingdom-new $PROJECT` first, then retry."
+   - If not: "`.kingdom/$PROJECT/kingdom.json` not found — run `/kingdom:new $PROJECT` first, then retry."
    - Stop.
 
 4. Read shape + git config via `jq`:
@@ -169,7 +169,7 @@ and environment:
 CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
-- If either is missing: "Pre-req not met — run `/kingdom-doctor` to configure, then retry Phase 5."
+- If either is missing: "Pre-req not met — run `/kingdom:doctor` to configure, then retry Phase 5."
   Stop here; do not call `cmux claude-teams`.
 
 On approval:

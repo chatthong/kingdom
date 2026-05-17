@@ -34,7 +34,7 @@ brew tap manaflow-ai/cmux && brew install --cask cmux
 
 | Feature | CLI | Used by |
 |---|---|---|
-| Spawn Claude Code teammates as native splits | `cmux claude-teams` | /kingdom-start (PRIMARY mode) |
+| Spawn Claude Code teammates as native splits | `cmux claude-teams` | /kingdom:start (PRIMARY mode) |
 | Send keystrokes to a pane | `cmux send --pane <handle> "<text>"` | King dispatching tasks to lanes |
 | Send a single key | `cmux send-key --pane <handle> Enter` | King confirming permission prompts |
 | Push a notification | `cmux notify --workspace <id> "<message>"` | Lanes/Watchman alerting King/Ter |
@@ -50,7 +50,7 @@ brew tap manaflow-ai/cmux && brew install --cask cmux
 
 - King launches via `cd <workspace> && claude` inside cmux.app (auto-memory loads at
   workspace root).
-- King's slash command `/kingdom-start` runs `cmux claude-teams` to spawn Claude Code
+- King's slash command `/kingdom:start` runs `cmux claude-teams` to spawn Claude Code
   teammates as native cmux splits.
 - King then runs `cmux list-panes` to discover handles, `cmux rename-tab` to label
   each pane (worker-1, worker-2, …), and `cmux send` to inject task briefs into each.
@@ -78,7 +78,7 @@ as actual tmux panes (fallback path) — see TMUX-Guide.md.
 ### Dispatch a task brief to a lane
 
 ```bash
-# Discover what panes exist after /kingdom-start
+# Discover what panes exist after /kingdom:start
 cmux tree --json | jq '.panes[] | {handle, label}'
 
 # Send a multi-line task brief (write to file first to avoid paste fragmentation)
