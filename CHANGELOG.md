@@ -4,6 +4,25 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.1] — 2026-05-18
+
+### Fixed
+
+- **`/kingdom:start` PRIMARY mode was renaming the wrong thing.** The King-workspace rename added in v0.13.1 used `cmux tab-action --action rename --workspace <ws>` — that actually renames the focused **surface** in workspace context, NOT the workspace's sidebar label. Sidebar kept showing whatever Claude Code auto-titled the active conversation. Now uses the correct `cmux workspace-action --action rename --workspace <ws> --title "…"` (the dedicated workspace-level command).
+- **Pin command similarly corrected** — `tab-action --action pin --workspace <ws>` → `workspace-action --action pin --workspace <ws>`. (cmux accepts both; `workspace-action` is canonical for workspace ops.)
+
+### Added
+
+- **Workspace colors applied per role.** After spawning each lane workspace, `/kingdom:start` now runs `cmux workspace-action --action set-color --workspace <ref> --color <named>` to apply the color from `kingdom.json.cmux.workspaceColors`. Defaults: King=amber, Worker=violet, Co-worker=blue, Watchman=rose. Visible as left-edge color bars in the cmux.app sidebar — visual role discrimination at a glance.
+- **King workspace gets a description** — `cmux workspace-action --action set-description` sets "Your conversation · pinned · `<UTC>`" so the sidebar shows context under the King's name.
+- **`.kingdom/.setting/cmux.md` updated** with the workspace-action vs tab-action distinction (new "Rename" section table, new "Set workspace color + description" section, new "Common pitfalls" row for the renamed-wrong-thing case).
+
+### Why this matters
+
+Real test: user could see `👑 King · bfg-swt` correctly appear when manually running `cmux workspace-action --action rename --workspace workspace:17 --title "👑 King · bfg-swt"`. The spec was using `tab-action` which silently no-op'd the sidebar label. Two near-identical commands (`tab-action --action rename --workspace …` vs `workspace-action --action rename --workspace …`) do completely different things — the spec needed the explicit fix.
+
+---
+
 ## [0.14.0] — 2026-05-18
 
 The "graceful teardown" release. New `/kingdom:exit` command for safely closing a kingdom session — checks in-flight work, notifies each lane, gracefully exits Claude in each workspace, closes lane workspaces, writes a session-end log marker. Keeps the King's workspace by default.

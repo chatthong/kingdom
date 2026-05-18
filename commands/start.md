@@ -178,35 +178,60 @@ On approval, spawn each master as its own workspace:
 KING_WS="${CMUX_WORKSPACE_ID:-workspace:1}"
 declare -A WORKER_WS COWORKER_WS WATCHMAN_WS
 
-# Rename the King's own workspace — it's just "Claude Code" by default
-cmux tab-action --action rename \
+# Workspace colors from kingdom.json.cmux.workspaceColors (cmux named-color set:
+# Red, Crimson, Orange, Amber, Olive, Green, Teal, Aqua, Blue, Navy, Indigo,
+# Purple, Magenta, Rose, Brown, Charcoal — lowercase OK)
+KING_COLOR=$(jq -r     '.cmux.workspaceColors.king     // "amber"'  "$KJSON")
+WORKER_COLOR=$(jq -r   '.cmux.workspaceColors.worker   // "violet"' "$KJSON")
+COWORKER_COLOR=$(jq -r '.cmux.workspaceColors.coworker // "blue"'   "$KJSON")
+WATCHMAN_COLOR=$(jq -r '.cmux.workspaceColors.watchman // "rose"'   "$KJSON")
+
+# IMPORTANT: cmux has TWO rename surfaces:
+#   tab-action --action rename       renames the inner SURFACE (tab label inside the workspace)
+#   workspace-action --action rename renames the WORKSPACE itself (shown in sidebar)
+# We want the workspace rename here — use workspace-action.
+
+# Rename + recolor the King's own workspace (its default name is just "Claude Code")
+cmux workspace-action --action rename \
   --workspace "$KING_WS" \
   --title "👑 King · $PROJECT" 2>/dev/null
 
-# Pin the King's workspace so it stays at top of sidebar (per cmux.json config)
+cmux workspace-action --action set-color \
+  --workspace "$KING_WS" \
+  --color "$KING_COLOR" 2>/dev/null
+
+cmux workspace-action --action set-description \
+  --workspace "$KING_WS" \
+  --description "Your conversation · pinned · $(date -u +%Y-%m-%dT%H%MZ)" 2>/dev/null
+
+# Pin the King's workspace so it stays at top of sidebar (per kingdom.json.cmux.pinKingWorkspace)
 PIN_KING=$(jq -r '.cmux.pinKingWorkspace // true' "$KJSON")
-[ "$PIN_KING" = "true" ] && cmux tab-action --action pin --workspace "$KING_WS" 2>/dev/null
+[ "$PIN_KING" = "true" ] && cmux workspace-action --action pin --workspace "$KING_WS" 2>/dev/null
 
 spawn_master_workspace () {
-  local label="$1" path="$2"
-  # Returns "OK workspace:N" — capture the ref
-  cmux new-workspace \
+  local label="$1" path="$2" color="$3"
+  # Step 1: create the workspace (returns "OK workspace:N")
+  local ref=$(cmux new-workspace \
     --name "$label" \
     --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
     --cwd "$path" \
     --command "claude" \
     --focus false \
-    | awk '/workspace:/ {print $2}'
+    | awk '/workspace:/ {print $2}')
+  # Step 2: set workspace color (new-workspace doesn't have a --color flag)
+  [ -n "$ref" ] && [ -n "$color" ] && \
+    cmux workspace-action --action set-color --workspace "$ref" --color "$color" 2>/dev/null
+  echo "$ref"
 }
 
-# Spawn workers
+# Spawn workers (violet)
 for I in $(seq 1 "$WORKERS"); do
-  WORKER_WS["$I"]=$(spawn_master_workspace "👷 worker-$I" "$PROJ/.worktrees/worker-$I")
+  WORKER_WS["$I"]=$(spawn_master_workspace "👷 worker-$I" "$PROJ/.worktrees/worker-$I" "$WORKER_COLOR")
 done
 
-# Spawn co-workers
+# Spawn co-workers (blue)
 for I in $(seq 1 "$COWORKERS"); do
-  COWORKER_WS["$I"]=$(spawn_master_workspace "🧑‍💼 co-worker-$I" "$PROJ/.worktrees/co-worker-$I")
+  COWORKER_WS["$I"]=$(spawn_master_workspace "🧑‍💼 co-worker-$I" "$PROJ/.worktrees/co-worker-$I" "$COWORKER_COLOR")
 done
 
 # Spawn watchmen — with optional dual-view split layout from kingdom.json
@@ -230,8 +255,11 @@ for I in $(seq 1 "$WATCHMEN"); do
       --layout "$LAYOUT_JSON" \
       --focus false \
       | awk '/workspace:/ {print $2}')
+    # Set watchman color (rose) — new-workspace doesn't accept --color
+    [ -n "${WATCHMAN_WS[$I]}" ] && \
+      cmux workspace-action --action set-color --workspace "${WATCHMAN_WS[$I]}" --color "$WATCHMAN_COLOR" 2>/dev/null
   else
-    WATCHMAN_WS["$I"]=$(spawn_master_workspace "🕵️ watchman-$I" "$PROJ/.worktrees/watchman-$I")
+    WATCHMAN_WS["$I"]=$(spawn_master_workspace "🕵️ watchman-$I" "$PROJ/.worktrees/watchman-$I" "$WATCHMAN_COLOR")
   fi
 done
 

@@ -36,12 +36,14 @@ Target version: **manaflow/cmux ≥ 0.64.6**. Not to be confused with `craigsc/c
 | Spawn a visible sub-agent tab | `cmux tab-action --action new-terminal-right --workspace <master-ws>` | [§ Spawn tab](#spawn-a-tab) |
 | Spawn a split inside a workspace | `cmux new-split <left\|right\|up\|down>` OR `--layout` at workspace creation | [§ Spawn split](#spawn-a-split) |
 | Send a prompt/command to a target | `cmux send --workspace <ref>` or `--surface <ref> --` `<text>` + `Enter` | [§ Send](#send-a-prompt-or-command) |
-| Rename a tab/workspace | `cmux rename-tab --surface <ref> -- "<title>"` | [§ Rename](#rename) |
+| Rename a **workspace** (sidebar label) | `cmux workspace-action --action rename --workspace <ref> --title "…"` | [§ Rename](#rename) |
+| Rename a **surface** (tab inside a workspace) | `cmux tab-action --action rename --surface <ref> --title "…"` | [§ Rename](#rename) |
+| Set workspace color / description | `cmux workspace-action --action set-color\|set-description …` | [§ Set workspace color + description](#set-workspace-color--description) |
 | Close own tab (5-step closer Step 5) | `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` | [§ Close tab](#close-own-tab) |
 | Send notification | `cmux notify --workspace <ref> --title --body` | [§ Notify](#notify) |
 | Identify current context | `cmux identify --json` | [§ Identify](#identify) |
 | List/inspect topology | `cmux tree --all` or `cmux list-panes --workspace <ref> --json` | [§ Inspect](#inspect-topology) |
-| Pin King's workspace at top of sidebar | `cmux tab-action --action pin --workspace <ref>` | [§ Pin](#pin-a-workspace) |
+| Pin a workspace at top of sidebar | `cmux workspace-action --action pin --workspace <ref>` | [§ Pin](#pin-a-workspace) |
 
 ---
 
@@ -187,15 +189,25 @@ Special keys: `Enter`, `C-l` (Ctrl-L, clear), `C-c` (Ctrl-C), etc. — sent posi
 
 ## Rename
 
-```bash
-# Rename a tab/workspace by surface ref
-cmux rename-tab --surface "$SURFACE_REF" -- "👷 worker-1 (BE-AUTH-3)"
+**Two distinct commands** — pick the one that matches what you want renamed:
 
-# Rename a workspace by workspace ref
-cmux tab-action --action rename --workspace "$WORKER_WS_1" --title "👷 worker-1 (BE-AUTH-3)"
+| Command | What it renames | Use case |
+|---|---|---|
+| `cmux workspace-action --action rename --workspace <ws> --title "…"` | **Workspace itself** (sidebar label) | Setting the role-level identity: `👑 King · bfg-swt`, `👷 worker-1` |
+| `cmux tab-action --action rename --surface <ref> --title "…"` | **Inner surface** (tab label inside a workspace) | Setting per-tab labels when a workspace has multiple tabs (e.g., `🐱 sub · Sonnet · code`) |
+| `cmux rename-tab --surface <ref> -- "…"` | Same as `tab-action --action rename` (alias) | Convenience |
+
+```bash
+# Workspace-level rename (sidebar label)
+cmux workspace-action --action rename --workspace "$WORKER_WS_1" --title "👷 worker-1 (BE-AUTH-3)"
+
+# Surface-level rename (tab label inside the workspace)
+cmux tab-action --action rename --surface "$SURFACE_REF" --title "🐱 sub · Sonnet · code"
 ```
 
-Useful for showing live task progress: as the worker moves through layers, rename to reflect (`"👷 worker-1 (BE-AUTH-3 · L3/4)"`). Reverts to plain `"👷 worker-1"` at task completion via the closer.
+**Common mistake:** using `tab-action --action rename --workspace <ws>` to rename the workspace itself — that actually renames the focused tab in workspace context, not the workspace's name. Always use `workspace-action` for sidebar identity.
+
+Useful for showing live task progress: as the worker moves through layers, rename the workspace to reflect (`workspace-action ... --title "👷 worker-1 (BE-AUTH-3 · L3/4)"`). Reverts to plain `"👷 worker-1"` at task completion via the closer.
 
 ---
 
@@ -280,11 +292,43 @@ The kingdom uses `cmux tree --all` in `/kingdom:doctor` and on resume to verify 
 Pin = workspace stays at the top of the cmux.app sidebar. Kingdom pins the King's workspace by default (controlled by `kingdom.json.cmux.pinKingWorkspace`).
 
 ```bash
-cmux tab-action --action pin --workspace "$KING_WS"
+cmux workspace-action --action pin --workspace "$KING_WS"
 
 # Unpin
-cmux tab-action --action unpin --workspace "$KING_WS"
+cmux workspace-action --action unpin --workspace "$KING_WS"
 ```
+
+> **Note:** `cmux tab-action --action pin --workspace <ws>` also works (cmux accepts either; tab-action falls through to workspace-action when the target is a workspace), but `workspace-action` is the canonical name for workspace-level ops.
+
+## Set workspace color + description
+
+Colors are visible per-workspace in cmux.app's sidebar (left-edge color bar). Use to distinguish roles at a glance.
+
+```bash
+# Color (named — case-insensitive)
+cmux workspace-action --action set-color --workspace "$WORKER_WS_1" --color violet
+cmux workspace-action --action set-color --workspace "$KING_WS"     --color amber
+
+# Description (the smaller text under the workspace name in the sidebar)
+cmux workspace-action --action set-description --workspace "$WORKER_WS_1" --description "BE-AUTH-3 · layer 3/4"
+
+# Clear them
+cmux workspace-action --action clear-color       --workspace "$WORKER_WS_1"
+cmux workspace-action --action clear-description --workspace "$WORKER_WS_1"
+```
+
+Available named colors: **Red, Crimson, Orange, Amber, Olive, Green, Teal, Aqua, Blue, Navy, Indigo, Purple, Magenta, Rose, Brown, Charcoal**. Or pass a `#RRGGBB` hex.
+
+Kingdom's default mapping (in `kingdom.json.cmux.workspaceColors`):
+
+| Role | Color |
+|---|---|
+| 👑 King | `amber` |
+| 👷 Worker | `violet` (alias `Purple`) |
+| 🧑‍💼 Co-worker | `blue` |
+| 🕵️ Watchman | `rose` |
+
+The `new-workspace` command **does not accept `--color`** — set it via a second `workspace-action --action set-color` call right after creation.
 
 ---
 
@@ -292,11 +336,13 @@ cmux tab-action --action unpin --workspace "$KING_WS"
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Workspace renamed but sidebar still shows old name | Used `tab-action --action rename --workspace <ws>` — that renames the focused **surface** within workspace context, NOT the workspace's sidebar label | Use `workspace-action --action rename --workspace <ws> --title "…"` (the dedicated workspace-level command) |
 | `cmux claude-teams` errors with prompt required | `claude-teams` is a thin pass-through to `claude --print`, which needs input. Kingdom doesn't use it. | Use `cmux new-workspace --command "claude"` per lane instead. |
 | `Tab not found` from `cmux tab-action` | Missing `--surface` or `--tab` flag when `$CMUX_SURFACE_ID` isn't set | Pass `--surface "$CMUX_SURFACE_ID"` explicitly, or use `--workspace <ref>` if targeting a whole workspace |
 | Workspace ref drifts after restart | Workspace refs are NOT stable across cmux.app restarts | Kingdom persists refs to `<LOGS>/workspace-refs.env` and re-reads on `/kingdom:start` resume — but if cmux.app was force-quit, refs may need rebuilding. Doctor Check 1 flags this. |
 | Sub-agent tab doesn't close | The sub-agent's process didn't run Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`) | Verify `$CMUX_SURFACE_ID` was set when the sub-agent launched — if not, the spawn went through `Agent(...)` not `cmux tab-action`, and there's no tab to close |
 | `cmux send` doesn't trigger Enter | You sent the prompt with `--` separator but forgot the second `cmux send … Enter` call | Always two calls: text, then Enter |
+| `new-workspace` ignores `--color` | `cmux new-workspace` does NOT support `--color` — only `--name`, `--description`, `--cwd`, `--command`, `--layout`, `--window`, `--focus` | Set color in a separate call: `cmux workspace-action --action set-color --workspace <ref> --color violet` |
 
 ---
 
