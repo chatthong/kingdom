@@ -4,6 +4,27 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.0] — 2026-05-18
+
+The "graceful teardown" release. New `/kingdom:exit` command for safely closing a kingdom session — checks in-flight work, notifies each lane, gracefully exits Claude in each workspace, closes lane workspaces, writes a session-end log marker. Keeps the King's workspace by default.
+
+### Added
+
+- **`/kingdom:exit`** — new slash command for graceful kingdom teardown. Signature: `/kingdom:exit [project=<name>] [--force] [--include-king] [--audit]`.
+  - 6-step flow: resolve project + source workspace-refs → in-flight check → optional audit → notify each lane → graceful Claude exit per lane (sends `/clear`) → close lane workspaces → session-end log line.
+  - **Default**: keeps King's workspace (your conversation persists); pass `--include-king` for full teardown.
+  - **In-flight handling**: always asks (Option C) — 3 choices: (1) wait up to 5 min for sentinels to appear, then force-close, (2) force-close immediately, (3) abort. Override with `--force` to skip the prompt.
+  - **Idempotent** — re-running on an already-exited kingdom prints "nothing to close" and updates only the session-end line.
+  - **Safe by design** — never runs `git push` or `git commit`; never removes worktrees; never deletes audit artifacts. Just closes cmux workspaces and writes a log line.
+- **`commands/exit.md`** scaffolded into the plugin; added to README slash command table.
+
+### Compatibility notes
+
+- **Non-breaking** — purely additive. Existing kingdoms work as-is.
+- **PRIMARY mode only for workspace closing** — FALLBACK (raw tmux) closes via `tmux kill-session`; HEADLESS has no workspaces to close. Spec covers all three but Step 5 (close workspaces) only does cmux work.
+
+---
+
 ## [0.13.1] — 2026-05-18
 
 ### Fixed

@@ -82,7 +82,11 @@ What landed:
 
 ## Tier 1 — direct response to Composio's strengths
 
-### 🆕 v0.14.0 — Reactions framework
+### ✅ v0.14.0 — `/kingdom:exit` (shipped 2026-05-18)
+
+Graceful teardown command. 6-step flow: resolve → in-flight check (always-ask) → optional audit → notify lanes → `/clear` per lane → close lane workspaces → session-end log line. Keeps King by default; `--include-king` for full teardown. Pushed Reactions to v0.15.
+
+### 🆕 v0.15.0 — Reactions framework
 
 The single highest-impact thing we can take from Composio. They use it for autonomy; we use it for **King-mediated routing**.
 
@@ -145,7 +149,7 @@ The single highest-impact thing we can take from Composio. They use it for auton
 
 ---
 
-### 🆕 v0.15.0 — `/kingdom:status` (terminal dashboard)
+### 🆕 v0.16.0 — `/kingdom:status` (terminal dashboard)
 
 What Composio shows in their web dashboard, we show in chat. Same info, no web server, no extra deps.
 
@@ -201,7 +205,7 @@ One command, fleet visibility, no daemon. Composio gives you a web tab; we give 
 
 ---
 
-### 🆕 v0.16.0 — Notifier extensibility (Slack / Discord)
+### 🆕 v0.17.0 — Notifier extensibility (Slack / Discord)
 
 Composio integrates with Slack/Discord; we currently rely on `cmux notify`. Add webhook posting:
 
