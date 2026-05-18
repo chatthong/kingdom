@@ -4,6 +4,26 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.3] — 2026-05-18
+
+Docs polish — show off the cmux.app integration that landed in 0.13.0–0.14.2. README now has a "What it looks like in cmux.app" section that visually demonstrates the workspace-per-master sidebar, the three notification surfaces (ring / badge / panel), the three-tier visual hierarchy, and the other cmux features the kingdom hooks into.
+
+### Changed
+
+- **README "Why kingdom?"** gets a new pillar: **Native cmux.app feel** (colour-coded workspaces, native notifications, no tab-multiplexing or custom UI).
+- **New section: `🪟 What it looks like in cmux.app`** between "Why kingdom?" and "Install". Includes:
+  - ASCII mockup of the cmux.app sidebar showing 5 colour-coded workspaces, pinned King, blue-ring + bell-badge indicators in context
+  - "Three visible cmux notification surfaces" table — rings, badges, bell panel
+  - New Mermaid diagram: three-tier visual hierarchy (Workspace → Tab → Split)
+  - Table of cmux features the kingdom uses: workspace colours, pinning, descriptions, layout JSON, `cmux send --workspace`, `cmux tree --all`
+  - "What `/kingdom:start` does in PRIMARY mode" — 6-step explanation tying it all together
+
+### Why this matters
+
+Prior README didn't make the cmux.app integration concrete. Users had to read 5 role docs + `cmux.md` to see how it all fits visually. Now the hero pillars + one visual section show off the feature set — what they see in the sidebar, what fires when, why it's better than dashboard-driven fleet ops.
+
+---
+
 ## [0.14.2] — 2026-05-18
 
 The "actually wire up cmux.app notifications" release. Prior spec mentioned `cmux notify` but inconsistently — `--pane` (wrong flag), missing for some events, no dual-target pattern. This patch threads notifications through every kingdom event that needs Ter's attention, using cmux.app's three visible surfaces: blue ring on pane, sidebar badge on workspace, bell-panel entry.
