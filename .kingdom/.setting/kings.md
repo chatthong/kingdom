@@ -866,6 +866,49 @@ After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
 
 Each PR should be one purpose, one commit, traceable to a single lane. Carving from `kingdom` would mix lanes (kingdom contains develop + lane-1 + lane-2 + lane-3 integrated). Carving from `worker-N` keeps the PR a clean one-commit feature branch matching exactly what that lane produced.
 
+### STRICT: `feature/<topic>` = `worker-N` tip, byte-for-byte identical
+
+The carved `feature/<topic>` branch is a **fast-forward checkout** from `worker-N`'s tip. **The King MUST NOT add commits on the feature branch.** Whatever is on `worker-N` at the moment of carve IS what gets pushed — no additions, no rewrites, no post-hoc edits.
+
+This guarantees `kingdom` = source of truth for what's about to ship. After Ter reviews on kingdom, the carved `feature/<topic>` branches contain EXACTLY the commits visible on kingdom from each lane. No surprises in the PR.
+
+```bash
+# Correct carve (single fast-forward; no new commits)
+git checkout -b "feature/<topic>" "worker-N"
+git push -u origin "feature/<topic>"
+gh pr create --base develop --head "feature/<topic>" --title "..." --body "..."
+
+# WRONG — adds a commit AFTER carving:
+git checkout -b "feature/<topic>" "worker-N"
+cp docs/test-reports/SMOKE_*.md .                 # ❌ post-carve edit
+git add docs/test-reports/
+git commit -m "add smoke report"                  # ❌ feature/* now diverges from worker-N
+git push -u origin "feature/<topic>"
+# → kingdom no longer reflects what's pushing; Ter's review is incomplete
+```
+
+### What to do when you want extra content in the PR
+
+If you want something in a PR that isn't yet on the worker's branch (e.g., a smoke test report from Tier-2 gate, an updated changelog entry, a doc reference to the new feature):
+
+**Option A — bundle into the worker's commit (preferred).** The lane writes the extra content as part of its closer. The worker's commit contains code + report + doc updates together. Single commit, single PR purpose. Clean.
+
+**Option B — separate PR.** Create a fresh `feature/<topic>-followup` branch from `origin/develop`, add the extra content as its own commit, push as its own PR. This is the right call when the extra content is genuinely independent (e.g., a smoke report covering 3 different PRs belongs in its own `docs(test-reports)` PR, not bundled with one of the feature PRs).
+
+**Anti-pattern: adding commits to `feature/<topic>` after carving.** This diverges from `worker-N` tip + invalidates kingdom's review surface. **Don't.**
+
+### How King decides between A and B
+
+| Scenario | Choice |
+|---|---|
+| Test report covers ONE PR's work specifically | A — worker commits it |
+| Test report covers MULTIPLE PRs (smoke across feature-7/8/9) | B — separate PR |
+| Doc update is about THIS PR's new feature | A — worker commits it |
+| Changelog entry mentions THIS PR | A — worker commits it |
+| Cross-cutting infrastructure change (e.g., `.gitignore` for kingdom worktrees) | B — separate PR (different concern entirely) |
+
+When uncertain, default to B — separate PRs are easier to review + revert than mixed-concern PRs.
+
 ```text
 origin/develop:    A --- B --- C
                               \
@@ -922,6 +965,7 @@ git diff origin/develop..kingdom --stat
 - ❌ King pushes without showing Ter the `git diff origin/develop..kingdom --stat` review surface
 - ❌ King auto-resolves a genuine source-file collision instead of surfacing it
 - ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
+- ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above. Real test caught this: King had 5 merge commits on kingdom, then planned to add a smoke report as a 2nd commit on `feature/fe-p0-found-7-seo-metadata` — kingdom would no longer reflect what was about to ship.
 
 ---
 

@@ -4,6 +4,40 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.16.3] — 2026-05-18
+
+The "feature branch = worker-N tip, byte-for-byte" release. Real test caught a workflow violation: King had 5 merge commits on `kingdom` (correct), then planned to add a smoke test report as a 2nd commit on `feature/fe-p0-found-7-seo-metadata` BEFORE push (incorrect — kingdom no longer reflects what's about to ship). v0.15.1 said "carve feature/* from worker-N tip" but didn't enforce strict equality.
+
+### Added
+
+- **`.kingdom/.setting/kings.md` § "STRICT: `feature/<topic>` = `worker-N` tip, byte-for-byte identical"** — new subsection inside "Kingdom as review staging". Rules:
+  - `feature/<topic>` is a fast-forward checkout from `worker-N` tip
+  - King MUST NOT add commits on the feature branch after carving
+  - Kingdom = source of truth for what's about to ship; feature branches = exact mirrors
+  - Concrete correct + wrong bash snippets
+- **`kings.md` § "What to do when you want extra content in the PR"** — explicit decision matrix:
+  - **Option A** (preferred): worker commits the extra content as part of its closer. Single commit on worker-N includes code + report + doc updates.
+  - **Option B**: separate PR. Fresh `feature/<topic>-followup` branch from `origin/develop` for genuinely independent content.
+  - Decision table: which to use when (test report ONE PR → A; test report MULTIPLE PRs → B; doc update about THIS feature → A; cross-cutting infra change → B)
+  - Default: when uncertain, choose B (separate PRs are easier to review + revert)
+- **New anti-pattern added** to the "Kingdom as review staging" anti-patterns list:
+  - "King adds commits to `feature/<topic>` after carving from worker-N tip" — with the real-test example
+
+### Changed
+
+- **README "Three rules to remember" rule #3** — expanded to enforce strict equality: "PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical. Each `feature/<topic>` is a fast-forward checkout of the lane's tip — NO commits added on the feature branch after carving."
+
+### Why this matters
+
+Real transcript (paraphrased): King had `kingdom` at d75b85e (5 merge commits visible), Ter approved bundling a smoke report into PR #3, King's plan was "feature/fe-p0-found-7-seo-metadata · 2 commits (worker-2 commit + test report)" — that 2nd commit would only exist on `feature/*` not on `worker-N` or `kingdom`. Ter caught it: "no, merge all PR to kingdom so I can see it." v0.16.3 codifies: kingdom must reflect EXACTLY what's about to ship. If extra content needs to be in a PR, put it on worker-N first or use a separate PR. No surprises after kingdom review.
+
+### Non-breaking
+
+- No schema, command, or behaviour changes outside the kings.md procedural rules.
+- Existing kingdoms keep working; v0.16.3 just makes the rule that was implicit in v0.15.1 explicit + enforceable.
+
+---
+
 ## [0.16.2] — 2026-05-18
 
 Docs polish — README three-tier hierarchy diagram fixed to show **spawn relationships**, not just topology.

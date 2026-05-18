@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.16.2-success)
+![Version](https://img.shields.io/badge/version-0.16.3-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -451,7 +451,7 @@ graph LR
 
 1. **Lane branches stay local.** `worker-N` / `co-worker-N` / `watchman-N` never reach origin. They live only on your laptop, accumulating one commit per completed task.
 2. **`kingdom` is local-only review + test staging.** King merges all in-flight lanes into kingdom, runs the **Tier-2 gate** (full tests + smoke + lint on the integrated state), prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`), then asks "push?". `kingdom` is never pushed.
-3. **PRs carve from `worker-N` tip, not from `kingdom`.** Each `feature/<topic>` is a single-commit branch carved from the lane's tip — keeps every PR one-purpose, one-commit, traceable to a single lane. Carving from kingdom would mix lanes; that's an anti-pattern.
+3. **PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical.** Each `feature/<topic>` is a fast-forward checkout of the lane's tip — NO commits added on the feature branch after carving. Whatever's on `worker-N` IS what ships. If you want extra content in the PR, put it on `worker-N` first (worker commits it) or open a **separate PR** (different concern → different PR). Adding commits to `feature/*` after carving breaks the kingdom-as-truth-of-what-ships invariant.
 
 ### What lives where
 
