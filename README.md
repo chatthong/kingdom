@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.17.2-success)
+![Version](https://img.shields.io/badge/version-0.18.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -552,6 +552,7 @@ The King reads this at `/kingdom:start` to:
 | `/kingdom:start <project>` | Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Reads shape from `kingdom.json` (no override args — change shape via `kingdom.json` or `/kingdom:init`). Idempotent — re-running resumes existing worktrees. |
 | `/kingdom:update [project=<name>] [--force]` | Audit sweep — auto-switches to `kingdom` branch + spawns 4 parallel specialists + Haiku scanner fan-out. Surfaces gaps between project doc claims and kingdom logs. Idempotent. Current project only. |
 | `/kingdom:exit [project=<name>] [--force] [--include-king] [--audit]` | Graceful teardown — checks in-flight work (asks before force-closing), notifies each lane, gracefully exits Claude in each workspace, closes lane workspaces, writes session-end log line. Keeps King's workspace by default. |
+| `/kingdom:day [project=<name>]` | **One-command daily cycle (v0.18.0+).** Runs `/kingdom:update` (if >24h old) + `/kingdom:start` + daily kickoff + auto-gate-poll loop. Auto-dispatches idle lanes; auto-fires Tier-1 + Tier-2 gates as sentinels appear; only blocks for your review/push approval and blocked-lane resolution. The canonical "type one thing, kingdom runs my day" entry point. |
 
 ---
 

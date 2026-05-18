@@ -4,6 +4,71 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.18.0] — 2026-05-18
+
+The "magic + fast" release. Three big wins shipped together:
+
+### 🆕 `/kingdom:day` — one-command daily cycle
+
+New slash command. Composes `/kingdom:update` (if >24h old) + `/kingdom:start` (idempotent resume) + daily kickoff + perpetual auto-gate-poll loop into a single command.
+
+Flow:
+1. Audit (only if last `/kingdom:update` was >24h ago)
+2. Spin up lanes (idempotent — resumes existing)
+3. Read context (CLAUDE.md + MEMORY + watchman state)
+4. Auto-dispatch idle lanes against pending work (60/40 industrial rule from v0.16.0)
+5. Enter the auto-gate-poll loop:
+   - Sentinels detected → fire Tier-1 gate
+   - Tier-1 pass → overlay onto kingdom (v0.17.0) → fire Tier-2 gate
+   - Tier-2 pass → notify Ter "review live diff?" (**only blocking point**)
+   - Approval → carve `feature/<topic>` (v0.16.3) → push + auto-PR-body (v0.18.0) → discard overlay
+6. Loop continues until Ter says stop, runs `/kingdom:exit`, or queue empties
+
+Result: type ONE command, the kingdom runs the full day. Block only on human decisions. New file: `commands/day.md`.
+
+### 🆕 Pre-warmed sub-agent pool
+
+New `kingdom.json.cmux.subAgentPool` block. Each master keeps N idle `claude -p` processes ready in hidden tabs (default `perMasterPoolSize: 2`, `models: ["sonnet"]`). Sub-agent spawn becomes `cmux send` to the existing surface (~20ms) instead of `cmux tab-action --action new-terminal-right` + full Claude boot (~10–20s).
+
+Layer-3 fan-out of 5 Sonnet sub-agents: ~100ms total (5 × 20ms) instead of ~50–100s (5 × 10–20s boot). **Layer-3 parallelism is now effectively instant.**
+
+Pool refills in background after each consumption so subsequent spawns also hit the fast path. Falls back to standard spawn when pool is empty. Disable via `kingdom.json.cmux.subAgentPool.enabled: false`. Only applies to tab-mode spawns; Agent() background spawns are already cheap.
+
+New section in `.kingdom/.setting/workers.md` § "Pre-warmed sub-agent pool" with full pool management bash.
+
+### 🆕 Auto-generated PR bodies from task files
+
+King's push approval gate now auto-fills `gh pr create --body` from the lane's task file. No manual PR-writing — the task file's discipline (Brief / Plan / Final summary) feeds directly into the PR body.
+
+Field mapping:
+- `## Brief` → `## Summary`
+- `## Plan (multi-layer)` checked items → `## Implementation` list
+- `## Final summary` → `## Verification`
+- `KING_*__<lane>__<id>.md` test report → linked at bottom
+- Footer: `🤖 PR body auto-generated from kingdom task file: tasks/<UTC>__<lane>__<id>.md`
+
+Override available via dispatch brief `PR body: manual` — King skips auto-generation and asks Ter to paste a body before pushing. Default: auto-generate.
+
+New section in `.kingdom/.setting/kings.md` § "Auto-generated PR body from task file".
+
+### Why this matters
+
+Three "magic + fast" feelings stack:
+
+| Win | Felt where |
+|---|---|
+| `/kingdom:day` | "I typed one thing and my whole day happened" — single command, full flow |
+| Pre-warmed pool | "Layer-3 parallel fan-out feels instant" — 5 sub-agents in 100ms instead of 100s |
+| Auto-PR-bodies | "I never write PR descriptions anymore" — task file = PR body, auto |
+
+### Non-breaking
+
+- All three are additive. `/kingdom:day` is a new optional command; the underlying `/kingdom:update` / `/kingdom:start` / etc. still work standalone.
+- Pre-warmed pool is opt-in via config (default enabled but easily disabled).
+- Auto-PR-body kicks in by default; opt-out per-task via `PR body: manual` in dispatch brief.
+
+---
+
 ## [0.17.2] — 2026-05-18
 
 The "lazy implementor antidote" release. Real test caught a discipline failure: King had unlimited sub-agent capacity but used them as one-shot implementers without first doing exhaustive pattern discovery. Result: worker hardcoded a canonical URL when the project's `lib/brand-defaults.ts` already documented the env-driven pattern; King claimed `scripts/000_superscript.sh` doesn't seed `APP_BASE_URL` only to discover `scripts/026_provision_frontend_env.sh` DOES.

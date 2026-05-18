@@ -848,6 +848,73 @@ Header schema (master-readable in 15 lines):
 
 ---
 
+## Auto-generated PR body from task file (v0.18.0+)
+
+When carving `feature/<topic>` for push, King auto-fills `gh pr create --body` from the lane's task file. No manual PR-writing — the task file is the source of truth + has all the structure already.
+
+### Body template
+
+```bash
+generate_pr_body_from_task_file () {
+  local lane="$1" sub_task_id="$2"
+  local task_file=$(ls -1t "$WS/.kingdom/${PROJECT}/tasks/"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
+  local digest_file=$(ls -1t "$LOGS/"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
+  local test_report=$(ls -1t "$PROJ/docs/test-reports/KING_"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
+
+  cat <<EOF
+## Summary
+
+$(awk '/^## Brief/,/^##/' "$task_file" | sed '1d;$d')
+
+## Implementation
+
+$(awk '/^## Plan/,/^## Progress/' "$task_file" | sed '1d;$d' | grep -E '^\s*- \[x\]')
+
+## Verification
+
+$(awk '/^## Final summary/,/^##/' "$task_file" | sed '1d;$d')
+
+$([ -n "$test_report" ] && echo "📋 Test report: $(basename "$test_report")")
+
+## Test plan
+
+- [x] Tier-1 gate passed
+- [x] Tier-2 gate passed (integrated on kingdom)
+- [ ] Manual review by lead
+
+---
+
+🤖 PR body auto-generated from kingdom task file: \`tasks/$(basename "$task_file")\`
+🤖 Curated closer artifact: \`logs/$(basename "$digest_file")\`
+EOF
+}
+```
+
+### Fields auto-extracted
+
+| Task-file section | PR body section |
+|---|---|
+| `## Brief` (2-4 lines describing the task) | `## Summary` |
+| `## Plan (multi-layer)` — `[x]` items only | `## Implementation` (numbered done-list) |
+| `## Final summary` | `## Verification` |
+| `KING_*__<lane>__<id>.md` test report path | linked at bottom |
+
+### When King uses this
+
+`gh pr create --body "$(generate_pr_body_from_task_file "$LANE" "$SUBTASK_ID")"` — invoked automatically at push time per the Push approval gate. No prompt for Ter to write the body. The task file's discipline (Brief / Plan / Summary) feeds directly into the PR.
+
+### Override / customisation
+
+If Ter wants to edit the auto-generated body before push, the dispatch brief can include:
+
+```text
+PR body: manual
+```
+
+In that case, King skips the auto-generation and asks Ter to paste a body before pushing. Default: auto-generate.
+
+---
+
 ## Kingdom as review staging — WORKING-TREE OVERLAY (never commit on kingdom)
 
 Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a local working-tree overlay for human review** — Ter MUST see the full code-surface of all in-flight lane changes as UNCOMMITTED files so GitHub Desktop's "Changes" tab (or any diff tool) shows everything line-by-line.

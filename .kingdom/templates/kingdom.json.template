@@ -56,6 +56,12 @@
     },
     "subAgentSpawnFallback": "tab",
     "_subAgentSpawnFallbackComment": "Used when model is unknown / not in subAgentSpawnByModel. Defaults to 'tab' (safer — visibility on unexpected work).",
+    "subAgentPool": {
+      "_comment": "Pre-warmed sub-agent process pool (v0.18.0+). Each master keeps N idle `claude -p` processes ready in hidden tabs; sub-agent spawn becomes `cmux send` to existing surface (~20ms) instead of new-terminal-right + full Claude boot (~10-20s). Refilled in background after each consumption. Disable by setting enabled=false. Only applies to tab-mode spawns; Agent() background spawns are already cheap.",
+      "enabled": true,
+      "perMasterPoolSize": 2,
+      "models": ["sonnet"]
+    },
     "watchmanLayout": {
       "_comment": "Dual-view watchman: top pane is the watchman Claude session (/loop), bottom pane is a live gh PR monitor. Set to null to disable the split and use a single-pane watchman workspace.",
       "direction": "vertical",
