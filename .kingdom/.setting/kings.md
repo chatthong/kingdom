@@ -41,14 +41,19 @@ cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
 # Auto-gate in progress (per Auto-gate on completion §)
 cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
 
-# Gate pass, asking Ter "push?"
+# Gate pass, asking Ter "push?" — also mark King's workspace unread
+# so the badge dot appears (cmux's auto-state may say "Idle" — wrong)
 cmux_set_state "⚠" "Push? · $LANE · $SUBTASK_ID · gate pass"
+cmux workspace-action --action mark-unread --workspace "$KING_WS" 2>/dev/null
 
-# Gate fail
+# Gate fail — mark the ORIGINATING lane's workspace unread (not King's;
+# the lane needs the fix-task awareness)
 cmux_set_state "❌" "Gate FAIL · $LANE · $SUBTASK_ID"
+cmux workspace-action --action mark-unread --workspace "$LANE_WS" 2>/dev/null
 
-# After push
+# After push — clear the "push?" attention marker
 cmux_set_state "✅" "Pushed feature/$TOPIC · $(date -u +%Y-%m-%dT%H%MZ)"
+cmux workspace-action --action mark-read --workspace "$KING_WS" 2>/dev/null
 
 # Holds the pushed state for ~5 min, then reverts to Idle
 sleep 300 && cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active" &

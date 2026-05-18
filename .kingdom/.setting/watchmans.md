@@ -386,6 +386,12 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= 
     # Already notified this tick? Skip to avoid spam — state stored in watchman_state.json
     PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
     if [ "$PREV_BLOCKED" != "true" ]; then
+      # 3-layer state override: badge + description + notify (cmux's auto-state
+      # may still say "Running" but our three signals tell the truth)
+      cmux workspace-action --action mark-unread --workspace "$WS_REF" 2>/dev/null
+      cmux workspace-action --action set-description \
+        --workspace "$WS_REF" \
+        --description "⚠ Blocked · permission prompt" 2>/dev/null
       cmux notify --surface "$WS_REF" \
         --title "🕵️ watchman-$WI" \
         --subtitle "Lane blocked · $LANE_LABEL" \
@@ -399,7 +405,13 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= 
         > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
     fi
   else
-    # Lane no longer blocked — clear state so a future block re-notifies
+    # Lane no longer blocked — clear unread marker + restore description + clear state
+    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
+    if [ "$PREV_BLOCKED" = "true" ]; then
+      cmux workspace-action --action mark-read --workspace "$WS_REF" 2>/dev/null
+      # Description restored by the lane itself on its next state transition;
+      # watchman doesn't second-guess what the lane should display normally.
+    fi
     jq "del(.blocked_lanes[\"$WS_VAR\"])" "$LOGS/watchman_state.json" \
       > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
   fi

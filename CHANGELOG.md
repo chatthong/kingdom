@@ -4,6 +4,34 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.12] — 2026-05-18
+
+The "override cmux's wrong auto-state" release. cmux.app auto-detects "Running" / "Idle" / "Needs input" badges per workspace, but the detection is heuristic — a lane stuck on a permission prompt may still show as "Running"; a King with a pending "push?" may show as "Idle". cmux does NOT expose direct CLI control over these auto-labels. v0.14.12 wires up the **manually controllable** badge — `mark-unread` / `mark-read` — to override cmux's wrong auto-state with three explicit signals: badge + description + notify.
+
+### Added
+
+- **`.kingdom/.setting/cmux.md` § "Attention markers — mark-read / mark-unread"** — new section before "Dynamic workspace descriptions":
+  - Explains what cmux's auto-state covers vs what `mark-unread` does
+  - Three-layer state override pattern: `mark-unread` + `set-description` + `cmux notify`
+  - State → markers convention table (8 kingdom states mapped to badge / description / notify settings)
+  - When to clear: `mark-read` fires when the underlying attention resolves
+- **Watchman blocked-lane scan** — now also fires `cmux workspace-action --action mark-unread` on detection, and `mark-read` when the lane unblocks. The badge dot now reflects the lane's true state regardless of cmux's auto-detection.
+- **King auto-gate flow** — fires `cmux workspace-action --action mark-unread` on:
+  - King's own workspace when "push?" is pending
+  - Originating lane's workspace when gate FAILs
+- **King post-push** — fires `cmux workspace-action --action mark-read` on King's workspace once Ter approves push (clears the dot).
+
+### Why this matters
+
+Real feedback (paraphrased): "cmux.app does the 'Running' / 'Needs input' automatic, it not always correct — มั่ว (guessed)." cmux's auto-state can't be overridden, but `mark-unread` is a separate manually-controllable attention indicator. Now when kingdom KNOWS better than cmux (lane blocked despite "Running" auto-label, King waiting despite "Idle"), the kingdom's three signals (badge + description + notify) tell the truth.
+
+### Non-breaking
+
+- No schema changes, no command changes.
+- All `cmux workspace-action` calls are silent-on-failure — descriptions/badges are cosmetic, not load-bearing.
+
+---
+
 ## [0.14.11] — 2026-05-18
 
 The "sidebar reads itself" release. cmux.app workspace descriptions are live-updatable via `cmux workspace-action --action set-description` — but the kingdom was setting them once at spawn time and never touching them again. v0.14.11 wires up dynamic descriptions so the sidebar shows a real-time status line per lane: progress bar, current layer, state emoji, blocked status, push prompts. Glance at the sidebar → know what's happening across the whole kingdom.

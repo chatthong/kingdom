@@ -398,6 +398,69 @@ Kingdom's default mapping (in `kingdom.json.cmux.workspaceColors`):
 
 The `new-workspace` command **does not accept `--color`** — set it via a second `workspace-action --action set-color` call right after creation.
 
+## Attention markers — mark-read / mark-unread
+
+**The problem:** cmux.app auto-detects whether each workspace is "Running" / "Idle" / "Needs input" — but the detection is heuristic (stdin idle, output streaming, etc.) and not always accurate. A lane stuck on a permission prompt may still show as "Running"; a King with a pending "push?" question may show as "Idle". The kingdom can't directly override these auto-labels via CLI.
+
+**The solution:** cmux exposes a **separate, manually controllable attention indicator** — `mark-read` / `mark-unread`. This is the badge dot shown on the workspace card in the sidebar. The kingdom uses it to override cmux's wrong auto-state when we KNOW better.
+
+```bash
+# Mark this workspace as needing attention (badge dot appears)
+cmux workspace-action --action mark-unread --workspace "$WORKER_WS_1"
+
+# Clear the attention (badge dot disappears)
+cmux workspace-action --action mark-read --workspace "$WORKER_WS_1"
+```
+
+### Three-layer state override (when cmux's auto-detection is wrong)
+
+When kingdom KNOWS a lane needs attention but cmux says "Running":
+
+```bash
+# 1. Mark the workspace unread (visible badge)
+cmux workspace-action --action mark-unread --workspace "$LANE_WS"
+
+# 2. Override the description with truth
+cmux workspace-action --action set-description \
+  --workspace "$LANE_WS" \
+  --description "⚠ Blocked · permission prompt"
+
+# 3. Fire a notification (bell panel + cross-workspace alert)
+cmux notify --surface "$LANE_WS" --workspace "$KING_WS" \
+  --title "👑 lane blocked" \
+  --subtitle "$LANE_LABEL" \
+  --body "Permission prompt — click to approve"
+```
+
+cmux's auto-state may still say "Running" but YOUR three signals tell the truth.
+
+### State → markers convention
+
+| Kingdom state | mark-read/unread | description prefix | notify? |
+|---|---|---|---|
+| 👷 Lane working normally | (no change) | `▶` | no |
+| 👷 Lane blocked (permission prompt etc.) | `mark-unread` | `⚠ Blocked · ...` | yes (dual: lane surface + King workspace) |
+| 👷 Lane closer just fired (done) | `mark-unread` (King's review pending) | `✅ <task> done · sentinel written` | yes (dual: lane + King) |
+| 👑 King auto-gating | (no change) | `▶ Gating <lane>` | no |
+| 👑 King has "push?" pending | `mark-unread` (King's own workspace) | `⚠ Push? · <lane> · <task>` | yes (King's workspace) |
+| 👑 King gate FAIL | `mark-unread` (originating lane's workspace) | `❌ Gate FAIL · <lane>` | yes (lane's workspace) |
+| 🕵️ Watchman develop RED | `mark-unread` (King's workspace) | (watchman's own description: `⚠ develop RED`) | yes (King's workspace) |
+| 🕵️ Watchman PR mergeable | `mark-unread` (King's workspace) | (no King-workspace description change) | yes (King's workspace) |
+
+When the attention state RESOLVES (Ter approved push, lane unblocked, develop green again), the role responsible **clears the marker**:
+
+```bash
+cmux workspace-action --action mark-read --workspace "$LANE_WS"
+# Description restored to active state
+cmux workspace-action --action set-description --workspace "$LANE_WS" --description "▶ <next state>"
+```
+
+### Why this matters
+
+Auto-detected `Running` / `Idle` / `Needs input` labels are best-effort from cmux. The kingdom maintains TRUE state via three explicit signals (mark-unread + description + notify) which we control completely. When auto-state disagrees with reality (lane "Running" but really blocked), the kingdom's signals win visually — the badge dot + description override + bell-panel entry all point at the truth.
+
+---
+
 ## Dynamic workspace descriptions (live status line)
 
 `set-description` is **idempotent and live** — the King + masters update their own workspace descriptions on every state transition, giving the sidebar a real-time activity line you can scan without clicking.
