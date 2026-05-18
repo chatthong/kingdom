@@ -364,6 +364,106 @@ This is BELT-AND-SUSPENDERS — the sub-agent's own Step 5 closes >99% of tabs. 
 
 ---
 
+## On-demand test verification (King-dispatched, read-only)
+
+Beyond the passive `/loop` smoke + PR babysitting, watchman accepts **on-demand test verification requests** from the King. This is the v0.16.0 industrial-overlay role expansion — King can route "verify X by running these tests" work to watchman without spinning up a worker for read-only verification tasks.
+
+### Request artifact
+
+King drops a request file at `<LOGS>/watchman-requests/<UTC>__verify-<slug>.md`:
+
+```markdown
+# Watchman test request — verify-<slug>
+
+## Brief
+<2-4 lines — what to verify, e.g. "Run integration tests against branch X
+to confirm BE-AUTH-3 doesn't regress the login flow.">
+
+## Commands
+- pnpm --filter @bfg-swt/backend-bac test:integration
+- pnpm --filter @bfg-swt/webshop test:e2e -- --grep login
+
+## Scope
+- Read-only — DO NOT edit test code, fixtures, or project files
+- DO NOT push, commit, or open PRs
+- Write report to <project>/docs/test-reports/WATCH_<UTC>__verify-<slug>.md
+```
+
+### Watchman's pickup logic (every `/loop` tick)
+
+```bash
+# At the end of each /loop tick (after the standard 8 steps), watchman scans
+# for new request files:
+
+REQUESTS_DIR="$LOGS/watchman-requests"
+mkdir -p "$REQUESTS_DIR"
+
+for REQ in "$REQUESTS_DIR"/*.md; do
+  [ -f "$REQ" ] || continue
+  REQ_SLUG=$(basename "$REQ" .md | sed 's/^[0-9-]*T[0-9]*Z__verify-//')
+  REPORT="$PROJ/docs/test-reports/WATCH_$(date -u +%Y-%m-%dT%H%MZ)__verify-${REQ_SLUG}.md"
+
+  # Already processed? (a matching report exists)
+  if ls "$PROJ/docs/test-reports/WATCH_"*"__verify-${REQ_SLUG}.md" >/dev/null 2>&1; then
+    continue
+  fi
+
+  # Execute the commands listed in the request (extract from the "## Commands" section)
+  COMMANDS=$(awk '/^## Commands/,/^##/' "$REQ" | grep -E '^- ' | sed 's/^- //')
+
+  STATUS="pass"
+  OUTPUT_BUFFER=""
+  while IFS= read -r CMD; do
+    OUTPUT=$(eval "$CMD" 2>&1) || STATUS="fail"
+    OUTPUT_BUFFER="${OUTPUT_BUFFER}
+$ $CMD
+$OUTPUT
+"
+  done <<< "$COMMANDS"
+
+  # Write the report (lane name slot = "watchman-N" per v0.15.2 strict naming)
+  cat > "$REPORT" <<EOF
+# Verification report — $REQ_SLUG
+
+## TL;DR
+- **Status:** $STATUS
+- **Requested by:** King ($(basename "$REQ"))
+- **Commands run:** $(echo "$COMMANDS" | wc -l)
+
+## Command outputs
+\`\`\`
+$OUTPUT_BUFFER
+\`\`\`
+EOF
+
+  # Notify King via cmux notify (badge on King's workspace)
+  cmux notify --workspace "$KING_WS" \
+    --title "🕵️ watchman-$WI" \
+    --subtitle "Verification $STATUS · $REQ_SLUG" \
+    --body "Report: $REPORT"
+done
+```
+
+### What watchman WILL and WON'T do
+
+| Will | Won't |
+|---|---|
+| ✅ Run test commands listed in the request | ❌ Edit test code, fixtures, or project files |
+| ✅ Read project source to understand what it's testing | ❌ Push, commit, or open PRs |
+| ✅ Write a `WATCH_*__verify-*.md` report | ❌ Modify the test request file itself |
+| ✅ Notify King when done | ❌ Take action on test failures (just reports — King decides next step) |
+
+### When King uses watchman vs a worker for test work
+
+| Test work type | Route to | Why |
+|---|---|---|
+| **Run existing tests, no edits** (verify a hypothesis, sanity-check a branch, confirm regression isn't introduced) | 🕵️ Watchman via request file | Read-only; cheaper Sonnet model; preserves worker capacity for code work |
+| **Write new tests, fix flaky tests, edit fixtures, modify CI config** | 👷 Worker | Code-touching; needs full lane authority + commit/push capability |
+
+Heuristic: if the answer is "run these commands and tell me what happened," → watchman. If the answer is "make these tests pass," → worker.
+
+---
+
 ## Blocked-lane scan (every tick)
 
 Lanes can silently stall on Claude Code's interactive permission prompts ("Do you want to proceed? 1. Yes / 2. Yes allow … / 3. No") or other TUI input requests. cmux.app shows the workspace as "Running" but the lane is actually idle, waiting for keyboard input. Without intervention you only notice by clicking each lane.

@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.16.0] — 2026-05-18
+
+The "60% conservative + 40% industrial scheduler" release. Real test feedback: "use master as much as possible, don't let them rest; King must plan for maximum capacity; King can run same job on two workers to compare." Calibrated as a balance — conservative core (push gates, kingdom merge, human approvals) stays non-negotiable; industrial overlay (auto-delegate big work, load idle capacity, parallel dispatch) layers on top for capacity-loading behaviour.
+
+### Added
+
+- **`kings.md` § "Calibrated philosophy — 60% conservative core, 40% industrial overlay"** — new top-level section defining the balance:
+  - **Conservative core (60%)**: human-gated push, mandatory kingdom merge, non-skippable gate, watchman passive by default, confirmation on risky moves, small inline work allowed
+  - **Industrial overlay (40%)**: big work auto-delegated, auto-load idle capacity, plan for max parallelism, parallel duplicate dispatch (Ter-initiated), watchman test-verification duty
+  - **Conflict resolution**: when the two halves disagree, conservative wins (60% is the floor, 40% layers on top)
+- **`kings.md` § "Two-tier gate — light per-lane, heavy on kingdom"** — formalises kingdom as test environment:
+  - **Tier 1 (lane)**: typecheck only, runs in `.worktrees/<lane>`. Fast feedback in seconds.
+  - **Tier 2 (kingdom)**: full tests + smoke + lint on the integrated kingdom branch. Catches cross-lane bugs Tier 1 misses.
+  - Push approval requires Tier 2 pass (not just Tier 1).
+- **`kings.md` § "Lane utilisation — load idle capacity"** — bash logic for the utilisation check + default behaviour rules:
+  - 2+ idle lanes + 2+ pending → auto-dispatch obvious matches
+  - 1 idle + 1 pending → suggest, await nod
+  - Controversial work → always suggest, never auto-dispatch
+- **`kings.md` § "Parallel duplicate dispatch (Ter-initiated)"** — explicit pattern for race-style exploration: same sub-task-id, different briefs/models, lanes named with `-A` / `-B` suffix in their task files. Winner ships; loser archived for audit.
+- **`watchmans.md` § "On-demand test verification (King-dispatched, read-only)"** — new role expansion:
+  - Request artifact at `<LOGS>/watchman-requests/<UTC>__verify-<slug>.md` with brief + commands + scope
+  - Watchman picks up next `/loop` tick, runs commands, writes `WATCH_*__verify-*.md` report, notifies King
+  - **Will**: run tests, read source, write report. **Won't**: edit test code, push, commit, take action on failures.
+
+### Why this matters
+
+User feedback: "if the job is getting big it must auto pass to the worker-N if job about test pass to watchman-N, use master as much as possible don't let them rest, and when king plan for task must plan for maximum capacity of worker that can do, don't plan for small job, sometime king can run same job on two worker to compare or to help each other find best solution." Plus the rule "king + master always send to 'kingdom' branch after task done or need to test." The 60/40 calibration captures the intent without overshooting — kingdom branch is now explicitly the test environment (Tier 2 gate runs there), idle lanes get loaded automatically, big work always delegates, and Ter-initiated duplicate dispatches are a first-class pattern.
+
+### Non-breaking
+
+- No schema changes. `kingdom.json.gate` block already has `typecheck` / `tests` / `smoke` / `lint` keys; v0.16.0 just splits which keys run at which tier.
+- Existing single-tier gate runs continue to work — if you want pre-v0.16.0 behaviour, just keep using the lane gate. The two-tier flow is the recommended default; King applies it automatically when watchman exists.
+- `watchman-requests/` directory is auto-created by watchman on first encounter; no migration needed.
+
+---
+
 ## [0.15.2] — 2026-05-18
 
 The "every artifact carries the lane" release. Real test surfaced drift: a lane wrote its curated digest as `2026-05-18T0443Z__other__sonnet__fe-found-7-seo-metadata.md` — no lane name! Couldn't `ls *worker-2*` to find everything that worker did. The task file spec already required `<UTC>__<lane>__<sub-task-id>.md` but the curated digest didn't include lane, and the King's behaviour drifted. v0.15.2 codifies lane-in-every-artifact strictly.

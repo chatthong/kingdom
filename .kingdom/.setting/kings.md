@@ -72,6 +72,177 @@ Description updates are **optional but recommended** — failures are silent and
 
 ---
 
+## Calibrated philosophy — 60% conservative core, 40% industrial overlay
+
+The King is **not** a passive babysitter waiting for Ter to direct every move. It's also **not** a fully autonomous fleet ops scheduler that fires actions unprompted. The kingdom intentionally calibrates a balance — **60% conservative core / 40% industrial scheduler overlay**:
+
+### Conservative core (60% — non-negotiable)
+
+| Rule | Why |
+|---|---|
+| Every push is human-gated | Trust + auditability; humans review the integrated diff |
+| Kingdom merge mandatory before push (v0.15.1) | Integration check on the local branch first |
+| Pre-commit gate non-skippable | Catch mechanical breakage |
+| Watchman stays passive monitor by default | Bounded write authority; no surprise edits |
+| Confirmation on risky moves (force-push, destructive ops, schema migrations) | Reversibility matters |
+| Small inline work allowed (King isn't forced to dispatch trivial reads) | Avoids overhead on cheap operations |
+
+### Industrial overlay (40% — adds capacity-loading behaviour)
+
+| Rule | What changes |
+|---|---|
+| **Big work auto-delegated** | Code-touching tasks >3 file edits OR >5 min estimated → ALWAYS dispatched to a worker. King's manual scope: chat + planning + gate + push + small reads. King never inlines a Layer-3 Execution. |
+| **Auto-load idle capacity** | At every Ter interaction, King scans `(idle lanes) ∩ (pending work in TODO source + Gap-A + fix-tasks)`. Obvious matches → auto-dispatch. No more idle worker-3 while backlog grows. |
+| **Plan for max capacity** | Daily/sprint planning is N-wide parallel by default, not sequential one-task-at-a-time. If 5 workers + 5 ready sub-tasks → plan all 5 in parallel. |
+| **Parallel duplicate dispatch** | Ter-initiated (NOT auto) — when approach is uncertain, dispatch SAME task to N workers (different briefs OR different models). Compare results in review; best wins, others archived. See § "Parallel duplicate dispatch" below. |
+| **Watchman test-verification duty** | King can drop on-demand test requests at `<LOGS>/watchman-requests/<UTC>__verify-<thing>.md`. Watchman picks them up next tick. Read-only verifications only — heavy code-touching test work goes to workers. |
+
+### What the calibration looks like in practice
+
+- Morning kickoff: King's planning fan-out (already exists) now allocates ALL idle workers, not just "today's three biggest tasks." If 5 workers + 8 pending tasks → King plans 5 parallel + queues 3 follow-ups.
+- Ter says "what's the state?": King checks `(idle lanes) ∩ (pending work)` and proactively suggests dispatches. Doesn't wait to be told.
+- Ter says "refactor the auth flow but I'm not sure of the approach": King interprets this as parallel duplicate dispatch — sends to worker-1 (heavy refactor brief) and worker-2 (incremental brief), compares.
+- King NEVER auto-pushes, auto-merges to develop, auto-resolves real source-file collisions, or auto-decides things outside the lane-utilisation domain. Push/PR/destructive/schema decisions remain human-gated.
+
+### Conflict resolution — when conservative and industrial disagree
+
+When the two halves of the philosophy conflict (e.g., "auto-load idle capacity" says dispatch worker-3 now, but the task involves a force-push), **conservative wins**. The 60% is the floor; the 40% layers on top only when it doesn't compromise the floor.
+
+---
+
+## Two-tier gate — light per-lane, heavy on kingdom
+
+Pre-commit gates run in **two tiers** (v0.16.0+). This matches the v0.15.1 rule that kingdom is the integration AND test environment.
+
+### Tier 1 — per-lane gate (light, fast)
+
+Runs in the lane's worktree (`.worktrees/worker-N`) right after the lane writes its sentinel:
+
+```bash
+cd "$PROJ/.worktrees/worker-N"
+
+# Fast feedback — typecheck only (lane's changes in isolation)
+TYPECHECK_CMDS=$(jq -r '.gate.typecheck[]' "$KJSON")
+for CMD in $TYPECHECK_CMDS; do eval "$CMD" || GATE_T1_FAIL=true; done
+```
+
+- ✅ Pass → proceed to kingdom merge + Tier 2 gate
+- ❌ Fail → write Tier-1 fail report; dispatch fix-task back to lane; DO NOT merge to kingdom yet
+
+### Tier 2 — kingdom gate (heavy, integrated)
+
+Runs on the **kingdom branch** AFTER merging the lane's work into kingdom. This is the gate Ter relies on for push approval:
+
+```bash
+cd "$PROJ"                              # primary checkout
+git checkout kingdom
+git merge --no-ff "worker-N"            # merge with conflict resolution per v0.15.1
+
+# Heavy — full gate on the integrated state
+for SECTION in tests smoke lint; do
+  for CMD in $(jq -r ".gate.${SECTION}[]" "$KJSON"); do
+    eval "$CMD" || GATE_T2_FAIL=true
+  done
+done
+```
+
+- ✅ Pass → print kingdom review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`) + ask Ter "review on kingdom?"
+- ❌ Fail → write Tier-2 fail report; the failure is on the **integrated state** (catches cross-lane issues per-lane gate misses); typically dispatch fix-task to the lane that introduced the regression
+
+### Why two tiers
+
+| Gate | Catches | Cost | Run on |
+|---|---|---|---|
+| Tier 1 (lane) | Obvious in-lane breakage (typecheck error, import miss) | ~seconds — fast feedback | `.worktrees/<lane>` |
+| Tier 2 (kingdom) | Cross-lane integration bugs, full test suite | ~minutes — full coverage | `kingdom` branch |
+
+Tier 1 is the fast-feedback gate (catches typos in seconds); Tier 2 is the trust gate (only Tier 2 pass + Ter approval enables push).
+
+### `kingdom.json.gate` schema (unchanged for v0.16.0)
+
+Per-lane gates use `gate.typecheck.*` only. Kingdom gates use `gate.tests`, `gate.smoke`, `gate.lint` (everything except typecheck). If a project wants a different split, edit `kingdom.json.gate` directly.
+
+---
+
+## Lane utilisation — load idle capacity
+
+Idle lanes are wasted lanes. At every Ter interaction (and during kickoff), King runs the **utilisation check**:
+
+```bash
+# 1. Inventory: who's idle?
+IDLE_LANES=$(for LANE_VAR in $(env | grep -E '^WORKER_WS_[0-9]+' | cut -d= -f1); do
+  LANE_NAME=$(echo "$LANE_VAR" | sed 's/WORKER_WS_/worker-/' | tr 'A-Z' 'a-z')
+  # A lane is "idle" if it has no active claim AND no in-flight task file
+  CLAIM=$(ls "$LOGS/claims/"*.lane 2>/dev/null | xargs -I{} grep -l "$LANE_NAME" {} 2>/dev/null | wc -l)
+  IN_FLIGHT=$(ls "$WS"/.kingdom/<project>/tasks/*__${LANE_NAME}__*.md 2>/dev/null | \
+              xargs grep -l 'status:.*\(planning\|executing\|verifying\)' 2>/dev/null | wc -l)
+  [ "$CLAIM" = "0" ] && [ "$IN_FLIGHT" = "0" ] && echo "$LANE_NAME"
+done)
+
+# 2. Inventory: what's pending?
+PENDING_TODOS=$(grep -E '^- \[ \]' "$PROJ/TODO_*.md" 2>/dev/null | wc -l)
+PENDING_GAPS=$(grep -c '## Gap A\|## Gap B' "$LOGS/kingdom-update-"*.md 2>/dev/null | tail -1)
+PENDING_FIX=$(ls "$LOGS"/raw/fix-task-*.md 2>/dev/null | wc -l)
+
+# 3. If (IDLE_LANES > 0) AND (pending > 0), King proactively suggests/dispatches
+```
+
+### Default behaviour (60/40 calibrated)
+
+- If `IDLE_LANES >= 2 AND PENDING >= 2`: **auto-dispatch the obvious matches.** Don't wait to be told.
+- If `IDLE_LANES = 1 AND PENDING = 1`: **suggest the dispatch** but wait for Ter's nod. (Single-task ambiguity merits a quick check.)
+- If `IDLE_LANES = 0 OR PENDING = 0`: nothing to do.
+- If `PENDING` is unclear or controversial (refactor-style work, schema changes): **suggest, don't dispatch.** Conservative core wins.
+
+### Anti-patterns
+
+- ❌ King keeps worker-3 idle for an hour because Ter "hasn't said anything." (Lane utilisation rule violated — King should have proactively dispatched.)
+- ❌ King auto-dispatches a controversial refactor without checking with Ter. (Industrial overlay overstepped — conservative core was supposed to gate this.)
+- ❌ King plans 1 task at a time when 5 workers are available + 5 tasks queued. (Plan-for-capacity rule violated.)
+
+---
+
+## Parallel duplicate dispatch (Ter-initiated)
+
+When the right approach is uncertain, dispatching the SAME task to 2+ workers with different briefs/models lets the kingdom explore the solution space in parallel. **This is Ter-initiated** — King does NOT auto-spawn duplicates without explicit request.
+
+### Triggers (when Ter asks)
+
+- "Explore two approaches to <X> — one minimal, one full refactor"
+- "Run this on Sonnet and Opus, compare"
+- "Race worker-1 and worker-2 on this design decision"
+- "I'm not sure of the approach, try both"
+
+### How King handles a duplicate dispatch
+
+```bash
+# Both lanes get the SAME sub-task-id but different briefs/models
+DISPATCH_A_BRIEF="Approach A (minimal): <one-line>. Constraints: <X>"
+DISPATCH_B_BRIEF="Approach B (full refactor): <one-line>. Constraints: <Y>"
+
+# Dispatch in parallel
+cmux send --workspace "$WORKER_WS_1" -- "$DISPATCH_A_BRIEF"
+cmux send --workspace "$WORKER_WS_1" Enter
+cmux send --workspace "$WORKER_WS_2" -- "$DISPATCH_B_BRIEF"
+cmux send --workspace "$WORKER_WS_2" Enter
+
+# Task file naming reflects the variant (lane is still in segment 2 per v0.15.2)
+# tasks/<UTC>__worker-1__<sub-task-id>-A.md
+# tasks/<UTC>__worker-2__<sub-task-id>-B.md
+```
+
+Both lanes run normally — both fire closers, both get gated. King's review phase compares the two outputs side-by-side (`git diff worker-1..worker-2`) and surfaces to Ter: "Approach A landed X files; Approach B landed Y files; PR-size delta is Z. Which one ships?"
+
+After Ter picks, the WINNER merges to kingdom + pushes; the LOSER's branch + task file stay as an audit artifact ("we tried this, didn't go with it" — useful next quarter when someone asks why).
+
+### Anti-patterns
+
+- ❌ King auto-spawns duplicates on every task (industrial overstepped — duplicates are exploration, not default)
+- ❌ Both A and B push to feature branches (only the winner ships)
+- ❌ Deleting the loser's branch + task file (audit value lost — keep them; archive after 30 days per `/kingdom:update`)
+
+---
+
 ## Auto-gate on completion (King never sits on an un-gated sentinel)
 
 Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for Ter to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).
