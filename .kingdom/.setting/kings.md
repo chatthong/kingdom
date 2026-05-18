@@ -41,18 +41,20 @@ cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
 # Auto-gate in progress (per Auto-gate on completion §)
 cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
 
-# Gate pass — King MUST merge lane into kingdom for Ter's review BEFORE
-# asking "push?". See § "Kingdom as review staging — MANDATORY before any push".
+# Gate pass — King MUST overlay lane's changes onto kingdom's working
+# tree (NOT commit) for Ter's review BEFORE asking "push?". See
+# § "Kingdom as review staging — WORKING-TREE OVERLAY (never commit on kingdom)".
 # State sequence:
-#   1) ▶ Merging <lane> into kingdom
-#   2) ⚠ Review on kingdom? · <lane> · <sub-task-id>
+#   1) ▶ Overlaying <lane> changes onto kingdom
+#   2) ⚠ Review live diff (GH Desktop / git diff) · <N> lane(s) overlaid
 #   3) (Ter approves)
 #   4) ▶ Carving feature/<topic> + pushing
-#   5) ✅ Pushed feature/<topic>
-cmux_set_state "▶" "Merging $LANE into kingdom · $SUBTASK_ID"
+#   5) ▶ Discarding kingdom overlay (git restore)
+#   6) ✅ Pushed feature/<topic>
+cmux_set_state "▶" "Overlaying $LANE changes onto kingdom · $SUBTASK_ID"
 
-# (after merge succeeds + review surface printed)
-cmux_set_state "⚠" "Review on kingdom? · $LANE · $SUBTASK_ID"
+# (after overlay succeeds + review surface printed)
+cmux_set_state "⚠" "Review live diff · $LANE · $SUBTASK_ID"
 cmux workspace-action --action mark-unread --workspace "$KING_WS" 2>/dev/null
 
 # Gate fail — mark the ORIGINATING lane's workspace unread (not King's;
@@ -838,29 +840,61 @@ Header schema (master-readable in 15 lines):
 
 ---
 
-## Kingdom as review staging — MANDATORY before any push
+## Kingdom as review staging — WORKING-TREE OVERLAY (never commit on kingdom)
 
-Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a local integration branch designed for human review** — Ter MUST see the full code-surface of all in-flight lane work integrated together BEFORE any push happens. The King's job between gate-pass and push is to **merge everything into kingdom** for that review.
+Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a local working-tree overlay for human review** — Ter MUST see the full code-surface of all in-flight lane changes as UNCOMMITTED files so GitHub Desktop's "Changes" tab (or any diff tool) shows everything line-by-line.
+
+**v0.17.0+ rule: kingdom branch never receives commits.** It's a scratch surface that gets reset to `origin/develop` each review cycle, then has the worker-N CHANGES overlaid as uncommitted modifications. After review + push, the overlay is discarded.
 
 ### Why this matters
 
-Each worker / co-worker runs its task on its own local branch. They never see each other's code. The pre-commit gate (typecheck + tests + dry-merge + cross-lane overlap) catches mechanical conflicts — but it doesn't catch **logical conflicts**, **review judgement** ("is this the right approach?"), or **bundle questions** ("should these 3 changes ship together or separately?"). Those need Ter eyeballing the integrated state.
+Each worker / co-worker runs its task on its own local branch. They never see each other's code. The pre-commit gate catches mechanical conflicts but not **logical conflicts**, **review judgement** ("is this the right approach?"), or **bundle questions** ("should these 3 changes ship together or separately?"). Those need Ter eyeballing the integrated state.
 
-Kingdom is the local-only branch that hosts that integrated state. Never pushed; lives only on Ter's laptop. After Ter reviews on kingdom and approves, the King carves fresh `feature/<topic>` branches from each lane's tip and pushes those — keeping each PR clean, one-purpose, traceable to a single worker's commit.
+Kingdom is the local-only working-tree-overlay branch where Ter does that review. The review surface is **GitHub Desktop's "Changes" tab** (or any diff viewer — `git diff`, VS Code's source-control panel, lazygit, etc.) showing every file modified across all in-flight lanes as UNCOMMITTED changes. No commit history to navigate. No "click History tab to see what changed." Just files, diffed line-by-line, all in one view.
 
 ### Mandatory workflow
 
 After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
 
-1. **Merge the gated lane into kingdom** (local, never pushed). Conflicts on shared files (TODO_*.md, CHANGELOG.md, etc.) are hand-resolved by King — typically by keeping ALL the close-suffix headers / entries.
-2. **Print the review surface** for Ter:
+1. **Reset kingdom to `origin/develop`** (clean slate — overlay starts fresh each review cycle):
    ```bash
-   git log --oneline origin/develop..kingdom
-   git diff origin/develop..kingdom --stat
+   git checkout kingdom
+   git fetch origin
+   git reset --hard "origin/$BASE"
    ```
-3. **Ask Ter to review** — NOT "push?" yet. Phrase as: "kingdom now contains <lane>'s `<sub-task-id>` work integrated with develop. Want to review on kingdom before push?"
-4. **Wait for Ter's approval**. Ter may look at specific diffs, run the project locally, comment on bundle/timing choices, ask for splits.
-5. **Only after Ter says "push" / "approve" / similar** — carve `feature/<topic>` from the lane's branch tip (NOT from kingdom; the feature branch is a fresh single-commit branch off `origin/develop`), push, open PR via `gh pr create`.
+2. **Overlay each gated lane's changes onto kingdom's working tree** (no commits — just files modified):
+   ```bash
+   # For each gated lane:
+   git checkout "worker-N" -- .       # copy worker-N's tree into kingdom's working tree
+   # Or, if you want to preserve other lanes' changes already overlaid:
+   #   git diff "origin/$BASE..worker-N" | git apply -3
+   # (3-way merge; conflicts surface as unmerged paths Ter can resolve)
+   ```
+   Result: kingdom's working tree has all changes from all in-flight lanes, **UNCOMMITTED**. Conflicts (typically shared TODO/CHANGELOG files) appear as merge markers in the working tree — King hand-resolves by keeping all close-suffix headers.
+3. **Print the review surface** — file list + per-file diff stats from the working tree:
+   ```bash
+   git status --short                   # what's modified/added/deleted
+   git diff --stat                      # per-file line counts
+   git diff "origin/$BASE" --stat       # alternative — same view from develop's POV
+   ```
+4. **Run Tier-2 gate on the working tree** (tests/smoke/lint run against the overlaid state). Tests see all integrated changes even though nothing's committed on kingdom.
+5. **Ask Ter to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
+6. **Wait for Ter's approval**.
+7. **On approval — carve `feature/<topic>` from each lane's tip** (NOT from kingdom; the feature branch is the lane's commits, untouched). Push, open PR.
+8. **After push — discard the kingdom overlay**:
+   ```bash
+   git restore .                        # discard working-tree changes
+   # OR `git reset --hard origin/develop` if needed
+   ```
+   Kingdom is back to clean = `origin/develop`. Next gate-pass starts a fresh overlay.
+
+### Why never commit on kingdom?
+
+- **Review tool friendly.** GitHub Desktop's "Changes" tab, VS Code's source-control panel, lazygit, and `git diff` all default to showing uncommitted changes. Merge-commit-based integration hid changes inside commit history; uncommitted-overlay puts everything front and center.
+- **No history clutter.** Old approach left 5+ merge commits per review cycle on a branch you never push — pollution that complicated `git log` reads.
+- **Clean reset.** After push, `git restore .` drops everything; kingdom is pristine for the next cycle. No accumulating cruft.
+- **Tier-2 gate still works.** Tests run on the overlaid working tree. Same coverage as before.
+- **Conflict handling stays the same.** Working-tree conflict markers surface during `git apply -3` or `git checkout worker-N -- file`; King hand-resolves in the working tree (typically by keeping all close-suffix headers in TODO files).
 
 ### Why carve from lane tip, not from kingdom?
 
@@ -925,9 +959,9 @@ feature/topic-1:   A --- B --- C --- D   ← push this (1 commit from worker-1 t
 feature/topic-2:   A --- B --- C --- E   ← push this (1 commit from worker-2 tip)
 ```
 
-### Multiple in-flight lanes — merge order
+### Multiple in-flight lanes — overlay order (v0.17.0+)
 
-When ≥2 lanes are gated and ready for review at the same time, merge in completion order (oldest sentinel first):
+When ≥2 lanes are gated and ready for review at the same time, overlay them in completion order (oldest sentinel first). The kingdom branch starts at `origin/develop`, gets each lane's changes applied to its working tree:
 
 ```bash
 # Reset kingdom to origin/develop tip first (clean slate)
@@ -935,18 +969,25 @@ git checkout kingdom
 git fetch origin
 git reset --hard "origin/$BASE"
 
-# Merge each gated lane in completion order
+# Overlay each gated lane's CHANGES onto the working tree (no commits)
 for LANE in $(ls -t "$LOGS/done/"*.flag | xargs -I{} basename {} | sed 's/^.*__\([^.]*\).flag/\1/' | sort -u); do
-  git merge --no-ff "$LANE" || {
-    echo "⚠️ Conflict merging $LANE — resolve manually (typically keep both close-suffix headers)"
-    # King hand-resolves common cases: TODO_*.md / CHANGELOG.md / docs/test-reports/
-    # then `git add` + `git commit`
-  }
+  echo "▶ Overlaying $LANE..."
+  if ! git diff "origin/$BASE..$LANE" | git apply --3way -; then
+    echo "⚠️ Conflict overlaying $LANE — resolve in working tree"
+    echo "   Common cases:"
+    echo "     - TODO_*.md  → keep all close-suffix headers from each lane"
+    echo "     - CHANGELOG.md → keep both entries; order by sub-task ID"
+    echo "     - docs/test-reports/ → all keep (different filenames)"
+    echo "   After resolving, continue to next lane manually."
+  fi
 done
 
-# Show the review surface
-git log --oneline origin/develop..kingdom
-git diff origin/develop..kingdom --stat
+# Show the review surface (working tree, not commit history)
+echo ""
+echo "📋 Review surface — all changes UNCOMMITTED on kingdom:"
+git status --short
+echo ""
+git diff "origin/$BASE" --stat
 ```
 
 ### Common conflict patterns + canonical resolutions
@@ -960,12 +1001,14 @@ git diff origin/develop..kingdom --stat
 
 ### Anti-patterns
 
-- ❌ King asks "push?" immediately after gate pass, skipping kingdom merge + review
+- ❌ King asks "push?" immediately after gate pass, skipping kingdom overlay + review
+- ❌ **King commits on kingdom branch** (v0.17.0+ rule: kingdom never receives commits — overlay only)
+- ❌ **King creates merge commits on kingdom** (`git merge --no-ff worker-N` on kingdom). Use `git diff worker-N | git apply` or `git checkout worker-N -- <files>` instead — changes overlay in working tree.
 - ❌ King carves `feature/*` from kingdom (mixes lanes; each PR loses one-purpose property)
-- ❌ King pushes without showing Ter the `git diff origin/develop..kingdom --stat` review surface
+- ❌ King pushes without showing Ter the review surface (`git status` + `git diff --stat`)
 - ❌ King auto-resolves a genuine source-file collision instead of surfacing it
 - ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
-- ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above. Real test caught this: King had 5 merge commits on kingdom, then planned to add a smoke report as a 2nd commit on `feature/fe-p0-found-7-seo-metadata` — kingdom would no longer reflect what was about to ship.
+- ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above.
 
 ---
 

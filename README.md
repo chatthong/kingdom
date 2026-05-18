@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.16.3-success)
+![Version](https://img.shields.io/badge/version-0.17.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -450,7 +450,7 @@ graph LR
 ### Three rules to remember
 
 1. **Lane branches stay local.** `worker-N` / `co-worker-N` / `watchman-N` never reach origin. They live only on your laptop, accumulating one commit per completed task.
-2. **`kingdom` is local-only review + test staging.** King merges all in-flight lanes into kingdom, runs the **Tier-2 gate** (full tests + smoke + lint on the integrated state), prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`), then asks "push?". `kingdom` is never pushed.
+2. **`kingdom` is a local working-tree overlay — never commit on it.** King resets `kingdom` to `origin/develop`, then overlays each in-flight lane's changes onto the working tree (via `git diff worker-N | git apply` or `git checkout worker-N -- <files>`). Result: every change shows up as UNCOMMITTED in GitHub Desktop's "Changes" tab / VS Code's source-control panel / `git status` — review files line-by-line in one view. Tier-2 gate runs on this overlay. After push, `git restore .` discards the overlay; `kingdom` is clean for the next cycle. `kingdom` is never pushed AND never commits.
 3. **PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical.** Each `feature/<topic>` is a fast-forward checkout of the lane's tip — NO commits added on the feature branch after carving. Whatever's on `worker-N` IS what ships. If you want extra content in the PR, put it on `worker-N` first (worker commits it) or open a **separate PR** (different concern → different PR). Adding commits to `feature/*` after carving breaks the kingdom-as-truth-of-what-ships invariant.
 
 ### What lives where
@@ -460,7 +460,7 @@ graph LR
 | `main` | online (protected) | permanent | release manager | ✅ origin/main |
 | `develop` | online | permanent | lead via PR merge | ✅ origin/develop |
 | `feature/<topic>` | online | one PR, then deleted | 👑 King (carve from worker-N tip + push + PR) | ✅ origin/feature/* |
-| `kingdom` | **local only** | permanent | 👑 King (fetch + merge develop, merge lanes, run Tier-2 gate) | ❌ never |
+| `kingdom` | **local only · no commits** | permanent branch, transient working-tree overlay (reset to origin/develop, overlay lanes, review, discard) | 👑 King (reset + overlay + Tier-2 gate + discard) | ❌ never |
 | `worker-N` | **local only** | slot identity — same lane does many tasks over time | 👷 worker-N | ❌ never |
 | `co-worker-N` | **local only** | slot identity | 🧑‍💼 co-worker-N | ❌ never |
 | `watchman-N` | **local only** | reset every `/loop` tick to `origin/develop` | 🕵️ watchman-N (read-only on source) | ❌ never |
@@ -482,7 +482,7 @@ Push approval requires Tier-2 pass. The single-lane Tier-1 gate is fast feedback
 
 **PR surface** (`feature/<topic>`) = one PR, one branch, one commit, descriptive name. Reviewers see what they're reviewing (`feature/auth-refactor`), not who did it (`feature/worker-1-week-15`).
 
-**Integration surface** (`kingdom`) = the local crucible where all in-flight lane work integrates and gets stress-tested before any byte reaches origin. Tier-2 gate runs here. You review the integrated diff here. Decisions to ship happen here.
+**Integration surface** (`kingdom`) = the local crucible where all in-flight lane work integrates as UNCOMMITTED working-tree changes before any byte reaches origin. Tier-2 gate runs against the overlay. You review file-by-file in GitHub Desktop's Changes tab (or any diff tool). After push, the overlay is discarded — kingdom branch itself never accumulates commits, never gets pushed.
 
 Full commit flow + push gate + FINAL conflict check details: [`git.md`](.kingdom/.setting/git.md) and [`kings.md`](.kingdom/.setting/kings.md).
 

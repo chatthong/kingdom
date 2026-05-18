@@ -4,6 +4,43 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.17.0] — 2026-05-18
+
+**BREAKING** — the "kingdom never commits; it's a working-tree overlay" release. Real frustration caught a fundamental design flaw: prior versions had King create merge commits on the `kingdom` branch, but GitHub Desktop's "Changes" tab (and VS Code's source-control panel) shows only UNCOMMITTED changes. So the user opened Changes tab, saw nothing, and was told to "click History tab to see commits" — exactly the wrong UX. v0.17.0 flips the model: kingdom holds the integrated changes as UNCOMMITTED files so the Changes tab shows everything line-by-line.
+
+### Changed (breaking — but only the King's behaviour, not the schema)
+
+- **Kingdom no longer accumulates commits.** Was: `git merge --no-ff worker-N` into kingdom per lane (5+ merge commits per review cycle). Now: `git reset --hard origin/develop` then `git diff worker-N | git apply` or `git checkout worker-N -- .` per lane — changes overlay as UNCOMMITTED working-tree modifications.
+- **Review surface changed.** Was: `git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`. Now: `git status --short` + `git diff --stat` (since kingdom has no commits, the diff is between the working tree and `origin/develop`).
+- **Tier-2 gate runs on the overlay** (uncommitted working tree). Tests/smoke/lint see all integrated changes — same coverage as the merge-commit-based version, just no commits to clean up after.
+- **After push, King discards the overlay.** `git restore .` (or `git reset --hard origin/develop`) drops the working-tree changes. Kingdom is back to clean. Next review cycle starts fresh.
+- **King's workspace description sequence updated**:
+  - was: `▶ Merging <lane> into kingdom` → `⚠ Review on kingdom?` → `✅ Pushed`
+  - now: `▶ Overlaying <lane> changes onto kingdom` → `⚠ Review live diff` → `▶ Discarding kingdom overlay` → `✅ Pushed`
+
+### Why this matters
+
+Real test transcript (paraphrased): User opened GitHub Desktop on kingdom, saw empty "Changes" tab, was told "click History tab" — got frustrated: "at kingdom never commit, I need to see real diff real update what file I need to see." Prior model required navigating commit history; v0.17.0 makes the Changes tab the canonical review surface. **Every file Ter cares about is right there, uncommitted, line-by-line.**
+
+### Updated anti-patterns
+
+- ❌ King commits on kingdom branch (v0.17.0 forbids — overlay only)
+- ❌ King creates merge commits via `git merge --no-ff worker-N` on kingdom — use `git apply` or `git checkout -- file` instead
+- ❌ King doesn't reset kingdom to `origin/develop` before overlaying (changes from prior cycles would pollute the review surface)
+
+### Migration
+
+- Existing kingdoms with merge-commit history on the `kingdom` branch: King can `git reset --hard origin/develop` on first v0.17.0 run to clean up (kingdom is local-only, so no remote impact). Or leave the old commits — they're harmless; just don't add new ones.
+- `kingdom.json` schema unchanged.
+
+### Non-breaking parts
+
+- `feature/<topic>` workflow unchanged — still carved from `worker-N` tip, byte-for-byte (v0.16.3 rule).
+- Worker → King communication unchanged (sentinels, 4-step closer, notifications).
+- Two-tier gate unchanged in concept; just Tier-2 runs on the overlay instead of merge-committed state.
+
+---
+
 ## [0.16.3] — 2026-05-18
 
 The "feature branch = worker-N tip, byte-for-byte" release. Real test caught a workflow violation: King had 5 merge commits on `kingdom` (correct), then planned to add a smoke test report as a 2nd commit on `feature/fe-p0-found-7-seo-metadata` BEFORE push (incorrect — kingdom no longer reflects what's about to ship). v0.15.1 said "carve feature/* from worker-N tip" but didn't enforce strict equality.
