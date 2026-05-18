@@ -47,8 +47,8 @@
       "coworker": "blue",
       "watchman": "rose"
     },
-    "subAgentSpawnDefault": "background",
-    "_subAgentSpawnComment": "'background' = Agent(...) headless (cheaper, no UI), 'tab' = visible new tab in master's workspace (auto-closes on sentinel). Default 'background' — master can override per-task by spawning via cmux tab-action when visibility is wanted.",
+    "subAgentSpawnDefault": "tab",
+    "_subAgentSpawnComment": "'tab' (default) = visible new tab in master's workspace; auto-closes via 5-step closer Step 5. Best for visibility into parallel sub-agent work. 'background' = Agent(...) headless (cheaper, no UI) — use explicitly when masters fan out cheap Haiku reads (Layer-1 scans, doc digests) that don't need watching. 'split' = visible new split inside master's workspace; only useful for ≤2 parallel sub-agents (more is cramped). The master decides per-task; this value is the default.",
     "watchmanLayout": {
       "_comment": "Dual-view watchman: top pane is the watchman Claude session (/loop), bottom pane is a live gh PR monitor. Set to null to disable the split and use a single-pane watchman workspace.",
       "direction": "vertical",

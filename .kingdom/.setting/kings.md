@@ -121,8 +121,18 @@ This step is **non-negotiable**. Without it, the King may dispatch tasks against
 
 #### Step 0 — Watchman state read
 
+Then the watchman state read happens (per § "Mandatory reads" above). The combined Step −1 + Step 0 output is the **single synthesis paragraph** Ter sees:
+
 ```text
-👑 Good morning. Checking watchman state...
+👑 Good morning.
+
+Context loaded:
+   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
+   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
+   • MEMORY.md             (42 entries; will load specific ones JIT)
+   • Personal notes        (TER.md — read but never quoted)
+
+Watchman state:
    • develop:        green @ 2026-05-18T01:30Z (latest tick)
    • PR queue:       2 open
                        #234 — CI green, awaiting your review (idle 4h)
@@ -141,7 +151,7 @@ Today's plan (king-plan task file: 2026-05-18T0900Z__king-plan__monday-kickoff.m
 Awaiting your go / overrides.
 ```
 
-This single synthesis paragraph aggregates `master_agent.log` + every `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` into actionable context. King does this every morning, after every long break, and whenever Ter says "what's the state?".
+King writes this synthesis every morning, after every long break, and whenever Ter says "what's the state?".
 
 ### Reading patterns (bash helpers)
 

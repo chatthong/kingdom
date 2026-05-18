@@ -4,6 +4,36 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.9] — 2026-05-18
+
+The "parallel work is now visible" release. v0.13.0 introduced tab-spawned sub-agents but defaulted to `"background"` (headless `Agent()`) — meaning by default, you couldn't see lane masters fanning out. v0.14.9 flips the default to **`"tab"`** so masters' parallel sub-agent work appears live in their workspace, auto-closing when each finishes. Also strengthens auto-close guarantees with a Watchman orphan-tab sweep.
+
+### Changed
+
+- **`kingdom.json.cmux.subAgentSpawnDefault` default flipped: `"background"` → `"tab"`** — every sub-agent spawn now opens a visible tab inside the master's workspace by default. Auto-closes on sentinel via 5-step closer Step 5.
+- **`.kingdom/.setting/workers.md` "Spawning sub-agents" section restructured.** Tab is now the documented default; `Agent(...)` is the **opt-in** exception for cheap Haiku fan-outs (Layer-1 Discovery scans, doc digests, fan-outs of >3 short agents where N tabs would be cramped). Three options total: `"tab"` (default), `"background"`, `"split"`.
+- **Visual fan-out example added** — concrete ASCII diagram of worker-1's workspace as 3 Sonnet sub-agents spawn for Layer 3 parallel code edits, then disappear cleanly when each writes its sentinel.
+
+### Added
+
+- **5-step closer robustness clarified** — Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`) MUST fire on every exit path (success / blocked / error). Documented as a wrapper-pattern in the sub-agent's brief template.
+- **Watchman orphan-tab sweep** — new `/loop` tick duty. Enumerates each lane master workspace's surfaces, finds tabs with title prefix `"🐱 sub"` whose recent output mentions "sentinel written" / "closer complete" AND have been idle ≥5 min → closes them via `cmux tab-action --action close`. Belt-and-suspenders for the rare case Step 5 fails (cmux unreachable, killed process). Sweeps logged to `master_agent.log`.
+
+### Why this matters
+
+Real test feedback: "and when master working i don't see it parallel work with sub-agent yet, if sub-agent running it will split screen or it will make more tab, tab or screen must auto close tho". Two fixes in one release: (1) make the default visible (flip default to `"tab"`), (2) make auto-close bulletproof (Step 5 + watchman sweep).
+
+### Compatibility notes
+
+- **`kingdom.json` schema is additive** — existing kingdoms without `cmux.subAgentSpawnDefault` get the new `"tab"` default automatically. To preserve v0.14.8 behaviour, set `"subAgentSpawnDefault": "background"` in your kingdom.json.
+- **Cost note** — tabs are full Claude Code sessions; spawning many simultaneously costs more than headless Agent() calls. For cheap Haiku fan-outs (Layer-1 scans, doc digests), masters should explicitly use `Agent(...)` — documented in workers.md.
+
+### Also bundled (small cleanup)
+
+- **`kings.md` kickoff synthesis** — removed the duplicate "Good morning. Checking watchman state..." paragraph that was left dangling after v0.14.8. Now there's exactly one synthesis block (the merged Context loaded + Watchman state version).
+
+---
+
 ## [0.14.8] — 2026-05-18
 
 The "King reads ALL context at session start" release. v0.14.7 made the King read watchman state at every decision point — but that's only half the picture. The other half is the foundational context Ter has written down: workspace CLAUDE.md, project CLAUDE.md, auto-memory entries, personal notes. Without those, the King may dispatch tasks against rules Ter explicitly documented ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") — burning trust + cycles re-correcting.

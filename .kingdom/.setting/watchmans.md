@@ -323,6 +323,47 @@ Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify`
 
 ---
 
+## Orphan-tab sweep (every tick)
+
+Sub-agent tabs in master workspaces are SUPPOSED to auto-close via the 5-step closer Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`). When that fails (cmux unreachable, killed process, etc.), tabs persist after their sentinel was written — clutter that the master can't clean up on its own.
+
+Watchman sweeps for these every `/loop` tick. Logic:
+
+```bash
+# For each lane master workspace, enumerate its tabs/surfaces
+for WS_VAR in $(env | grep -E '^(WORKER|COWORKER)_WS_[0-9]+' | cut -d= -f1); do
+  WS_REF=$(eval echo "\$$WS_VAR")
+
+  # List all surfaces in this workspace
+  SURFACES=$(cmux list-pane-surfaces --workspace "$WS_REF" --json 2>/dev/null)
+
+  # For each surface that LOOKS like a sub-agent tab (name starts with "🐱 sub")
+  echo "$SURFACES" | jq -r '.surfaces[] | select(.title | startswith("🐱 sub")) | .ref' | while read SURF; do
+
+    # Was its sentinel written more than 5 minutes ago?
+    # We don't know the ID directly from the surface name — but we can
+    # check the surface's idle time + last-written log line.
+    OUTPUT=$(cmux capture-pane --workspace "$WS_REF" --surface "$SURF" --lines 5 2>/dev/null)
+
+    # If the recent output mentions "closer complete" or "sentinel written"
+    # AND the surface has been idle (no new content) for ≥5 min, it's orphan.
+    if echo "$OUTPUT" | grep -q 'sentinel\|closer\|done flag'; then
+      AGE=$(jq -r ".surface_idle_ts[\"$SURF\"] // 0" "$LOGS/watchman_state.json")
+      NOW=$(date -u +%s)
+      if [ $((NOW - AGE)) -gt 300 ]; then
+        cmux tab-action --action close --surface "$SURF" 2>/dev/null
+        echo "[$(date -u +%Y-%m-%dT%H%MZ)] 🕵️ watchman swept orphan tab $SURF in $WS_VAR" \
+          >> "$LOGS/master_agent.log"
+      fi
+    fi
+  done
+done
+```
+
+This is BELT-AND-SUSPENDERS — the sub-agent's own Step 5 closes >99% of tabs. Watchman handles the rest. Sweeps are logged to `master_agent.log` so the King can see orphans being cleaned up.
+
+---
+
 ## Blocked-lane scan (every tick)
 
 Lanes can silently stall on Claude Code's interactive permission prompts ("Do you want to proceed? 1. Yes / 2. Yes allow … / 3. No") or other TUI input requests. cmux.app shows the workspace as "Running" but the lane is actually idle, waiting for keyboard input. Without intervention you only notice by clicking each lane.

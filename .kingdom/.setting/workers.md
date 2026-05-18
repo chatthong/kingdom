@@ -8,14 +8,36 @@ See [`index.md`](index.md) for entry-point context, [`kings.md`](kings.md) for w
 
 ## Spawning sub-agents — Tab vs Agent decision
 
-A lane master spawns sub-agents in one of two ways. The choice is per-task, made by the master:
+A lane master spawns sub-agents in one of three ways. The default (since v0.14.9) is **tab** — visible in the master's workspace, auto-closes on sentinel. Override to `Agent()` for cheap fan-outs where visibility costs more than it gives.
 
 | Choice | When to use | How |
 |---|---|---|
-| 🐱 **Agent (background, no UI)** | Default. Cheaper, no tab clutter, sentinel poll resolves them. Use for: planning fan-outs, Layer-1 Discovery scans, `/kingdom:update` specialists, Layer-3 parallel edits where visibility isn't needed. | `Agent(model="sonnet", prompt=…, run_in_background=true)` — Claude Code's native sub-agent call. |
-| 📑 **Tab (visible in master's workspace)** | Use when: (1) user explicitly says "show me", (2) the sub-agent is long-running (>5 min) and progress visibility matters, (3) debugging a stuck spawn. | `cmux tab-action --action new-terminal-right --workspace "$CMUX_WORKSPACE_ID"` then `cmux send --surface <new> -- "claude --model … -p …"`. Tab auto-closes via Step 5 of the 4-step closer (see below). |
+| 📑 **Tab (visible in master's workspace) — DEFAULT** | Anything you want to see happen in real time: Layer-3 parallel code edits, debug spawns, anything Sonnet+, anything >30s. Tabs auto-close via 5-step closer Step 5 — no manual cleanup. | `cmux tab-action --action new-terminal-right --workspace "$CMUX_WORKSPACE_ID"` → capture surface ref → `cmux rename-tab --surface <ref> -- "🐱 sub · <model> · <slug>"` → `cmux send --surface <ref> -- "cd <worktree> && claude --model … -p …"` + Enter. The sub-agent's brief INCLUDES Step 5 of the closer (self-close). |
+| 🐱 **Agent (background, no UI) — opt-in for cheap fan-outs** | Cheap Haiku reads (Layer-1 Discovery scans, doc digests, `/kingdom:update` specialists), short reads (<10s), parallel fan-outs of >3 agents where opening N tabs would be cramped. | `Agent(model="haiku", prompt=…, run_in_background=true)` — Claude Code's native sub-agent call. Same 4-step closer; no Step 5 (no tab to close). |
+| 🪟 **Split (visible inside master's workspace)** | Pair-style work — 2 sub-agents you want to compare side-by-side. Rare. ≤2 sub-agents max — splits get cramped past that. | `cmux new-split right --workspace "$CMUX_WORKSPACE_ID"` then dispatch into the new pane. |
 
-Default policy: **Agent for everything unless explicitly requested visible.** Override per-task via the master's dispatch logic (e.g., user said "watch worker-1 do BE-AUTH-3 — open it in a tab").
+**Default policy (v0.14.9+): Tab unless cheap.** Configurable in `kingdom.json.cmux.subAgentSpawnDefault` — values `"tab"` (default), `"split"`, `"background"`. Master overrides per-task by passing an explicit mode in its spawn logic.
+
+### Visual fan-out example
+
+When worker-1 hits Layer 3 (Execution) and decides to spawn 3 parallel Sonnet sub-agents for separate code chunks:
+
+```text
+Master worker-1 dispatches Layer 3 fan-out (subAgentSpawnDefault=tab):
+
+  cmux.app sidebar (workspace `👷 worker-1`):
+    ├── 📑 worker-1 (master Claude session, the long-lived worker)
+    ├── 📑 🐱 sub · Sonnet · auth-controller   ← spawned, running
+    ├── 📑 🐱 sub · Sonnet · jwt-service       ← spawned, running
+    └── 📑 🐱 sub · Sonnet · auth-tests        ← spawned, running
+
+When each sub-agent finishes (writes sentinel + Step 5 self-close):
+
+  cmux.app sidebar (workspace `👷 worker-1`):
+    └── 📑 worker-1   ← master synthesises the 3 outputs, continues Layer 4
+```
+
+Ter SEES the parallelism happen. Tabs appear, do work, disappear cleanly.
 
 ---
 
@@ -232,13 +254,26 @@ Master writes nothing under `<LOGS>/`. The worker is the only writer for its tas
 
 ### 5-step closer for tab-spawned sub-agents (PRIMARY mode only)
 
-When a master spawns a sub-agent as a **visible tab** (`cmux tab-action --action new-terminal-right …` — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
+When a master spawns a sub-agent as a **visible tab** (the default since v0.14.9 — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
 
 5. **Close own tab** — `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` (the env var is auto-set in every cmux terminal)
 
 The tab self-destructs after the sentinel flag is written. The master doesn't need to clean up; the sidebar/tab-strip stays tidy automatically.
 
-For **Agent-spawned** sub-agents (the default — background, no UI), Step 5 is a no-op because `$CMUX_SURFACE_ID` isn't set in the Agent's process context.
+**Robustness:** Step 5 must fire on EVERY exit path — successful task done, blocked task, errored task. The sub-agent's prompt template includes Step 5 inside a `trap` / `finally`-style wrapper so failures still close the tab:
+
+```bash
+# In the sub-agent's brief (added by the master):
+# After Steps 1-4 (raw + curated + log + sentinel), ALWAYS run:
+cmux tab-action --action close --surface "$CMUX_SURFACE_ID" 2>/dev/null
+# Errors are swallowed because by this point the sentinel is already
+# written — the master sees the work as done regardless of whether the
+# tab close succeeds.
+```
+
+**Orphan tab sweep:** Watchman has a duty (since v0.14.9) to detect tabs that DID write a sentinel but DIDN'T close — sweeps them every `/loop` tick. Belt-and-suspenders for the rare case where Step 5 fails (cmux unreachable, network glitch, killed process). See [`watchmans.md`](watchmans.md) → "Orphan-tab sweep".
+
+For **Agent-spawned** sub-agents (the cheap-fan-out exception — background, no UI), Step 5 is a no-op because `$CMUX_SURFACE_ID` isn't set in the Agent's process context.
 
 ### Required curated-artifact header (mandatory schema)
 
