@@ -4,6 +4,31 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.20.0] — 2026-05-18
+
+`/kingdom:day` is promoted to THE daily ritual. Always runs `/kingdom:update` (no >24h skip-gate) + `/kingdom:start` (idempotent) + a richer kickoff brief (local date+time + Suggested next task synthesis) + the auto-gate-poll loop. New argument surface for soft budgets (`target=N-M/<period>` with auto-split across day/week/month) and a hard daily ceiling (`cap=N`). `/kingdom:update` and `/kingdom:start` remain available as standalone building blocks for power users.
+
+### Added
+
+- **`/kingdom:day [project] [target=N-M/<period>] [cap=N]`** as the canonical daily entry point. Argument parsing is forgiving + echoed back in Step 0.2 so the user can correct typos before the loop fires.
+- **`target=N-M/<period>` auto-split** — `target=30-50/week` interprets as ~6-10/day (5 working days) and ~120-200/month; `target=5-10/day` interprets as ~25-50/week (5 working days) and ~100-200/month; `target=120-200/month` interprets as ~30-50/week and ~6-10/day. King prints all three views in the kickoff brief.
+- **`cap=N` hard daily ceiling** — King stops dispatching after `N` task-completions today; idle lanes wait. Overrides `target` for the day.
+- **Local date+time in kickoff brief** — `date '+%A, %B %-d, %Y · %H:%M %Z'` respects the shell's `TZ` so the user sees their actual local time (e.g. `Monday, May 18, 2026 · 18:35 +07`), not UTC.
+- **Suggested next task synthesis** — King picks 1-3 candidates from (1) unfinished prior-session task files, (2) lead-requested follow-ups on open PRs, (3) unflipped acceptance criteria in `TODO_*.md` / `TODO_Master.csv` / `STEP.md` matching idle lanes, (4) watchman gap findings, (5) first unstarted heading in the task-ledger. User picks or says "go" to accept the first.
+
+### Changed
+
+- **`/kingdom:day` always runs `/kingdom:update`** at Step 1 — the prior >24h skip-gate is dropped. Audit is cheap relative to acting on stale information.
+- **`commands/start.md` + `commands/update.md`** carry a header note marking them as building blocks; `/kingdom:day` is the recommended entry point. Standalone use cases are listed (resume-after-crash for `/kingdom:start`; mid-day re-audit for `/kingdom:update`).
+- **README "Quick start" + "Every day" sections** rewritten to lead with `/kingdom:day`. The slash-command table reorders to put `/kingdom:day` first with bold formatting; `/kingdom:start` and `/kingdom:update` are tagged "*(Building block)*".
+- `plugin.json`, `marketplace.json`, README badge — version → `0.20.0`.
+
+### Tradeoff
+
+Every `/kingdom:day` invocation eats the audit cost upfront (~1-3 min parallel fan-out) instead of starting in ~10s when the audit is fresh. Worth it if you'd rather not remember audit timing; costly if you `/kingdom:day` multiple times per day. For that workflow, use `/kingdom:start` standalone to skip the audit and drop directly into the poll loop.
+
+---
+
 ## [0.19.1] — 2026-05-18
 
 Closing the post-push overlay-discard loophole. The behaviour was already documented in `kings.md` Step 8 and implemented as `kingdom_discard_overlay` in `_primitives.md`, but it wasn't enforced via `rules.md` — so a lane-spawned King session could (and today did) skip it and leave the kingdom branch with stale overlay files after push.

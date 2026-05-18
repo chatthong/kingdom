@@ -1,7 +1,9 @@
 ---
-description: Force a docs/log/task audit pass on the current project — Layer-1 project scan + fan-out Haiku readers, then checkbox/orphan/log reconcile + gap synthesis. Idempotent.
+description: (Building block — most users want /kingdom:day instead, which runs this automatically.) Force a docs/log/task audit pass on the current project — Layer-1 project scan + fan-out Haiku readers, then checkbox/orphan/log reconcile + gap synthesis. Idempotent.
 argument-hint: [project=<name>] [--force]
 ---
+
+> **Most users want [`/kingdom:day`](day.md) instead.** `/kingdom:day` always runs this audit as Step 1 + then spawns lanes + enters the auto-gate-poll loop. Use `/kingdom:update` standalone only for mid-day re-audits when watchman flags fresh findings, or to refresh the audit-trail without entering the poll loop.
 
 You are running a forced audit pass on the kingdom's audit-trail artifacts for ONE project. The goal: bring `.kingdom/<project>/{logs,tasks}/` into a self-consistent state AND surface gaps between the project's actual state and what the kingdom has recorded. Idempotent — safe to run any time.
 

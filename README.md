@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.19.1-success)
+![Version](https://img.shields.io/badge/version-0.20.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -40,11 +40,20 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
 
-# 2. Scaffold a workspace — 90s, once per workspace
+# 2. Scaffold a workspace, once per workspace (~90s)
 /kingdom:init my-app
 
-# 3. Spawn your kingdom — your daily ritual
-/kingdom:start my-app
+# 3. Run the day — the ONE command you type every morning
+/kingdom:day my-app
+```
+
+`/kingdom:day` is the canonical daily ritual. It audits the project, spawns the lanes, prints a kickoff brief with your local date+time and a suggested next task, then auto-dispatches + auto-gates work until something needs your approval. You stay in one chat with the King.
+
+```bash
+# Optional caps + targets
+/kingdom:day my-app cap=5                  # hard stop at 5 task-completions today
+/kingdom:day my-app target=30-50/week      # soft budget; auto-splits to ~6-10/day
+/kingdom:day my-app target=30-50/day       # auto-splits to ~150-250/week
 ```
 
 You now have **5 AI agents** in cmux.app's sidebar — 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman — each in its own colour-coded workspace, all coordinated through your one chat with the King.
@@ -246,19 +255,24 @@ Done. Edit `.kingdom/my-app/kingdom.json` once to fill in your `gate.*` commands
 
 ## 🔁 Every day — your Monday-morning ritual
 
+```bash
+/kingdom:day my-app                        # the one command, every morning
+/kingdom:day my-app cap=5                  # cap today's task-completions at 5
+/kingdom:day my-app target=30-50/week      # soft weekly budget; auto-splits to daily/monthly
 ```
-/kingdom:start my-app
-```
 
-Monday morning. Kingdom spins back up — workers, co-worker, watchman, all in the cmux.app sidebar with colours, notifications, and the conversation state from last week.
+Monday morning. One command. Kingdom runs `/kingdom:update` (refresh project state), spawns the lanes (idempotent — resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per R1).
 
-Tuesday morning. Same command. **Idempotent** — re-running resumes; never recreates.
+Tuesday morning. Same command. The audit re-runs (cheap, parallel fan-out). The kickoff brief reflects yesterday's progress against your target. Nothing to remember.
 
-After a vacation: `/kingdom:update my-app` first (surfaces gaps between project docs and kingdom logs), then `/kingdom:start`.
-
-End of day: `/kingdom:exit my-app` — closes lanes gracefully, keeps your conversation alive.
+End of day: `/kingdom:exit my-app` closes lanes gracefully; your conversation stays alive.
 
 That's the whole routine. **It replaces the daily overhead of "what was I doing", "did anyone push", "is develop green", "is PR #234 reviewed".** The King knows. Watchman knows. Ask the King.
+
+> **Standalone building-block commands** for power users — most don't need these:
+> - [`/kingdom:update my-app`](commands/update.md) — audit-only pass; useful mid-day after watchman flags fresh findings
+> - [`/kingdom:start my-app`](commands/start.md) — spawn lanes only, no audit, no poll loop; useful for resume-after-crash
+> - Both are invoked automatically by `/kingdom:day`. Reach for them only when you want the standalone phase.
 
 ---
 
@@ -455,16 +469,16 @@ After the King overlays 3 lanes onto `kingdom`, GitHub Desktop's **Changes** tab
 Changes (11)
 ─────────────────────────────────────────────────────
    .gitignore                                      +3
-   TODO_Backend.md                                 +1 −1
-   TODO_Master.csv                                 +1 −1
-   TODO_Webshop.md                                 +30 −17
-   apps/swt-frontend/apps/account/app/layout.tsx   +7
-   apps/swt-frontend/apps/admin/app/layout.tsx     +8
-   apps/swt-frontend/apps/webshop/README.md        +21  (new)
-   apps/swt-frontend/apps/webshop/app/layout.tsx   +7
-   apps/swt-frontend/apps/webshop/middleware.ts    +111 (new)
+   TODO.md                                         +1 −1
+   ROADMAP.md                                      +1 −1
+   docs/feature-x.md                               +30 −17
+   src/app/account/layout.tsx                      +7
+   src/app/admin/layout.tsx                        +8
+   src/app/shop/README.md                          +21  (new)
+   src/app/shop/layout.tsx                         +7
+   src/app/shop/middleware.ts                      +111 (new)
    docs/test-reports/README.md                     +1
-   docs/test-reports/SMOKE_…_2026-05-18.md         +189 (new)
+   docs/test-reports/SMOKE_2026-05-18.md           +189 (new)
 ─────────────────────────────────────────────────────
 ```
 
@@ -549,10 +563,10 @@ The King reads this at `/kingdom:start` to:
 | `/kingdom:doctor` | Check prerequisites — `cmux.app`, `tmux`, `jq`, `gh`, `git ≥ 2.5`, user-global + workspace `settings.json` (auto-patches both with diff + ask), `tasks/` writable, orphan audit artifacts, git state across projects. 10 checks. Re-run anytime. |
 | `/kingdom:init` | Workspace scaffold only — `.kingdom/.setting/` role docs + `.claude/settings.json` permissions. |
 | `/kingdom:init <project> [workers=N] [co-workers=M] [watchman=K] [base=<branch>]` | Workspace scaffold (if missing) + project scaffold — `.kingdom/<project>/kingdom.json` + `tasks/` + `logs/`. |
-| `/kingdom:start <project>` | Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Reads shape from `kingdom.json` (no override args — change shape via `kingdom.json` or `/kingdom:init`). Idempotent — re-running resumes existing worktrees. |
-| `/kingdom:update [project=<name>] [--force]` | Audit sweep — auto-switches to `kingdom` branch + spawns 4 parallel specialists + Haiku scanner fan-out. Surfaces gaps between project doc claims and kingdom logs. Idempotent. Current project only. |
+| **`/kingdom:day [project] [target=N-M/<day\|week\|month>] [cap=N]`** | **THE daily ritual (v0.20.0+).** Always runs `/kingdom:update` + `/kingdom:start` + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` sets a soft budget that auto-splits across daily/weekly/monthly views; `cap=` is a hard daily ceiling. Only blocks for your review/push approval and blocked-lane resolution. The one command you type every morning. |
+| `/kingdom:start <project>` | *(Building block — `/kingdom:day` invokes this automatically.)* Spawn the lanes for `<project>` — git worktrees + cmux/tmux/headless dispatch + sidebar tags + watchman `/loop`. Idempotent. Standalone use: resume-after-crash, lane-shape change, manual debugging. |
+| `/kingdom:update [project=<name>] [--force]` | *(Building block — `/kingdom:day` invokes this automatically.)* Audit sweep — switches to `kingdom` branch + spawns 4 parallel specialists + Haiku scanner fan-out. Surfaces gaps between project doc claims and kingdom logs. Idempotent. Standalone use: mid-day re-audit when watchman flags fresh findings. |
 | `/kingdom:exit [project=<name>] [--force] [--include-king] [--audit]` | Graceful teardown — checks in-flight work (asks before force-closing), notifies each lane, gracefully exits Claude in each workspace, closes lane workspaces, writes session-end log line. Keeps King's workspace by default. |
-| `/kingdom:day [project=<name>]` | **One-command daily cycle (v0.18.0+).** Runs `/kingdom:update` (if >24h old) + `/kingdom:start` + daily kickoff + auto-gate-poll loop. Auto-dispatches idle lanes; auto-fires Tier-1 + Tier-2 gates as sentinels appear; only blocks for your review/push approval and blocked-lane resolution. The canonical "type one thing, kingdom runs my day" entry point. |
 
 ---
 

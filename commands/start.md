@@ -1,7 +1,9 @@
 ---
-description: Spawn the kingdom for a project — reads .kingdom/<project>/kingdom.json, creates lane worktrees via git worktree add, then dispatches per MODE (primary/fallback/headless)
+description: (Building block — most users want /kingdom:day instead.) Spawn the kingdom for a project — reads .kingdom/<project>/kingdom.json, creates lane worktrees via git worktree add, then dispatches per MODE (primary/fallback/headless)
 argument-hint: <project>
 ---
+
+> **Most users want [`/kingdom:day`](day.md) instead.** `/kingdom:day` runs `/kingdom:update` (audit) + `/kingdom:start` (this command) + kickoff + auto-gate-poll in one ritual. Use `/kingdom:start` standalone only when you want to spawn lanes without auditing or entering the poll loop (rare: resume-after-crash, lane-shape change, manual debugging).
 
 Parse `$ARGUMENTS`: first positional token = `<project>` (required). Must match a real subdirectory under `$PWD`.
 
