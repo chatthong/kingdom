@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.17.0-success)
+![Version](https://img.shields.io/badge/version-0.17.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -396,7 +396,7 @@ The leaves of the tree. Spawned by the King (for planning) or by any master (for
 
 ## 🌳 Branch model
 
-> **TL;DR** — Lanes work on `worker-N` (local). King merges them into `kingdom` (local) for Tier-2 tests + your review. After you approve, King carves `feature/<topic>` **from the worker-N tip** (not from kingdom) and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.**
+> **TL;DR** — Lanes work on `worker-N` (local). King **overlays** their changes onto `kingdom`'s working tree as **UNCOMMITTED files** (never commits on kingdom) so you can review every line in GitHub Desktop's Changes tab. Tier-2 gate runs against the overlay. After you approve, King carves `feature/<topic>` **from the worker-N tip** (byte-for-byte) and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.** After push, King discards the kingdom overlay (`git restore .`) — kingdom is back to clean `origin/develop`.
 
 ### The lifecycle
 
@@ -407,11 +407,11 @@ graph LR
         W1([👷 worker-1<br/>1 commit per task])
         W2([👷 worker-2])
         W3([👷 worker-3])
-        K([👑 kingdom<br/>integration · Tier-2 gate · review])
+        K([👑 kingdom<br/>WORKING-TREE OVERLAY<br/>(never commit)<br/>Tier-2 gate · review])
 
-        W1 -.->|"git merge --no-ff"| K
-        W2 -.->|"merge --no-ff"| K
-        W3 -.->|"merge --no-ff"| K
+        W1 -.->|"git diff worker-1 \| git apply<br/>(overlay, no commit)"| K
+        W2 -.->|"overlay, no commit"| K
+        W3 -.->|"overlay, no commit"| K
     end
 
     subgraph ONLINE ["☁️  ONLINE — origin, your team sees this"]
@@ -428,9 +428,9 @@ graph LR
         DEV -.->|"release cycle"| MAIN
     end
 
-    DEV ==>|"git fetch + merge<br/>(/kingdom:start)"| K
+    DEV ==>|"git fetch + reset --hard origin/develop<br/>(start of each review cycle)"| K
 
-    W1 ==>|"Ter approves on kingdom<br/>→ King carves from worker-1 tip<br/>git push + gh pr create"| F1
+    W1 ==>|"Ter reviews live diff in GitHub Desktop<br/>→ approves push<br/>→ King carves from worker-1 tip<br/>→ git push + gh pr create<br/>→ git restore . (discard overlay)"| F1
     W2 ==> F2
     W3 ==> F3
 
@@ -446,6 +446,29 @@ graph LR
     class F1,F2,F3 feature
     class MAIN protected
 ```
+
+### What you see in GitHub Desktop after King overlays
+
+After the King overlays 3 lanes onto `kingdom`, GitHub Desktop's **Changes** tab shows all the modified files at once, line-by-line, ready to click through:
+
+```text
+Changes (11)
+─────────────────────────────────────────────────────
+   .gitignore                                      +3
+   TODO_Backend.md                                 +1 −1
+   TODO_Master.csv                                 +1 −1
+   TODO_Webshop.md                                 +30 −17
+   apps/swt-frontend/apps/account/app/layout.tsx   +7
+   apps/swt-frontend/apps/admin/app/layout.tsx     +8
+   apps/swt-frontend/apps/webshop/README.md        +21  (new)
+   apps/swt-frontend/apps/webshop/app/layout.tsx   +7
+   apps/swt-frontend/apps/webshop/middleware.ts    +111 (new)
+   docs/test-reports/README.md                     +1
+   docs/test-reports/SMOKE_…_2026-05-18.md         +189 (new)
+─────────────────────────────────────────────────────
+```
+
+Click any file → see the diff in the right pane. No commit history to navigate. No "History tab" detour. Every change for every in-flight lane is right there, uncommitted, in one place.
 
 ### Three rules to remember
 

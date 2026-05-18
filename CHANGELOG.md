@@ -4,6 +4,28 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.17.1] — 2026-05-18
+
+Docs catch-up — v0.17.0 flipped the kingdom-merge model to working-tree overlay, but the README "Branch model" diagram + TL;DR still said "King merges them into kingdom" with `git merge --no-ff` arrows.
+
+### Changed
+
+- **README `## 🌳 Branch model` TL;DR rewritten** for v0.17.0:
+  - Was: "King merges them into kingdom (local) for Tier-2 tests + your review"
+  - Now: "King overlays their changes onto kingdom's working tree as UNCOMMITTED files (never commits on kingdom) so you can review every line in GitHub Desktop's Changes tab" + adds the discard step "After push, King discards the kingdom overlay (`git restore .`)"
+- **Lifecycle Mermaid diagram updated**:
+  - Arrows from worker-N to kingdom relabelled `git diff worker-N | git apply (overlay, no commit)` (was `git merge --no-ff`)
+  - Kingdom node label updated to `WORKING-TREE OVERLAY (never commit) · Tier-2 gate · review`
+  - Develop→kingdom arrow relabelled `git fetch + reset --hard origin/develop (start of each review cycle)` (was `git fetch + merge`)
+  - Worker→feature transition arrow text now mentions GitHub Desktop review + `git restore .` cleanup
+- **New "What you see in GitHub Desktop after King overlays" subsection** — concrete ASCII rendering of the Changes tab showing 11 modified files line-by-line. Drives home the v0.17.0 promise: the Changes tab IS the review surface, not commit history.
+
+### Why
+
+User confirmed v0.17.0 logic was right but the README diagram + TL;DR still showed the old merge-based model — confusing for first-time readers. v0.17.1 brings the docs in sync with the spec.
+
+---
+
 ## [0.17.0] — 2026-05-18
 
 **BREAKING** — the "kingdom never commits; it's a working-tree overlay" release. Real frustration caught a fundamental design flaw: prior versions had King create merge commits on the `kingdom` branch, but GitHub Desktop's "Changes" tab (and VS Code's source-control panel) shows only UNCOMMITTED changes. So the user opened Changes tab, saw nothing, and was told to "click History tab to see commits" — exactly the wrong UX. v0.17.0 flips the model: kingdom holds the integrated changes as UNCOMMITTED files so the Changes tab shows everything line-by-line.
