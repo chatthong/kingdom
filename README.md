@@ -1,19 +1,55 @@
+<!--
+kingdom — Multi-agent orchestration kit for Claude Code (a Claude Code plugin).
+Parallel AI coding with git worktrees, native cmux.app integration, audit-first
+design, and human-in-the-loop push gates.
+
+Keywords: claude code plugin, multi-agent orchestration, ai agent fleet,
+parallel ai coding, git worktree, claude sub-agents, claude code teammates,
+cmux integration, ai code review, autonomous coding agent, agent orchestrator,
+claude opus sonnet haiku, ai pair programming, claude code teams alternative,
+composio agent-orchestrator alternative, anthropic claude plugin.
+-->
+
 <div align="center">
 
 # 👑 kingdom
 
-**One King. N workers. Auditable parallel work with Claude Code — any domain you version with git.**
+### Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees + native cmux.app
 
-![Version](https://img.shields.io/badge/version-0.14.3-success)
+**One King. N workers. Auditable parallel work — any domain you version with git.**
+
+![Version](https://img.shields.io/badge/version-0.14.5-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
 ![Linux](https://img.shields.io/badge/Linux-tmux%20fallback-333333)
 ![git worktrees](https://img.shields.io/badge/git%20worktrees-built--in-orange)
+![Multi-Agent](https://img.shields.io/badge/multi--agent-orchestration-9333ea)
+![cmux.app](https://img.shields.io/badge/cmux.app-native-f59e0b)
 
-[Install](#-install-30-seconds) · [Setup](#-first-time-setup-90-seconds) · [Shapes](#kingdom-new----pick-your-shape) · [Roles](#-meet-the-king----and-the-masters-that-work-for-it) · [FAQ](#-faq)
+[Quick start](#-quick-start) · [Install](#-install) · [Every day](#-every-day--your-monday-morning-ritual) · [Roles](#-meet-the-king----and-the-masters-that-work-for-it) · [FAQ](#-faq)
 
 </div>
+
+---
+
+## ⚡ Quick start
+
+```bash
+# 1. Install (in any Claude Code session)
+/plugin marketplace add chatthong/kingdom
+/plugin install kingdom@kingdom
+
+# 2. Scaffold a workspace — 90s, once per workspace
+/kingdom:init my-app
+
+# 3. Spawn your kingdom — your daily ritual
+/kingdom:start my-app
+```
+
+You now have **5 AI agents** in cmux.app's sidebar — 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman — each in its own colour-coded workspace, all coordinated through your one chat with the King.
+
+> **Need details?** [Install](#-install) · [First time](#-first-time-90s-once-per-workspace) · [Every day](#-every-day--your-monday-morning-ritual) · [The contract](#-the-contract-what-kingdom-wont-touch) · [How it works](#-how-it-works)
 
 ```mermaid
 graph TB
