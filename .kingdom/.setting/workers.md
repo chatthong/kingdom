@@ -115,6 +115,55 @@ Workers don't write claims. King does. Workers just receive their assignment via
 
 ---
 
+## Task-artifact naming — strict (every artifact carries the lane)
+
+**The lane name appears in every per-task artifact filename**, so a single `grep`/`ls` finds everything that lane touched across the kingdom's history. Workers are generic capacity, but each task file/log/raw/sentinel is a **snapshot** of the lane assignment at THAT moment. If worker-3 does BE-AUTH-3 this week and FE-ICONS-9 next week, both task files have `worker-3` in their name.
+
+| Artifact | Filename | Lane location |
+|---|---|---|
+| Task file | `<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md` | `<lane>` (segment 2) |
+| Raw output | `<LOGS>/raw/<UTC>__<sub>-<lane>__<sub-task-id>.md` | `<sub>-<lane>` (segment 2 — model-prefix + lane) |
+| Curated digest | `<LOGS>/<UTC>__<lane>__<sub-task-id>.md` | `<lane>` (segment 2) |
+| Sentinel flag | `<LOGS>/done/<UTC>__<sub>-<lane>__<sub-task-id>.flag` | `<sub>-<lane>` (segment 2) |
+| Test report (King) | `<project>/docs/test-reports/KING_<UTC>__<lane>__<sub-task-id>.md` | `<lane>` (segment 2 of the name part) |
+
+### Continuation grep patterns
+
+```bash
+# All artifacts from worker-3 (any task, any time)
+ls "$WS"/.kingdom/<project>/tasks/*__worker-3__*.md
+ls "$WS"/.kingdom/<project>/logs/*__worker-3__*.md
+ls "$WS"/.kingdom/<project>/logs/raw/*-worker-3__*.md
+ls "$WS"/.kingdom/<project>/logs/done/*-worker-3__*.flag
+ls "$PROJ"/docs/test-reports/KING_*__worker-3__*.md
+
+# Just today's worker-3 work
+ls "$WS"/.kingdom/<project>/tasks/$(date -u +%Y-%m-%d)*__worker-3__*.md
+
+# Most recent worker-3 task file
+ls -1t "$WS"/.kingdom/<project>/tasks/*__worker-3__*.md | head -1
+```
+
+### Anti-patterns
+
+- ❌ Task file without lane in name (e.g., `2026-05-18T0443Z__other__sonnet__fe-found-7-seo-metadata.md` — lane missing, can't grep)
+- ❌ Lane name in different positions across artifacts (must always be segment 2 for shell glob consistency)
+- ❌ Renaming a task file after creation (it's a frozen snapshot — write once)
+- ❌ Putting two lanes' work in one task file (one lane, one file, period)
+
+### `/kingdom:update` and other non-lane artifacts
+
+Some artifacts aren't lane-attached:
+
+- `/kingdom:update` curated digest: `<LOGS>/kingdom-update-<UTC>.md` — no lane (it's King-dispatched, not lane work)
+- `/kingdom:update` specialist sub-digests: `<LOGS>/audit-{A,B,C,D}-<UTC>.md` — no lane
+- King planning task files: `<workspace>/.kingdom/<project>/tasks/<UTC>__king-plan__<short-slug>.md` — `king-plan` IS the "lane" slot (constant)
+- Watchman reports: `<project>/docs/test-reports/WATCH_<UTC>__<event-class>.md` — no lane (always watchman-N implicit)
+
+For these non-lane artifacts, the filename's segment-2 slot carries the artifact TYPE instead of a lane name (`king-plan`, audit-A through audit-D, WATCH_*). The grep contract still holds: any file with a lane in segment 2 IS lane-attached; anything else isn't.
+
+---
+
 ## Task file (mandatory — first thing the lane writes)
 
 Every task assigned to a lane gets its own **task file** — checkbox doc tracking the multi-layer plan, in-progress progress, and final summary. It's the audit trail for HOW the work happened. Lane master is the sole writer; sub-agents and others read only.
@@ -299,10 +348,10 @@ The worker prompt has **four mandatory closing actions** done at the end of each
 
 > **Note:** The task file (see "Task file" section above) is an auxiliary parallel artifact — like the claim file, it runs alongside the task lifecycle. The task file's "Final summary" section is written and status flipped to done/blocked **before step 1 of the closer fires.** The closer itself is always exactly 4 steps.
 
-1. **Write raw** → `<LOGS>/raw/<ID>__<sub>-<lane-name>.md` (full raw output of the task)
-2. **Write curated** → `<LOGS>/<ID>.md` with `## TL;DR` at top (machine-readable digest)
-3. **Append 1-line status** → `<LOGS>/master_agent.log`
-4. **Touch sentinel flag** → `<LOGS>/done/<ID>__<sub>-<lane-name>.flag` — AND fire two `cmux notify` calls (mandatory in PRIMARY mode):
+1. **Write raw** → `<LOGS>/raw/<UTC>__<sub>-<lane-name>__<sub-task-id>.md` (full raw output; lane embedded for grep)
+2. **Write curated** → `<LOGS>/<UTC>__<lane-name>__<sub-task-id>.md` with `## TL;DR` at top (machine-readable digest; lane embedded)
+3. **Append 1-line status** → `<LOGS>/master_agent.log` (line includes lane name)
+4. **Touch sentinel flag** → `<LOGS>/done/<UTC>__<sub>-<lane-name>__<sub-task-id>.flag` — AND fire two `cmux notify` calls (mandatory in PRIMARY mode):
    - `cmux notify --surface "$CMUX_SURFACE_ID" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR from curated digest>"` — gives this pane a blue ring + tab lights up in cmux.app
    - `cmux notify --workspace "$KING_WS" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR>"` — King's sidebar entry gets a badge + bell-icon panel logs the event
    `$KING_WS` is sourced from `<LOGS>/workspace-refs.env`. See `cmux.md` → § Notification system for visual targeting reference.

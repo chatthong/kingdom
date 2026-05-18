@@ -4,6 +4,36 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.15.2] — 2026-05-18
+
+The "every artifact carries the lane" release. Real test surfaced drift: a lane wrote its curated digest as `2026-05-18T0443Z__other__sonnet__fe-found-7-seo-metadata.md` — no lane name! Couldn't `ls *worker-2*` to find everything that worker did. The task file spec already required `<UTC>__<lane>__<sub-task-id>.md` but the curated digest didn't include lane, and the King's behaviour drifted. v0.15.2 codifies lane-in-every-artifact strictly.
+
+### Changed
+
+- **Curated digest filename now includes the lane** — was `<LOGS>/<ID>.md`, now `<LOGS>/<UTC>__<lane>__<sub-task-id>.md`. Matches the task-file naming convention so `ls *__worker-3__*` from any of the artifact dirs (`tasks/`, `logs/`, `logs/raw/`, `logs/done/`, `docs/test-reports/`) returns lane-attached files only.
+- **Raw output filename clarified** — `<LOGS>/raw/<UTC>__<sub>-<lane>__<sub-task-id>.md` (was `<ID>__<sub>-<lane>.md`). Same shape as before, just `<sub-task-id>` made explicit at the end so the filename is fully self-describing.
+- **Sentinel filename clarified** — `<LOGS>/done/<UTC>__<sub>-<lane>__<sub-task-id>.flag` (same convention).
+- **Test report filename clarified** — `<project>/docs/test-reports/KING_<UTC>__<lane>__<sub-task-id>.md` (was already this pattern; documented now).
+
+### Added
+
+- **`.kingdom/.setting/workers.md` § "Task-artifact naming — strict"** — new top-level section right before "Task file" subsection. Defines:
+  - **Naming convention table** — every per-task artifact's exact filename pattern + where the lane appears
+  - **Continuation grep patterns** — concrete `ls`/`grep` commands to find "all of worker-3's work today" / "most recent worker-3 task" / etc.
+  - **Anti-patterns** — task file without lane in name, inconsistent lane positions, renaming after creation, putting two lanes in one file
+  - **Non-lane artifacts carve-out** — `/kingdom:update` digests, King planning files (`<UTC>__king-plan__<slug>.md`), Watchman reports — these intentionally have no lane (artifact-type in segment 2 instead). The grep contract still holds: anything with a lane in segment 2 IS lane-attached.
+
+### Why this matters
+
+User feedback: "on task file can we name file name to more specific to workspace like, this task is for worker-3 (it can switch later anyway) just it get to continue work more smooth." Workers are generic capacity (v0.5.0), but each task file is a frozen snapshot of that moment's lane assignment. The lane in the filename makes continuation easy: re-running `/kingdom:start` on a paused session, King's first task-file scan can be filtered per lane (`ls tasks/*__worker-3__*`) to know exactly what work was paused mid-flight.
+
+### Non-breaking
+
+- Existing kingdom artifacts keep their original names — only NEW artifacts use the strict convention.
+- Master read patterns (Tier 2 `Read(<LOGS>/<ID>.md, limit=15)`) still work — King reads by sub-task-id, the filename pattern just makes the lane visible alongside it.
+
+---
+
 ## [0.15.1] — 2026-05-18
 
 The "kingdom is the review surface, not just the integration branch" release. Real test caught a workflow gap: King had 3 gated worker branches ready, asked for push approval directly — skipping the kingdom merge that lets Ter see the integrated code surface before any push. Ter had to manually redirect to "merge to kingdom first, then review, then push." v0.15.1 makes the merge-to-kingdom-for-review step **mandatory** between gate-pass and push.
