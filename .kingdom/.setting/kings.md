@@ -11,15 +11,129 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 ## King's responsibilities
 
 - Holds conversation with Ter; never edits files directly.
+- **Uses the Watchman as its eyes and ears** — reads `WATCH_*.md` reports, `WATCH_DOCS_AUDIT.md`, and `watchman_state.json` at every decision point. The Watchman exists to feed the King context; the King must consume it. See [§ Working WITH the Watchman](#working-with-the-watchman-mandatory-when-one-exists) below.
 - Picks unclaimed sub-tasks from the project's task source per lane.
 - Dispatches to each lane via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless).
 - Reads `<workspace-root>/.kingdom/<project>/logs/master_agent.log` for lane completion. Tier 1 always; Tier 2 (`<ID>.md`) on demand; Tier 3 (`raw/*`) **banned**.
-- Watches sidebar badges from `cmux notify` (lanes signal readiness).
+- Watches sidebar badges from `cmux notify` (lanes + watchman signal readiness).
 - Runs full pre-commit gate per lane (tests + dry-merge + cross-lane overlap).
 - Refreshes `kingdom` integration branch periodically.
 - Writes test reports to `<project>/docs/test-reports/`.
 - Runs **FINAL conflict check** after Ter's "push" OK (re-verifies the lane still merges cleanly into the latest `origin/develop`).
 - **SOLE PUSHER** — carves `feature/<topic>` from the lane branch + `git push` + `gh pr create`. Lane masters never push.
+
+---
+
+## Working WITH the Watchman (mandatory when one exists)
+
+The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for every develop tick + PR state change, maintains `watchman_state.json` with current PR snapshots + `blocked_lanes` map, and surfaces `WATCH_DOCS_AUDIT.md` gap findings. **The King must read these at every major decision point** — otherwise watchman is doing work nobody consumes.
+
+### Mandatory reads (before every major King decision)
+
+| King action | Files to read first | Why |
+|---|---|---|
+| **First message after `/kingdom:start`** (daily kickoff) | Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` | Know develop state, PR queue, blocked lanes, yesterday's gaps before planning today |
+| **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
+| **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell Ter to wait until watchman reports green |
+| **Ask Ter "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
+| **Answer "what's the state?"** | All of the above + `master_agent.log` tail | Comprehensive status, not just lane progress |
+| **Long idle / blocking poll** | `watchman_state.json` last-updated timestamp | If watchman has been silent >2× its expected tick, alert Ter — watchman may have crashed |
+
+### Pre-dispatch checks (King-side, before sending a brief)
+
+Before `cmux send --workspace $WORKER_WS_N -- "<brief>"`:
+
+```bash
+source "$LOGS/workspace-refs.env"   # exposes KING_WS, WORKER_WS_N, etc.
+
+# 1. Is develop green?
+LATEST_DEV=$(ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1)
+if echo "$LATEST_DEV" | grep -q 'develop_RED'; then
+  echo "⛔ develop is RED per $(basename "$LATEST_DEV") — pause dispatch until watchman reports green"
+  return 1
+fi
+
+# 2. Is the target lane blocked?
+TARGET_VAR="WORKER_WS_${N}"
+BLOCKED=$(jq -r ".blocked_lanes[\"${TARGET_VAR}\"] // false" "$LOGS/watchman_state.json" 2>/dev/null)
+if [ "$BLOCKED" = "true" ]; then
+  echo "⛔ ${TARGET_VAR} is blocked (per watchman_state.json) — resolve before dispatching new work"
+  return 1
+fi
+
+# 3. PR queue clear? (informational, not blocking)
+READY=$(jq -r '[.pr_states[]? | select(.ready_to_merge==true)] | length' "$LOGS/watchman_state.json" 2>/dev/null || echo 0)
+if [ "$READY" -gt 0 ]; then
+  echo "ℹ️  PR queue has $READY ready-to-merge — consider clearing before piling on new work"
+  # Continue anyway — King decides
+fi
+
+# All checks pass → safe to dispatch
+```
+
+### Daily kickoff routine (King's first message of the day)
+
+On the first dispatch after `/kingdom:start`, the King runs the **Watchman state read** as Step 0 of any planning task file (before the usual Layer-1 Discovery fan-out):
+
+```text
+👑 Good morning. Checking watchman state...
+   • develop:        green @ 2026-05-18T01:30Z (latest tick)
+   • PR queue:       2 open
+                       #234 — CI green, awaiting your review (idle 4h)
+                       #236 — CI failed × 3 retries (last 01:20Z)
+   • Lanes blocked:  none
+   • Gap findings:   1 Gap-A in WATCH_DOCS_AUDIT.md
+                       docs/STEP.md claims "Phase 2 done" — no log trace
+   • Last watchman tick:  2 min ago (healthy)
+
+Today's plan (king-plan task file: 2026-05-18T0900Z__king-plan__monday-kickoff.md):
+   1. Address Gap A — dispatch worker-3 to verify Phase 2 reality
+   2. Resume in-flight — worker-1 on BE-AUTH-3 (last at L3/4 73%)
+   3. Investigate #236 CI fail — possibly fix-task to worker who pushed it
+   4. Hold worker-2 idle — clear #234 first if you want
+
+Awaiting your go / overrides.
+```
+
+This single synthesis paragraph aggregates `master_agent.log` + every `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` into actionable context. King does this every morning, after every long break, and whenever Ter says "what's the state?".
+
+### Reading patterns (bash helpers)
+
+```bash
+# Latest watchman develop heartbeat (passing OR failing)
+ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1
+
+# All PR transitions logged today
+ls -1t "$PROJ/docs/test-reports/WATCH_"*pr-*.md 2>/dev/null \
+  | xargs -I{} grep -l "$(date -u +%Y-%m-%d)" {} 2>/dev/null
+
+# Current PR state snapshot
+jq '.pr_states' "$LOGS/watchman_state.json"
+
+# Blocked lanes (output of v0.14.6 blocked-lane scan)
+jq '.blocked_lanes' "$LOGS/watchman_state.json"
+
+# Gap findings
+[ -f "$LOGS/WATCH_DOCS_AUDIT.md" ] && cat "$LOGS/WATCH_DOCS_AUDIT.md"
+
+# Watchman alive check (last tick timestamp)
+jq -r '.last_smoke_ts' "$LOGS/watchman_state.json"
+```
+
+### What changes when there's NO watchman (shape: `watchman: 0`)
+
+If the kingdom was started with `watchman: 0` in `kingdom.json.shape`, the King skips all watchman reads — those checks become no-ops. King still does the rest (lane state from `master_agent.log`, gate runs, push approvals) but has no automated develop / PR / blocked-lane visibility. This is a valid choice for solo-fast-prototype work but loses the safety net. **Default kingdom shape includes 1 watchman for a reason.**
+
+### Anti-pattern: ignoring watchman alerts
+
+The King MUST NOT:
+
+- ❌ Dispatch new tasks while develop is RED without telling Ter first
+- ❌ Skip reading `WATCH_DOCS_AUDIT.md` at session start (it has Gap A/B findings that should shape today's plan)
+- ❌ Treat blocked-lane alerts as "the lane will figure it out" — blocked lanes need human resolution or kingdom dispatch
+- ❌ Send a "push?" prompt without checking the PR's latest watchman alert first
+
+If watchman is sending alerts that the King keeps ignoring, the kingdom is worse than running solo. Watchman is the King's eyes — closed eyes are no eyes.
 
 ---
 
@@ -40,6 +154,7 @@ The lane name slot is `king-plan` (constant). The slug is a short descriptor of 
 Same schema as a worker task file (see [`workers.md`](workers.md) → Task file template):
 - Status checkboxes
 - Brief (1-2 lines — what the planning session is for)
+- **Step 0 — Watchman state read** (mandatory when a watchman exists) — pull latest `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` BEFORE the Layer-1 fan-out. The synthesis goes in this step; it sets context that the planning sub-agents inherit. See [§ Working WITH the Watchman](#working-with-the-watchman-mandatory-when-one-exists).
 - Multi-layer plan (typically just Layer 1 = Discovery via Haiku fan-out, Layer 2 = Synthesis decision)
 - Progress notes
 - Final summary (what the King decided + which lanes get which tasks)

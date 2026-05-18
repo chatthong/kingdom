@@ -4,6 +4,32 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.7] — 2026-05-18
+
+The "King actually uses the Watchman" release. Prior versions treated watchman as background noise — it wrote `WATCH_*.md` reports, maintained `watchman_state.json`, surfaced `WATCH_DOCS_AUDIT.md` Gap findings, but nothing in the King's flow REQUIRED reading any of it. This release makes watchman first-class: King must read watchman outputs at every major decision point, otherwise the kingdom is "worse than running solo."
+
+### Added
+
+- **`.kingdom/.setting/kings.md` § "Working WITH the Watchman (mandatory when one exists)"** — new top-level section right after King's responsibilities. Defines:
+  - **Mandatory reads table** — what watchman files King must read before each major action (daily kickoff, dispatch, gate, "push?" prompt, status questions, long idle)
+  - **Pre-dispatch checks** — bash snippet King runs before `cmux send`: (1) is develop green per latest `WATCH_*develop_*.md`, (2) is target lane blocked per `watchman_state.json.blocked_lanes`, (3) PR queue informational
+  - **Daily kickoff routine** — single synthesis paragraph aggregating all watchman state on first message of the day; auto-fires after `/kingdom:start`
+  - **Reading patterns** — bash helpers for the 5 common watchman lookups
+  - **No-watchman case** — what changes when `kingdom.json.shape.watchman: 0` (King skips watchman reads; loses safety net)
+  - **Anti-patterns** — 4 things King MUST NOT do (dispatch on RED develop, skip Gap reads, ignore blocked-lane alerts, push without latest watchman state)
+- **King's planning task file Step 0 — Watchman state read** — explicit step BEFORE the usual Layer-1 Discovery fan-out. Synthesis written here; planning sub-agents inherit the context.
+
+### Why this matters
+
+The kingdom ships watchman by default, watchman does a lot of work each tick (smoke checks, PR state snapshots, gap audits, blocked-lane scans as of v0.14.6) — but if the King doesn't READ those outputs, none of that work matters. Real test feedback: "King is like never use watchman when it has — king must use watchman as max benefit auto." v0.14.7 wires it in as mandatory at every decision point.
+
+### Compatibility notes
+
+- **Non-breaking** — no schema changes, no command changes. Behaviour change in how King plans + dispatches.
+- **Watchman==0 kingdoms** — entire new section becomes no-op. King falls back to old behaviour (read `master_agent.log` only).
+
+---
+
 ## [0.14.6] — 2026-05-18
 
 The "lanes never silently stall" release. Fixes two related gaps: (1) Claude Code prompts for permission on every read of `.kingdom/**` and `.worktrees/**` files (lanes block until you approve), and (2) when a prompt DOES fire, cmux.app still shows the lane as "Running" — no notification, no badge, no way to know without clicking each lane.
