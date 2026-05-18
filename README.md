@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.16.1-success)
+![Version](https://img.shields.io/badge/version-0.16.2-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -146,19 +146,20 @@ cmux fires native macOS notifications too — the kingdom always passes role-emo
 
 ```mermaid
 graph TB
-    W[🪟 cmux.app window]
+    W[🪟 cmux.app window<br/>where you launch claude]
+    W ==> K[🏢 Workspace · 👑 King<br/>amber · pinned · your conversation]
 
-    W --> K[🏢 Workspace · 👑 King<br/>amber · pinned · your conversation]
-    W --> M1[🏢 Workspace · 👷 worker-1<br/>violet · long-lived autonomous lane]
-    W --> M2[🏢 Workspace · 👷 worker-2<br/>violet]
-    W --> CW[🏢 Workspace · 🧑‍💼 co-worker-1<br/>blue · paired with you]
-    W --> WM[🏢 Workspace · 🕵️ watchman-1<br/>rose · vertical split inside]
+    K -.->|"/kingdom:start →<br/>cmux new-workspace ×N"| M1[🏢 Workspace · 👷 worker-1<br/>Purple · autonomous lane]
+    K -.->|spawns| M2[🏢 Workspace · 👷 worker-2<br/>Purple]
+    K -.->|spawns| CW[🏢 Workspace · 🧑‍💼 co-worker-1<br/>Blue · paired with you]
+    K -.->|spawns| WM[🏢 Workspace · 🕵️ watchman-1<br/>Rose · vertical split inside]
 
-    M1 -.spawn.-> T1[📑 Tab · 🐱 sub · Sonnet · code<br/>auto-close on sentinel]
-    M1 -.spawn.-> T2[📑 Tab · 🐱 sub · Haiku · digest]
+    M1 -.->|"Agent() or<br/>cmux tab-action"| T1[📑 Tab · 🐱 sub · Sonnet · code<br/>auto-close on sentinel]
+    M1 -.->|spawns| T2[📑 Tab · 🐱 sub · Haiku · digest]
     WM --> S1[🪟 Split top · claude /loop]
     WM --> S2[🪟 Split bottom · gh pr list --watch]
 
+    classDef window fill:#f1f5f9,stroke:#475569,stroke-width:1.5px
     classDef king fill:#fef3c7,stroke:#f59e0b,stroke-width:3px
     classDef opus stroke:#a78bfa,stroke-width:2px
     classDef blue stroke:#60a5fa,stroke-width:2px
@@ -166,6 +167,7 @@ graph TB
     classDef tab stroke:#34d399,stroke-width:1.5px,stroke-dasharray:5 5
     classDef split stroke:#fb7185,stroke-width:1.5px
 
+    class W window
     class K king
     class M1,M2 opus
     class CW blue
@@ -173,6 +175,13 @@ graph TB
     class T1,T2 tab
     class S1,S2 split
 ```
+
+> **What the arrows mean:**
+> - `══>` solid bold — you launch the King inside cmux.app (start of your conversation)
+> - `-.->` dashed — **spawn** relationships: King spawns lane workspaces via `/kingdom:start`; lane masters spawn sub-agent tabs via `Agent()` (background) or `cmux tab-action --action new-terminal-right` (visible)
+> - `-->` solid plain — internal split layout (watchman's dual-view top/bottom)
+>
+> All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (under the same window) — but the King is the **dispatcher** that creates the lane workspaces. The diagram shows the spawn relationship rather than the flat sibling layout.
 
 | Tier | Used for | cmux command | Auto-closes? |
 |---|---|---|---|

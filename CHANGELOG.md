@@ -4,6 +4,30 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.16.2] — 2026-05-18
+
+Docs polish — README three-tier hierarchy diagram fixed to show **spawn relationships**, not just topology.
+
+### Changed
+
+- **README `### Three-tier visual hierarchy` Mermaid diagram** — was showing all 5 workspaces as direct children of the cmux.app window (topologically correct but loses the orchestration story). Fixed to show:
+  - cmux.app window → King (you launch claude here, solid bold arrow)
+  - King → worker-1, worker-2, co-worker-1, watchman-1 (dashed "spawn" arrows representing `/kingdom:start`'s `cmux new-workspace` calls)
+  - Lane masters → sub-agent tabs (dashed "spawn" arrows via `Agent()` or `cmux tab-action`)
+  - Watchman → internal split top/bottom (solid plain — internal layout, not spawn)
+- **Diagram arrow legend** added below the diagram explaining the three arrow styles (solid bold = launch, dashed = spawn, solid plain = internal layout)
+- **Workspace colour names corrected** in the diagram — "violet" / "blue" / "rose" → "Purple" / "Blue" / "Rose" (matches v0.14.13 fix where cmux's named-color set was clarified — `violet` isn't a cmux color)
+
+### Why this matters
+
+User question: "why not worker-N co-worker-N watchman-1 spawn under king?" — the diagram was correct about cmux.app's flat topology (siblings under window) but lost the orchestration story. v0.16.2 reframes the diagram around the **spawn relationship**: King is the dispatcher that creates the lane workspaces, lane masters spawn sub-agent tabs.
+
+### Non-breaking — diagram-only change
+
+No spec, schema, command, or behaviour changes. Pure visual clarity.
+
+---
+
 ## [0.16.1] — 2026-05-18
 
 Docs polish — README branch model section rewritten for clarity.
