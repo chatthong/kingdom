@@ -28,13 +28,9 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 
 The King updates its own cmux workspace description on every state transition so the sidebar reads at a glance:
 
-```bash
-cmux_set_state () {
-  cmux workspace-action --action set-description \
-    --workspace "$KING_WS" \
-    --description "$1 $2" 2>/dev/null
-}
+> Helper definition: see [`_primitives.md § cmux_set_state`](_primitives.md#cmux_set_state--update-workspace-description-live-status-line). King's usage patterns below.
 
+```bash
 # Idle (default after spawn / resume)
 cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
 
@@ -854,41 +850,7 @@ When carving `feature/<topic>` for push, King auto-fills `gh pr create --body` f
 
 ### Body template
 
-```bash
-generate_pr_body_from_task_file () {
-  local lane="$1" sub_task_id="$2"
-  local task_file=$(ls -1t "$WS/.kingdom/${PROJECT}/tasks/"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
-  local digest_file=$(ls -1t "$LOGS/"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
-  local test_report=$(ls -1t "$PROJ/docs/test-reports/KING_"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
-
-  cat <<EOF
-## Summary
-
-$(awk '/^## Brief/,/^##/' "$task_file" | sed '1d;$d')
-
-## Implementation
-
-$(awk '/^## Plan/,/^## Progress/' "$task_file" | sed '1d;$d' | grep -E '^\s*- \[x\]')
-
-## Verification
-
-$(awk '/^## Final summary/,/^##/' "$task_file" | sed '1d;$d')
-
-$([ -n "$test_report" ] && echo "📋 Test report: $(basename "$test_report")")
-
-## Test plan
-
-- [x] Tier-1 gate passed
-- [x] Tier-2 gate passed (integrated on kingdom)
-- [ ] Manual review by lead
-
----
-
-🤖 PR body auto-generated from kingdom task file: \`tasks/$(basename "$task_file")\`
-🤖 Curated closer artifact: \`logs/$(basename "$digest_file")\`
-EOF
-}
-```
+> Helper definition: see [`_primitives.md § generate_pr_body_from_task_file`](_primitives.md#feature-carve--featuretopic-byte-for-byte-from-worker-n-v0163). The template is one place — edit it there.
 
 ### Fields auto-extracted
 

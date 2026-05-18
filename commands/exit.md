@@ -159,27 +159,25 @@ done
 sleep 3    # let Claude process the /clear
 ```
 
-## Step 5 — Close lane workspaces
+## Step 5 — Close lane workspaces (PARALLEL — rules.md R28)
+
+Use the canonical `cmux close-workspace` — NOT `cmux tab-action --action close --workspace` (that errors with `Unknown tab action`). See [`cmux.md` § Teardown / close commands](../.kingdom/.setting/cmux.md#teardown--close-commands).
 
 ```bash
-close_workspace () {
-  local ws="$1"
-  # close-others removes all non-active surfaces; if only one remains, then close it
-  cmux tab-action --action close-others --workspace "$ws" 2>/dev/null
-  cmux tab-action --action close --workspace "$ws" 2>/dev/null
-}
-
+# Parallel fan-out: each lane workspace closes independently (no cross-lane dependency)
 for I in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
   REF=$(eval echo "\$$I")
-  close_workspace "$REF"
+  cmux close-workspace --workspace "$REF" 2>/dev/null &
 done
+wait
+echo "✓ All lane workspaces closed"
 ```
 
-If `--include-king` was given:
+If `--include-king` was given (King's workspace closes LAST and serially — it terminates your conversation):
 
 ```bash
-# Last — close the King's workspace too (this terminates your conversation)
-close_workspace "$KING_WS"
+# Serial + last — closing King's own workspace ends the session
+cmux close-workspace --workspace "$KING_WS" 2>/dev/null
 ```
 
 Otherwise (default): leave `$KING_WS` alone. Your conversation persists.

@@ -40,7 +40,10 @@ Target version: **manaflow/cmux ≥ 0.64.6**. Not to be confused with `craigsc/c
 | Rename a **surface** (tab inside a workspace) | `cmux tab-action --action rename --surface <ref> --title "…"` | [§ Rename](#rename) |
 | Set workspace color / description | `cmux workspace-action --action set-color\|set-description …` | [§ Set workspace color + description](#set-workspace-color--description) |
 | Close own tab (5-step closer Step 5) | `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` | [§ Close tab](#close-own-tab) |
-| Send notification | `cmux notify --workspace <ref> --title --body` | [§ Notify](#notify) |
+| Close a whole **workspace** (kingdom teardown) | `cmux close-workspace --workspace <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Close a **surface** (single tab/pane) | `cmux close-surface --surface <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Close an entire **window** | `cmux close-window --window <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Send notification | `cmux notify --workspace <ref> --title --body` | [§ Notification system](#notification-system) |
 | Identify current context | `cmux identify --json` | [§ Identify](#identify) |
 | List/inspect topology | `cmux tree --all` or `cmux list-panes --workspace <ref> --json` | [§ Inspect](#inspect-topology) |
 | Pin a workspace at top of sidebar | `cmux workspace-action --action pin --workspace <ref>` | [§ Pin](#pin-a-workspace) |
@@ -222,15 +225,44 @@ cmux tab-action --action close --surface "$CMUX_SURFACE_ID"
 
 For Agent-spawned sub-agents (the default — headless), there's no tab to close; `$CMUX_SURFACE_ID` won't be set in the Agent process context. Step 5 becomes a no-op.
 
-To close a workspace entirely (rare — kingdom teardown):
+To close a workspace entirely (kingdom teardown — `/kingdom:exit`), use the canonical `close-workspace` command — NOT `tab-action --action close` (which targets a single surface, not the workspace):
 
 ```bash
-cmux tab-action --action move-to-new-workspace --workspace "$STALE_WS"  # move it out
-# Then in the new isolated workspace, close-others
-cmux tab-action --action close-others --workspace <isolated>
+cmux close-workspace --workspace "$STALE_WS"
 ```
 
-Or manually right-click the workspace in cmux.app sidebar → "Close Workspace".
+See [§ Teardown / close commands](#teardown--close-commands) below for the full close-* family.
+
+---
+
+## Teardown / close commands
+
+cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom:exit` cycle on cryptic `Unknown tab action` errors — King has trial-and-errored this before. **Canonical mapping:**
+
+| Target | Command | When |
+|---|---|---|
+| **Workspace** (lane teardown, `/kingdom:exit`) | `cmux close-workspace --workspace <ref>` | Closing a full lane workspace at kingdom teardown |
+| **Surface** (single tab inside a workspace) | `cmux close-surface --surface <ref>` OR `cmux tab-action --action close --surface <ref>` | Sub-agent self-close (5-step closer Step 5) |
+| **Window** (top-level cmux.app window) | `cmux close-window --window <ref>` | Rare — closes an entire native window |
+
+**What NOT to use:**
+
+- ❌ `cmux tab-action --action close-others --workspace <ws>` — only closes OTHER tabs in the workspace, leaves the workspace alive with one residual tab. Useless for teardown.
+- ❌ `cmux tab-action --action close --workspace <ws>` — error: `Unknown tab action` when `--workspace` is passed without `--surface`. tab-action close targets a surface, not a workspace.
+- ❌ `cmux workspace-action --action close ...` — there is no `close` workspace-action; only `rename`, `set-color`, `set-description`, `mark-read`, `mark-unread`, `pin`.
+
+**Parallel teardown (correct pattern for `/kingdom:exit` Step 5):**
+
+```bash
+# Close N lane workspaces IN PARALLEL — each close is independent (rules.md R28)
+for I in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
+  REF=$(eval echo "\$$I")
+  cmux close-workspace --workspace "$REF" &
+done
+wait
+```
+
+Each `close-workspace` is a network call to cmux.app — serializing them makes teardown of 5 lanes take 5× longer for no reason.
 
 ---
 

@@ -81,47 +81,11 @@ Configured in `kingdom.json.cmux.subAgentPool`:
 
 Master initialises the pool at spawn time (background, non-blocking):
 
-```bash
-init_subagent_pool () {
-  local pool_size=$(jq -r '.cmux.subAgentPool.perMasterPoolSize // 2' "$KJSON")
-  for I in $(seq 1 "$pool_size"); do spawn_pool_slot & done
-}
-
-spawn_pool_slot () {
-  local result=$(cmux tab-action --action new-terminal-right \
-    --workspace "$CMUX_WORKSPACE_ID" --focus false 2>&1)
-  local surface=$(echo "$result" | grep -oE 'surface:[0-9]+' | head -1)
-  [ -z "$surface" ] && return 1
-
-  cmux rename-tab --surface "$surface" -- "🐱 sub · idle (pool)"
-  cmux send --surface "$surface" -- "claude -p 'AWAITING_DISPATCH'"
-  cmux send --surface "$surface" Enter
-
-  echo "$surface" >> "$LOGS/.subagent-pool-${CMUX_WORKSPACE_ID#workspace:}.list"
-}
-
-spawn_subagent_from_pool () {
-  local model="$1" brief="$2"
-  local pool_file="$LOGS/.subagent-pool-${CMUX_WORKSPACE_ID#workspace:}.list"
-  local surface=$(head -1 "$pool_file" 2>/dev/null)
-
-  if [ -z "$surface" ]; then
-    # Pool empty — fall back to standard spawn
-    spawn_subagent_tab "$model" "$brief"
-    return
-  fi
-
-  # Consume the pool slot
-  sed -i.bak '1d' "$pool_file" && rm "${pool_file}.bak"
-
-  cmux rename-tab --surface "$surface" -- "🐱 sub · $model · $(echo "$brief" | head -c 30)"
-  cmux send --surface "$surface" -- "$brief"
-  cmux send --surface "$surface" Enter
-
-  # Refill the pool in background (non-blocking)
-  spawn_pool_slot &
-}
-```
+> Helper definitions: see [`_primitives.md § init_subagent_pool / spawn_pool_slot / spawn_subagent_from_pool`](_primitives.md#init_subagent_pool). Three helpers, one home.
+>
+> - `init_subagent_pool` — call once at master spawn; fans out `perMasterPoolSize` hidden tabs running `claude -p 'AWAITING_DISPATCH'`.
+> - `spawn_pool_slot` — internal; spawns one hidden tab + appends its surface ref to the pool list file.
+> - `spawn_subagent_from_pool` — public dispatch entry; reuses a hot slot (`cmux send` ~20ms) or falls back to `spawn_subagent_tab` (~10-20s).
 
 Result:
 
@@ -300,13 +264,9 @@ The status checkboxes are flipped sequentially as work progresses. Each Layer's 
 
 After every checkbox flip / layer transition, the worker updates its own cmux workspace description so the sidebar shows current state at a glance:
 
-```bash
-cmux_set_state () {
-  cmux workspace-action --action set-description \
-    --workspace "$CMUX_WORKSPACE_ID" \
-    --description "$1 $2" 2>/dev/null
-}
+> Helper definition: see [`_primitives.md § cmux_set_state`](_primitives.md#cmux_set_state--update-workspace-description-live-status-line). Worker's usage patterns below.
 
+```bash
 # At Step 0 (task file just created)
 cmux_set_state "▶" "$SUBTASK_ID · ▱▱▱▱ initialising"
 

@@ -9,12 +9,14 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | File | Owns |
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
+| [`rules.md`](rules.md) | **Priority-tiered rules (v0.19.0+)** — Tier 1 IRON-CLAD (R1-R7, R22-R23), Tier 2 STRONG DEFAULTS (R8-R16, R24-R28), Tier 3 CONVENTIONS (R17-R21). King reads this **FIRST** at session start per R14, before any other role doc. |
 | [`kings.md`](kings.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`workers.md`](workers.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-workers.md`](co-workers.md) | Co-worker (Ter-paired) interactive protocol |
 | [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, lifecycle, dual-view layout |
 | [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, PR conventions |
 | [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
+| [`_primitives.md`](_primitives.md) | **Shared bash helpers** (v0.19.0+) — canonical implementations of every helper the role docs reference (`cmux_set_state`, `attach_or_create_worktree`, `spawn_master_workspace`, `spawn_pool_slot`, `kingdom_*`, `carve_and_push_feature`, `generate_pr_body_from_task_file`, `pattern_grep_fanout`, etc). Single source of truth for shared bash. |
 
 ---
 

@@ -4,6 +4,38 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.19.0] — 2026-05-18
+
+Priority-tiered rules doc + post-merge automation + parallel-by-default execution model. King's session-start context-read now expanded to a full 0-7 ordered list. Closer mandate + task file lifecycle codified as Tier 1 rules. Post-merge kingdom resync + PR-number backfill move from "King's serial chores" to "watchman's parallel duty."
+
+### Added
+
+- `rules.md` — new canonical priority-tiered rules document King reads FIRST at session start (R0 in R14 read order). 21 → 26 rules across 3 tiers (Tier 1 IRON-CLAD, Tier 2 STRONG DEFAULTS, Tier 3 CONVENTIONS).
+- `_primitives.md` — shared bash helpers (`cmux_set_state`, `kingdom_*`, `spawn_pool_slot`, `carve_and_push_feature`, etc.) as a single source of truth referenced by role docs.
+- **R14 expanded** — King's session-start read list is now ordered 0-7: `rules.md` → workspace `CLAUDE.md` → project `CLAUDE.md` → project `README.md` → project `docs/` → `MEMORY.md` → personal notes (read-only) → watchman state.
+- **R22 (Tier 1) Closer must fire on EVERY task completion** — even on blocked/cancelled/errored exit. Raw → curated → log line → sentinel → (tab) close own tab. No silent exits.
+- **R23 (Tier 1) Task file Step 0 mandatory** — `.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md` exists BEFORE any sub-agent dispatch, code edit, or Layer-1 grep. Required schema: Status / Brief / Plan (multi-layer) / Progress notes / Final summary.
+- **R24 (Tier 2) Task file continuously updated** — flip checkboxes in place, append progress notes, write Final summary before closer Step 1. Anti-pattern: write at Step 0 + never touch again.
+- **R25 (Tier 2) Update BOTH kingdom task file AND project task-ledger** — kingdom file = audit-trail home for King + Ter; project file (TODO_*.md / CSV / STEP.md) = public source for lead + reviewers. Both flip in worker's single task commit.
+- **R26 (Tier 2) Post-merge kingdom resync** — when `feature/<topic>` squash-merges to develop, King runs the 7-step resync: detect MERGED → clean overlay → fetch + ff base → reset kingdom → free merged lane → rebase remaining lanes → verify no duplicates → log line. Helper: `kingdom_resync_after_merge`.
+- **R27 (Tier 2) Watchman owns PR-number backfill + close-suffix maintenance** — worker commits `(PR #pending)` because PR doesn't exist at commit time. Watchman's `/loop` body fans out parallel `(PR #pending) → (PR #<N>)` flips per-lane in their own worktrees + amends + `--force-with-lease`. Skips already-MERGED PRs (opens `feature/post-<N>-cleanup` instead). Also sweeps stale `.lane` claims after sentinels close.
+- **R28 (Tier 2) Parallel by default for scan + non-conflicting edit** — read N files = parallel; edit N different files = parallel; amend + force-push N branches = serial *within* a branch, parallel *across* branches. Serialize only when A mutates B's input, or for "exclusive sensitive" ops (push, hard reset, branch delete, anything touching `keys/` / `.env*`).
+- `watchmans.md` — new "PR-number backfill duty" section (under R27); Sonnet watchman now owns this work, not King.
+- `cmux.md` — `#notify` anchor in the command index fixed to `#notification-system` (canonical GitHub heading anchor); new "Teardown / close commands" section documenting the canonical `close-workspace` / `close-surface` / `close-window` command family + the three common wrong incantations + the parallel teardown pattern (R28).
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.19.0`.
+- **`/kingdom:exit` Step 5 fix** — switched from broken `cmux tab-action --action close --workspace <ref>` (errors `Unknown tab action`) to canonical `cmux close-workspace --workspace <ref>` AND parallelised the 5-lane teardown (each `close-workspace` is now `&`-backgrounded with a single `wait` at the end). Previous serial version took ~5× longer than necessary; the wrong command name also forced King to trial-and-error through `tab-action close-others`, `cmux --help`, etc.
+- **Role-doc bash trim** — duplicate helper definitions inlined across `kings.md` (2 blocks) and `workers.md` (4 blocks: 3-helper pool + `cmux_set_state`) now reference `_primitives.md` as the single source of truth. Usage examples remain inline (they show HOW the helper is called for that role); the function bodies move to `_primitives.md`. Approximate trim: `kings.md` 1320 → ~1290 lines, `workers.md` 779 → ~735 lines. Behaviour unchanged — the helper names + signatures are identical.
+
+### Pending for follow-up (not in 0.19.0)
+
+- `parallel_edit_fanout` helper in `_primitives.md` (R28 references it; spec-only for now).
+- Wiring the call site for `kingdom_resync_after_merge` into `kings.md` § Push approval gate Step 7 (helper exists in `_primitives.md`; the role-doc Step 7 still inlines the old per-lane cleanup pattern from before R26).
+
+---
+
 ## [0.18.1] — 2026-05-18
 
 Light doc minification — removed 3 "Why this matters" motivational sections from role docs (2 in `cmux.md`, 1 in `kings.md`). Pure prose removal; no behavioural rules changed. Saves ~12 lines / ~1KB across the role docs read by King at session start.

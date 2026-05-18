@@ -323,6 +323,49 @@ Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify`
 
 ---
 
+## PR-number backfill duty (every tick · v0.19.0+ · per [rules.md R27](rules.md#r27))
+
+The worker commits TODO/CSV close-suffix as `(PR #pending)` because the PR number doesn't exist at commit time. **Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick** — King never does this work.
+
+**Scan logic (parallel by default, per [rules.md R28](rules.md#r28)):**
+
+```bash
+# Build feature/<topic> → PR #N map from King's master_agent.log
+declare -A PR_MAP
+while IFS= read -r line; do
+  feat=$(echo "$line" | grep -oE 'feature/[a-z0-9-]+' | head -1)
+  prn=$(echo  "$line" | grep -oE 'PR #[0-9]+'        | grep -oE '[0-9]+' | head -1)
+  [ -n "$feat" ] && [ -n "$prn" ] && PR_MAP["$feat"]="$prn"
+done < "$LOGS/master_agent.log"
+
+# Scan EACH lane worktree for `(PR #pending)` — IN PARALLEL via Agent fan-out
+for lane in worker-1 worker-2 worker-3 co-worker-1; do
+  Agent_dispatch_sonnet \
+    "name=watchman-pr-backfill-$lane" \
+    "cd $WORKTREES/$lane && \
+     pr=${PR_MAP[feature/<topic-for-$lane>]} && \
+     [ -z \"\$pr\" ] && exit 0 && \
+     gh pr view \$pr --json state -q .state | grep -qv MERGED || exit 0 && \
+     rg -l '(PR #pending)' | xargs sed -i '' \"s/(PR #pending)/(PR #\$pr)/g\" && \
+     git add -u && git commit --amend --no-edit && git push --force-with-lease" &
+done
+wait
+```
+
+**Constraints:**
+
+- **Skip merged PRs** — `gh pr view <N> --json state -q .state | grep -q MERGED` → no force-push to closed branches (memory rule `check_pr_state_before_force_push`). Watchman opens a separate `feature/post-<N>-cleanup` branch + new PR for the orphan flips.
+- **Each lane writes only to its own worktree** — no cross-lane file contention.
+- **`--force-with-lease` not `--force`** — bails if remote moved since fetch.
+
+**Side duty — stale `.lane` claim sweep:** for every `<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag` sentinel, check `<LOGS>/claims/<lane>__<task-id>.lane` — if both exist, rm the claim. Lane is then free for next dispatch.
+
+**Side duty — kingdom-task-file checkbox audit:** on each tick, walk `.kingdom/<project>/tasks/*.md` and flag any file whose `Status` is `verifying` but whose matching sentinel exists in `<LOGS>/done/` → write to `WATCH_TASK_AUDIT.md` for King (NOT auto-flip; status is worker's responsibility per R23/R24).
+
+This duty IS Tier 2 maintenance — failure to backfill is cosmetic, not load-bearing. King carries on without it; the TODO files just stay ugly until next tick.
+
+---
+
 ## Orphan-tab sweep (every tick)
 
 Sub-agent tabs in master workspaces are SUPPOSED to auto-close via the 5-step closer Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`). When that fails (cmux unreachable, killed process, etc.), tabs persist after their sentinel was written — clutter that the master can't clean up on its own.
