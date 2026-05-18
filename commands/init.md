@@ -83,7 +83,7 @@ WS_SETTINGS="$PWD/.claude/settings.json"
 mkdir -p "$PWD/.claude"
 [ -f "$WS_SETTINGS" ] || echo '{}' > "$WS_SETTINGS"
 
-REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent"]'
+REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent","Read(.kingdom/**)","Write(.kingdom/**)","Edit(.kingdom/**)","Read(.worktrees/**)","Write(.worktrees/**)","Edit(.worktrees/**)"]'
 HAS_ALL=$(jq --argjson req "$REQUIRED" '
   if .permissions.allow then ($req - .permissions.allow | length == 0) else false end
 ' "$WS_SETTINGS")
@@ -96,16 +96,26 @@ If `HAS_ALL` is `false`, show the diff and ask:
 ```
 Proposed change to .claude/settings.json (workspace-scoped):
 
-+ permissions.allow ← merge in [Bash, Read, Write, Edit, Grep, Glob, Agent]
++ permissions.allow ← merge in [
+    Bash, Read, Write, Edit, Grep, Glob, Agent,
+    Read(.kingdom/**), Write(.kingdom/**), Edit(.kingdom/**),
+    Read(.worktrees/**), Write(.worktrees/**), Edit(.worktrees/**)
+  ]
 
 Apply? [y/N]
 ```
+
+> The path-scoped entries eliminate the most common interactive permission prompts: lanes reading task files at `.kingdom/<project>/tasks/` or worktree files at `.worktrees/<lane>/`. Without them, Claude Code blocks the lane on each unfamiliar path until you approve. Watchman's blocked-lane scan (see `.kingdom/.setting/watchmans.md`) catches any prompts that still fire.
 
 On `y`, merge with `jq` (preserves any existing keys + dedupes):
 
 ```bash
 tmp=$(mktemp)
-jq '.permissions.allow = (((.permissions.allow // []) + ["Bash","Read","Write","Edit","Grep","Glob","Agent"]) | unique)' \
+jq '.permissions.allow = (((.permissions.allow // []) + [
+  "Bash","Read","Write","Edit","Grep","Glob","Agent",
+  "Read(.kingdom/**)","Write(.kingdom/**)","Edit(.kingdom/**)",
+  "Read(.worktrees/**)","Write(.worktrees/**)","Edit(.worktrees/**)"
+]) | unique)' \
   "$WS_SETTINGS" > "$tmp" && mv "$tmp" "$WS_SETTINGS"
 jq '.permissions' "$WS_SETTINGS"
 ```
