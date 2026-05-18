@@ -495,10 +495,6 @@ cmux workspace-action --action mark-read --workspace "$LANE_WS"
 cmux workspace-action --action set-description --workspace "$LANE_WS" --description "▶ <next state>"
 ```
 
-### Why this matters
-
-Auto-detected `Running` / `Idle` / `Needs input` labels are best-effort from cmux. The kingdom maintains TRUE state via three explicit signals (mark-unread + description + notify) which we control completely. When auto-state disagrees with reality (lane "Running" but really blocked), the kingdom's signals win visually — the badge dot + description override + bell-panel entry all point at the truth.
-
 ---
 
 ## Dynamic workspace descriptions (live status line)
@@ -584,13 +580,9 @@ cmux_set_state "$KING_WS"           "⚠" "Push? · worker-2 · BE-AUTH-3"
 cmux_set_state "$CMUX_WORKSPACE_ID" "🐾" "Awaiting dispatch"
 ```
 
-### Why this matters
-
-The cmux.app sidebar is the King's dashboard. With dynamic descriptions, Ter can glance at the sidebar and read a sentence per lane describing exactly what it's doing — without clicking any workspace. Combined with workspace colors (role) + native notifications (events) + workspace names (identity), the sidebar becomes a complete status surface.
-
 ### Description update is OPTIONAL but recommended
 
-Description updates are nice-to-have, not load-bearing. If a role fails to update (cmux unreachable, transient error), work continues — the audit trail in `master_agent.log` + task files remains the source of truth. Description is the **visual surface** for the audit trail, not the audit trail itself.
+Description updates are nice-to-have, not load-bearing. If a role fails to update (cmux unreachable, transient error), work continues — `master_agent.log` + task files remain the source of truth. Description is the visual surface for the audit trail, not the audit trail itself.
 
 ---
 

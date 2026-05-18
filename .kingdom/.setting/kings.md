@@ -921,11 +921,7 @@ Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a lo
 
 **v0.17.0+ rule: kingdom branch never receives commits.** It's a scratch surface that gets reset to `origin/develop` each review cycle, then has the worker-N CHANGES overlaid as uncommitted modifications. After review + push, the overlay is discarded.
 
-### Why this matters
-
-Each worker / co-worker runs its task on its own local branch. They never see each other's code. The pre-commit gate catches mechanical conflicts but not **logical conflicts**, **review judgement** ("is this the right approach?"), or **bundle questions** ("should these 3 changes ship together or separately?"). Those need Ter eyeballing the integrated state.
-
-Kingdom is the local-only working-tree-overlay branch where Ter does that review. The review surface is **GitHub Desktop's "Changes" tab** (or any diff viewer — `git diff`, VS Code's source-control panel, lazygit, etc.) showing every file modified across all in-flight lanes as UNCOMMITTED changes. No commit history to navigate. No "click History tab to see what changed." Just files, diffed line-by-line, all in one view.
+Review surface: **GitHub Desktop's "Changes" tab** (or `git diff` / VS Code source-control panel / lazygit) showing every file modified across all in-flight lanes as UNCOMMITTED changes. No commit history to navigate — files diffed line-by-line in one view.
 
 ### Mandatory workflow
 

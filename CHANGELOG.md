@@ -4,6 +4,33 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.18.1] — 2026-05-18
+
+Light doc minification — removed 3 "Why this matters" motivational sections from role docs (2 in `cmux.md`, 1 in `kings.md`). Pure prose removal; no behavioural rules changed. Saves ~12 lines / ~1KB across the role docs read by King at session start.
+
+### Honest minification report
+
+Role doc footprint (read by King at every `/kingdom:start` session per v0.14.8):
+
+| File | Lines | Lines in code blocks | Notes |
+|---|---|---|---|
+| `kings.md` | 1327→1320 | ~540 (40%) | Bulk is canonical bash patterns; non-trivial to trim safely |
+| `workers.md` | 779 | ~349 (45%) | Same — pool helper + closer templates are load-bearing |
+| `watchmans.md` | 631 | ~353 (56%) | /loop body bash + scan logic dominate |
+| `cmux.md` | 617→610 | ~194 (31%) | Command reference; each block is canonical |
+| `index.md` | 290 | ~65 | Mostly prose; tightest doc |
+| `git.md` | 258 | ~115 | Branch model reference |
+| `co-workers.md` | 190 | ~33 | Already light |
+| **Total** | **4092→4080** | **~1649 (40%)** | |
+
+Going further (target -30%) would require a structural rewrite: consolidate anti-patterns across files into one shared section, move shared bash helpers (`cmux_set_state`, `spawn_pool_slot`, etc.) into a single primitives doc, deduplicate cross-references. That's a half-day v0.19 candidate, not a one-pass minification.
+
+### Cross-reference audit
+
+Ran on all 7 role docs. 1 ambiguous internal anchor in `cmux.md` (`#notify` — works in current GitHub rendering but doesn't match the canonical lowercase-hyphenated anchor format). Not a runtime bug.
+
+---
+
 ## [0.18.0] — 2026-05-18
 
 The "magic + fast" release. Three big wins shipped together:
