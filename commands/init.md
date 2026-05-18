@@ -71,6 +71,10 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cmux.md"       "$PWD/.kingdom/.setti
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/_primitives.md" "$PWD/.kingdom/.setting/_primitives.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/rules.md"       "$PWD/.kingdom/.setting/rules.md"
 
+# v0.22.0+: card library
+mkdir -p "$PWD/.kingdom/.setting/cards"
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cards/"*.md "$PWD/.kingdom/.setting/cards/"
+
 wc -l "$PWD/.kingdom/.setting/"*.md
 ```
 
@@ -202,41 +206,24 @@ Print the written file for review:
 cat "$PWD/.kingdom/${project}/kingdom.json"
 ```
 
-## Step 5 — Report + suggest next step
+## Step 5 — Report + suggest next step (renders `cards/scaffold-success.md`)
 
-**Workspace-only mode** (no `project` arg):
+Print the [`scaffold-success`](../.kingdom/.setting/cards/scaffold-success.md) card. Variant depends on whether `project` was passed:
 
+```bash
+N_ROLE_DOCS=$(ls -1 "$PWD/.kingdom/.setting/"*.md 2>/dev/null | wc -l | tr -d ' ')
+
+if [ -n "$project" ]; then
+  # Project mode
+  export PROJECT="$project" N_ROLE_DOCS WORKERS COWORKERS WATCHMAN BASE
+  render_card "scaffold-success"
+else
+  # Workspace-only mode — uses the slimmer variant in cards/scaffold-success.md
+  export N_ROLE_DOCS
+  render_card "scaffold-success/workspace-only"
+fi
 ```
-Workspace scaffold complete.
 
-Created/verified:
-  .kingdom/.setting/index.md       (N lines)
-  .kingdom/.setting/kings.md       (N lines)
-  .kingdom/.setting/workers.md     (N lines)
-  .kingdom/.setting/co-workers.md  (N lines)
-  .kingdom/.setting/watchmans.md   (N lines)
-  .kingdom/.setting/git.md         (N lines)
-  .claude/settings.json            permissions.allow ⊇ {Bash, Read, Write, Edit, Grep, Glob, Agent}
+The card output replaces the prior plain-text "Kingdom ready for `<project>`" block. See [`cards/scaffold-success.md`](../.kingdom/.setting/cards/scaffold-success.md) for the full template + both variants.
 
-Next: run /kingdom:init <project> to scaffold a kingdom.json for one of your projects.
-```
-
-**Project mode** (`project` arg given):
-
-```
-Kingdom ready for <project>.
-
-Workspace:
-  .kingdom/.setting/*.md           (6 role docs)
-  .claude/settings.json            permissions OK
-
-Project:
-  .kingdom/<project>/kingdom.json  (shape: workers=N co-workers=M watchman=K, base=<branch>)
-  .kingdom/<project>/tasks/        (audit-trail home — King + lane masters write here)
-  .kingdom/<project>/logs/         (4-step closer artifacts)
-
-Next:
-  1. Edit .kingdom/<project>/kingdom.json — fill in `gate.*` commands (typecheck/tests/smoke/lint, or rename for non-dev domains).
-  2. Run `/kingdom:doctor` to verify your machine has all the deps + correct permissions.
-  3. Run `/kingdom:start <project>` to spawn the lanes (worktrees + cmux panes).
-```
+If the user opted out of the `.claude/settings.json` patch (Step 3 answered `N`), the card appends a warning line: `⚠ Skipped settings.json patch — sub-agents may stall on permission prompts.`

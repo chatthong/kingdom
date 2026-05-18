@@ -53,7 +53,7 @@ parse_target () {
 }
 ```
 
-King prints the interpreted budget in the kickoff brief so Ter can correct before the loop fires.
+King prints the interpreted budget in the kickoff brief so the user can correct before the loop fires.
 
 ### Step 0.2 — Print parse summary BEFORE acting
 
@@ -67,6 +67,22 @@ Proceeding to audit + spawn + kickoff...
 ```
 
 If the parse is ambiguous (unknown period, malformed range), print the issue + stop.
+
+### Step 0.3 — The counting unit (what `cap` and `target` actually count)
+
+**1 task = 1 task file (`.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md`) = 1 sentinel (`<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag`) ≈ 1 PR (`feature/<topic>`).**
+
+The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merges. Mapping:
+
+| Unit | Counted? |
+|---|---|
+| **Task file** + sentinel | ✅ THE unit |
+| **TODO Story / heading** (e.g. `FE-P0-FOUND.7`) | ✅ usually 1:1 with a task file |
+| **Sub-task / AC bullet** (one `- [x]` under a Story) | ❌ flips inside one task file |
+| **PR** (`feature/<topic>`) | ✅ usually 1:1; a follow-up cleanup PR adds 1 |
+| **Milestone** (`M01-M20`) | ❌ spans many tasks |
+
+So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. King echoes this unit definition back in the kickoff brief.
 
 ## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
 
@@ -85,44 +101,61 @@ echo "👑 Step 2/5 · Spinning up kingdom for ${project}..."
 # Invoke /kingdom:start ${project}. Idempotent — resumes if already running, spawns missing lanes.
 ```
 
-## Step 3 — Daily kickoff (with local date+time + Suggested next task)
+## Step 3 — Daily kickoff (4-card brief, v0.22.0+)
 
-King reads in the order R14 mandates (rules.md → workspace + project CLAUDE.md → README.md → docs/ → MEMORY.md → personal notes → watchman state) and prints:
+King reads in the order R14 mandates (rules.md → workspace + project CLAUDE.md → README.md → docs/ → MEMORY.md → personal notes → watchman state), then prints a **4-card brief** by calling `render_card` for each card in `.kingdom/.setting/cards/`:
 
 ```bash
 LOCAL_DATETIME=$(date '+%A, %B %-d, %Y · %H:%M %Z')
-```
+WX_LINE=$(fetch_weather_line)   # _primitives.md helper; 3s timeout; silent on failure
 
-```text
-👑 Good morning, Ter.
-   ${LOCAL_DATETIME}
+# Pick welcome variant by hour
+HOUR=$(date '+%-H')
+if   [ "$HOUR" -ge 5 ]  && [ "$HOUR" -lt 12 ]; then VARIANT=morning
+elif [ "$HOUR" -ge 12 ] && [ "$HOUR" -lt 18 ]; then VARIANT=afternoon
+elif [ "$HOUR" -ge 18 ] && [ "$HOUR" -lt 22 ]; then VARIANT=evening
+else                                                 VARIANT=late
+fi
 
-Daily ritual running for ${project}.
+# Render the 4 kickoff cards in order
+render_card "welcome/${VARIANT}"
+render_card "daily-status"
+render_card "suggested-task"
+render_card "dispatch-plan"
 
-Target: 30-50/week → today's budget 6-10 tasks
-        (this week so far: <DONE_THIS_WEEK> done · <IN_FLIGHT> in-flight)
-
-Context loaded:
-   • rules.md / CLAUDE.md / README.md / docs/ / MEMORY.md / TER.md
-   • Watchman state: develop <STATUS> @ <LAST_TICK>
-   • PR queue: <N_OPEN> open · <N_MERGED_TODAY> merged today
-   • Lanes blocked: <N_BLOCKED>
-
-Suggested next task:
-   → <BEST_FIT_TASK_ID> · <one-line why this one fits next>
-   OR: <ALT_TASK_ID> · <one-line why>
-   OR: new — pick from <TASK_LEDGER_PATH> <SECTION>
-
-Today's auto-dispatch plan (within cap/target):
-   • worker-1 → <task>
-   • worker-2 → <task>
-   • worker-3 → <task>
-   • co-worker-1 → (held for paired work)
-   • watchman-1 → /loop running
+# Closing line
+cat <<'EOF'
 
 I'll auto-dispatch + auto-gate + overlay onto kingdom as work completes.
 You'll be notified when I need: review approval, push approval, or blocked-lane resolution.
+EOF
 ```
+
+Each card's full template + variable list + variants lives in [`.kingdom/.setting/cards/`](../.kingdom/.setting/cards/):
+
+- [`cards/welcome.md`](../.kingdom/.setting/cards/welcome.md) — 4 time-of-day variants (morning/afternoon/evening/late) + weather slot
+- [`cards/daily-status.md`](../.kingdom/.setting/cards/daily-status.md) — project + counting unit + target + watchman + PR queue
+- [`cards/suggested-task.md`](../.kingdom/.setting/cards/suggested-task.md) — 1-3 candidates with reasoning
+- [`cards/dispatch-plan.md`](../.kingdom/.setting/cards/dispatch-plan.md) — lane assignments for today
+
+**Card formatting summary:**
+
+- Each card is a box-drawn body (`╭─╮│╰╯`) wrapped in a GitHub alert (`[!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`) so it renders with a coloured frame in Claude Code chat.
+- Internal width: 58 chars (60 total with borders).
+- Weather line silently skipped on API failure or `kingdom.json.welcome.weather = false`.
+- Variant by hour: morning (5-11), afternoon (12-17), evening (18-21), late (22-4).
+
+Other cards fired by `/kingdom:day` later in the cycle (Step 5 poll loop / Step 6 push gate):
+
+- [`cards/task-complete.md`](../.kingdom/.setting/cards/task-complete.md) — Tier-2 gate pass (~20 random congratulatory lines)
+- [`cards/push-prompt.md`](../.kingdom/.setting/cards/push-prompt.md) — Tier-2 passed, awaiting "push" word
+- [`cards/gate-fail.md`](../.kingdom/.setting/cards/gate-fail.md) — Tier-1 or Tier-2 fail
+- [`cards/cap-reached.md`](../.kingdom/.setting/cards/cap-reached.md) — `cap=N` hit
+- [`cards/end-of-day.md`](../.kingdom/.setting/cards/end-of-day.md) — day stops (exit, cap reached, all idle)
+- [`cards/pr-merged.md`](../.kingdom/.setting/cards/pr-merged.md) — PR flips MERGED (triggers R26 resync)
+- [`cards/conflict-detected.md`](../.kingdom/.setting/cards/conflict-detected.md) — `git merge-tree` finds drift at push time
+
+See [`cards/README.md`](../.kingdom/.setting/cards/README.md) for the full index + alert-flavour mapping.
 
 The **Suggested next task** synthesis draws from (in priority order):
 1. **Unfinished prior-session work** — task files in `.kingdom/${project}/tasks/` with Status ∈ `planning|executing|verifying` and no matching sentinel in `logs/done/`.
@@ -131,7 +164,7 @@ The **Suggested next task** synthesis draws from (in priority order):
 4. **Watchman gap findings** in `WATCH_DOCS_AUDIT.md`.
 5. **New work** — first unstarted heading in the task-ledger that has no dependency-blocking.
 
-King picks 1-3 candidates and presents them as a numbered choice; Ter can pick one or say "go" to accept the first.
+King picks 1-3 candidates and presents them as a numbered choice; the user can pick one or say "go" to accept the first.
 
 ## Step 4 — Auto-dispatch (within cap/target)
 
@@ -182,17 +215,37 @@ while true; do
       run_tier2_gate
 
       if [ "$?" = "0" ]; then
+        # Tier-2 passed: print task-complete card (random congratulatory line),
+        # then push-prompt card (requires user's 'push' word per R1)
+        DURATION=$(compute_task_duration "${LANE}" "${SUBTASK_ID}")
+        RANDOM_LINE=$(random_task_done_line)
+        export LANE TASK_ID="${SUBTASK_ID}" DURATION RANDOM_LINE
+        render_card "task-complete"
+
+        N_MODIFIED=$(git diff --name-only "origin/${BASE}" | wc -l | tr -d ' ')
+        N_NEW=$(git status --short | grep -c '^??')
+        GATE_DURATION=$(compute_gate_duration "${LANE}" "${SUBTASK_ID}")
+        PR_TITLE=$(extract_pr_title_from_task_file "${LANE}" "${SUBTASK_ID}")
+        export N_MODIFIED N_NEW GATE_DURATION PR_TITLE
+        render_card "push-prompt"
+
         cmux_set_state "⚠" "Review live diff · ${LANE} · ${SUBTASK_ID}"
         cmux workspace-action --action mark-unread --workspace "$KING_WS"
         cmux notify --workspace "$KING_WS" \
           --title "👑 King · review ready" \
           --subtitle "${LANE} · ${SUBTASK_ID}" \
-          --body "Tier-2 passed. Review live diff in GitHub Desktop; reply 'push' to publish."
-        wait_for_ter_decision
+          --body "Tier-2 passed. Reply 'push' to publish."
+
+        wait_for_ter_decision    # per R1: only the literal 'push' word counts
       else
+        TIER="Tier-2" TIER_SCOPE="kingdom overlay" \
+          FAILURE_SUMMARY=$(summarise_gate_failure) \
+          REPORT_PATH=$(latest_test_report "${LANE}" "${SUBTASK_ID}")
+        export LANE TASK_ID="${SUBTASK_ID}" TIER TIER_SCOPE FAILURE_SUMMARY REPORT_PATH
+        render_card "gate-fail"
+
         cmux notify --workspace "$KING_WS" --title "👑 King · Tier-2 FAIL" \
-          --subtitle "${LANE} · ${SUBTASK_ID}" \
-          --body "<failure summary>"
+          --subtitle "${LANE} · ${SUBTASK_ID}" --body "$FAILURE_SUMMARY"
       fi
     fi
   done
@@ -207,7 +260,7 @@ while true; do
 done
 ```
 
-## Step 6 — On Ter's "push" approval per PR
+## Step 6 — On user's "push" approval per PR
 
 ```bash
 git checkout -b "feature/${TOPIC}" "${LANE}"
@@ -234,8 +287,8 @@ After push, King returns to Step 5's poll loop. The cycle continues until stoppi
 
 The day stops on any of:
 
-- Ter runs `/kingdom:exit ${project}` (graceful teardown)
-- Ter says "stop" or "hold" in chat (King exits the auto-loop; lanes stay alive)
+- User runs `/kingdom:exit ${project}` (graceful teardown)
+- User says "stop" or "hold" in chat (King exits the auto-loop; lanes stay alive)
 - `cap=N` reached + no in-flight gates pending (King exits loop, waits for next-day instruction)
 - All lanes idle AND no pending work AND no in-flight PRs (King exits loop, says "Day complete; run `/kingdom:exit` to close lanes.")
 
@@ -244,5 +297,5 @@ The day stops on any of:
 - **Daily ritual.** `/kingdom:day <project>` is THE canonical daily entry point. Use it every morning. Composes `/kingdom:update` (always) + `/kingdom:start` (idempotent) + kickoff + auto-gate-poll loop + per-push approval gates.
 - **Building-block commands stay available.** `/kingdom:update` and `/kingdom:start` remain as standalone commands for power users (mid-day re-audit, resume-only after King crash). Most users won't invoke them directly.
 - **Blocks only on human decisions.** Review approval, push approval, blocked-lane resolution. Everything else flows autonomously per kingdom rules.
-- **Argument parsing is forgiving.** `target=30-50/week` and `cap=5` are interpreted then echoed back in Step 0.2 so Ter can correct typos before the loop fires.
+- **Argument parsing is forgiving.** `target=30-50/week` and `cap=5` are interpreted then echoed back in Step 0.2 so the user can correct typos before the loop fires.
 - **State machine.** `/kingdom:day` is the orchestrator; `/kingdom:update` and `/kingdom:start` are the building blocks. Same audit trail, same artifacts, same gate flow.

@@ -4,6 +4,43 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.22.0] — 2026-05-18
+
+Card library: 17 reusable display templates for everything the kingdom prints to the user. Plus weather card on `/kingdom:day` kickoff, random "task complete" lines from a 20-entry pool, and an explicit task-counting-unit definition that the King echoes back so `cap=N` / `target=N-M/<period>` are unambiguous.
+
+### Added
+
+- `.kingdom/.setting/cards/` directory with 19 card design files (all 6 slash commands now render at least one card):
+  - **Kickoff (4 cards):** `welcome.md` (4 time-of-day variants + weather slot), `daily-status.md`, `suggested-task.md`, `dispatch-plan.md`
+  - **Mid-day events (6 cards):** `task-complete.md` (20 random congratulatory lines), `push-prompt.md`, `gate-fail.md`, `cap-reached.md`, `blocked-lane.md`, `conflict-detected.md`
+  - **End-of-cycle (3 cards):** `end-of-day.md`, `pr-merged.md`, `watchman-alert.md` (4 severity variants)
+  - **Lifecycle (2 cards):** `scaffold-success.md`, `spawn-complete.md`
+  - **Internal (1 card):** `dispatch-brief.md` (King → lane prompt template)
+  - **Standalone-command closers (2 cards):** `audit-summary.md` (renders at end of `/kingdom:update`), `doctor-report.md` (renders at end of `/kingdom:doctor`, 3 variants)
+  - **Index:** `cards/README.md` (alert-flavour mapping, width conventions, variable substitution, custom branding)
+- Each user-facing card wraps a box-drawn body (`╭─╮│╰╯`) in a GitHub alert (`[!NOTE]` / `[!TIP]` / `[!IMPORTANT]` / `[!WARNING]` / `[!CAUTION]`) so it renders with a coloured frame in Claude Code chat.
+- **Weather card** (`welcome.md`): fetches local weather via ipapi.co (geolocation) + open-meteo (current conditions). Both free, no API key. 3s timeout per call; silent skip on failure. Opt-out via `kingdom.json.welcome.weather = false`.
+- **Random task-done lines** (`task-complete.md`): 20-line pool that rotates on each Tier-2 pass. Ring-buffer in `<LOGS>/.last-task-done-line` prevents back-to-back repeats. Pool includes rest-reminder variants ("Did you eat?", "Walking break suggested") fired ~10% of the time so the kingdom feels like a coworker, not a drill sergeant.
+- **Task-counting-unit definition** (Step 0.3 of `commands/day.md`): explicit table showing `1 task = 1 task file = 1 sentinel ≈ 1 PR`, with which units count toward `cap=` and `target=` (Story heading ✅, PR ✅; sub-task AC bullet ❌, milestone ❌). The `daily-status` card echoes this definition every kickoff so user knows what they're counting.
+- **Helpers in `_primitives.md`:** `fetch_weather_line` (3s timeout, silent on failure, opt-out aware), `random_task_done_line` (ring-buffer rotation), `render_card` (template load + `${VAR}` substitution + drop-on-empty-line).
+
+### Changed
+
+- `commands/day.md` Step 3 (kickoff) rewritten to call `render_card "welcome/${VARIANT}"` + `render_card "daily-status"` + `render_card "suggested-task"` + `render_card "dispatch-plan"` instead of inlining the four box-drawn templates. Step 5 (poll loop) now fires `task-complete` + `push-prompt` cards on Tier-2 pass and `gate-fail` card on failure.
+- `commands/init.md` Step 2 now copies `cards/` into the workspace scaffold alongside the role docs. Step 5 renders the `scaffold-success` card (workspace-only OR project variant) instead of the prior plain-text "Kingdom ready" block.
+- `commands/start.md` Phase 7 renders the `spawn-complete` card.
+- `commands/exit.md` final step renders the `end-of-day` card.
+- `commands/update.md` final step renders the `audit-summary` card.
+- `commands/doctor.md` final step renders the `doctor-report` card (variant-aware: all-pass / partial-pass / failed).
+- **Public-plugin hygiene:** removed all hardcoded `Ter` references from the public-facing template content. Replaced with `${USER_NAME}` variable in `cards/welcome.md` (configurable via `kingdom.json.welcome.userName`; defaults to empty so greeting is just "Good morning" without a name) + generic "user" in `commands/*.md` and `cards/conflict-detected.md` / `cards/dispatch-brief.md`.
+- `plugin.json`, `marketplace.json`, README badge — version → `0.22.0`.
+
+### Honest scope note
+
+The card library is a SPEC level rollout. King implementations (existing sessions running v0.21.0) will keep using the inline templates from `commands/day.md` as it was; v0.22.0 King sessions started AFTER plugin update will pick up the `render_card` flow. There's no migration step. If you want immediate visual upgrade in an existing King, restart the King session after `/plugin update kingdom`.
+
+---
+
 ## [0.21.0] — 2026-05-18
 
 README slimmed from 739 to ~200 lines; long-form content split into `docs/`. The cmux.app sidebar mockup is now a mermaid diagram (was a code-fence ASCII box). No behavioural changes; all moved content is reachable via the README's `## 📚 Docs` table.

@@ -399,33 +399,34 @@ No panes to pin. Skip this phase.
 
 ---
 
-## Phase 7 — Report
+## Phase 7 — Report (renders `cards/spawn-complete.md`)
 
+```bash
+# Build roster strings (omit lines for zero-count roles)
+WORKER_ROSTER="👷 $(seq 1 $WORKERS | sed 's/^/worker-/' | paste -sd ' · ' -) (violet)"
+[ "$COWORKERS" -gt 0 ] && COWORKER_ROSTER="🧑‍💼 $(seq 1 $COWORKERS | sed 's/^/co-worker-/' | paste -sd ' · ' -) (blue)" || COWORKER_ROSTER=""
+[ "$WATCHMEN"  -gt 0 ] && WATCHMAN_ROSTER="🕵️ $(seq 1 $WATCHMEN | sed 's/^/watchman-/' | paste -sd ' · ' -) (rose, split layout)" || WATCHMAN_ROSTER=""
+
+TOTAL_LANES=$((1 + WORKERS + COWORKERS + WATCHMEN))
+MODE_NOTE=$([ "$RESUMED" = "1" ] && echo "Resumed $TOTAL_LANES existing lanes." || echo "Fresh spawn (created $TOTAL_LANES worktrees).")
+
+export PROJECT WORKER_ROSTER COWORKER_ROSTER WATCHMAN_ROSTER TOTAL_LANES MODE_NOTE
+render_card "spawn-complete"
+
+# After the card, print "next steps" hint if invoked standalone (not via /kingdom:day)
+if [ "$INVOKED_BY_DAY" != "1" ]; then
+  cat <<EOF
+
+Tell the King what to work on, e.g. "Pair on co-worker-1" for paired UI work,
+or "Survey TODO_*.md and distribute across workers" for autonomous dispatch.
+The Watchman monitors develop/PR status — check sidebar for badges.
+
+(Most users want /kingdom:day instead — it runs audit + spawn + kickoff in one ritual.)
+EOF
+fi
 ```
-Kingdom up for <project>:
 
-  branch:     kingdom (merged from origin/$BASE)
-  workers:    worker-1 … worker-$WORKERS
-  co-workers: co-worker-1 … co-worker-$COWORKERS
-  watchmen:   watchman-1 … watchman-$WATCHMEN
-
-  Logs:       $WS/.kingdom/$PROJECT/logs/
-  Config:     $WS/.kingdom/$PROJECT/kingdom.json
-  Task source: $TASK_SOURCE
-
-Next steps:
-- Tell the King what to work on, e.g.:
-    "worker-1: claim and start BE-P0-CICD.1"
-- Or ask the King to plan the session:
-    "Survey the task source and distribute across workers"
-- For Ter-paired UI work:
-    "Pair on co-worker-1"
-- The Watchman monitors develop/PR status — check sidebar for badges.
-
-Useful log commands:
-  tail -n 20 $WS/.kingdom/$PROJECT/logs/master_agent.log
-  ls -1t $WS/.kingdom/$PROJECT/logs/*.md | head -10
-```
+See [`cards/spawn-complete.md`](../.kingdom/.setting/cards/spawn-complete.md) for the full template + fallback-mode variants (tmux / headless).
 
 ---
 

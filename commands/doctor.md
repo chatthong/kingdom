@@ -418,21 +418,33 @@ Then print ONE of:
 Kingdom is ready. Run /kingdom:start to launch your first session.
 ```
 
-**Some yellow/red but no critical ❌:**
-```
-Kingdom partially ready — install the following to enable the full feature set:
-  - <item> (<reason>)
+The 3 outcomes are wrapped in the [`doctor-report`](../.kingdom/.setting/cards/doctor-report.md) card (variant-aware):
+
+```bash
+CHECK_RESULTS_LIST=$(printf '%s\n' \
+  "${CMUX_RESULT}" "${TMUX_RESULT}" "${JQ_RESULT}" "${GH_RESULT}" "${GIT_RESULT}" \
+  "${USER_SETTINGS_RESULT}" "${WORKSPACE_SETTINGS_RESULT}" "${TASKS_WRITABLE_RESULT}" \
+  "${ORPHAN_AUDIT_RESULT}" "${GIT_STATE_RESULT}")
+
+N_FAILED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^✗')
+N_PATCHED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^⚙')
+
+export OS_VERSION SHELL CMUX_VERSION TMUX_VERSION JQ_VERSION GH_VERSION GIT_VERSION \
+  N_PROJECTS CHECK_RESULTS_LIST N_FAILED N_PATCHED PATCHED_LIST ACTION_LIST \
+  PLURAL=$([ "$N_FAILED" = "1" ] && echo "" || echo "s")
+
+if   [ "$N_FAILED" -eq 0 ] && [ "$N_PATCHED" -eq 0 ]; then
+  render_card "doctor-report/all-pass"
+elif [ "$N_FAILED" -eq 0 ]; then
+  render_card "doctor-report/partial-pass"
+else
+  render_card "doctor-report/failed"
+fi
 ```
 
-**Any critical ❌ (manaflow/cmux app, jq, git < 2.5):**
-```
-Kingdom not ready — install the following before running /kingdom:start:
-  - <item> (<reason>)
-```
+See [`cards/doctor-report.md`](../.kingdom/.setting/cards/doctor-report.md) for the 3 variants + variable list.
 
-The MODE-status block above checks PRIMARY/FALLBACK/HEADLESS; the `tasks/` writability check (Check 7) confirms the audit-trail directory is ready.
-
-Then, on the final line, always print the detected mode:
+After the card, always print the detected mode line:
 
 - If cmux.app found AND `$CMUX_CLAUDE_PID` set:
   ```

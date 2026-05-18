@@ -211,10 +211,26 @@ Poll the sentinel flag in a single blocking Bash call (zero token cost while wai
 until [ -f "$PWD/.kingdom/${project}/logs/done/${UTC}__sonnet-kingdom-update.flag" ]; do
   sleep 5
 done
-cat "$PWD/.kingdom/${project}/logs/kingdom-update-${UTC}.md"
 ```
 
-Show the digest to the user. Highlight any `⚠️ flagged` entries, the `## Digest re-understanding candidates`, and the new `## Gap A` / `## Gap B` sections — those need King's attention.
+Then render the [`audit-summary`](../.kingdom/.setting/cards/audit-summary.md) card with the run stats:
+
+```bash
+REPORT="$PWD/.kingdom/${project}/logs/kingdom-update-${UTC}.md"
+N_CHECKBOXES_FLIPPED=$(grep -c '^- \[x\]' "$REPORT" 2>/dev/null || echo 0)
+N_ORPHANS_BACKFILLED=$(grep -c '^### Orphan backfilled:' "$REPORT" 2>/dev/null || echo 0)
+N_LOG_LINES_REPAIRED=$(grep -c '^### Log line repaired:' "$REPORT" 2>/dev/null || echo 0)
+N_DIGESTS_STALE=$(grep -c '^### Stale digest:' "$REPORT" 2>/dev/null || echo 0)
+N_TASK_MERGES=$(grep -c '^### Merge candidate:' "$REPORT" 2>/dev/null || echo 0)
+N_SUSPECT=$(grep -c '^### Suspect:' "$REPORT" 2>/dev/null || echo 0)
+
+export PROJECT="$project" N_SPECIALISTS=4 DURATION \
+  N_CHECKBOXES_FLIPPED N_ORPHANS_BACKFILLED N_LOG_LINES_REPAIRED \
+  N_DIGESTS_STALE N_TASK_MERGES N_SUSPECT REPORT_PATH="$REPORT"
+render_card "audit-summary"
+```
+
+Then `cat` the report for the user to scroll. Highlight any `⚠️ flagged` entries, the `## Digest re-understanding candidates`, and the new `## Gap A` / `## Gap B` sections — those need King's attention.
 
 ## Step 4 — King's follow-up (advisory)
 

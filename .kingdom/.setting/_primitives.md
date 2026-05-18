@@ -424,6 +424,106 @@ Used by `workers.md` § Task-artifact naming and every role doc that creates art
 
 ---
 
+## Card rendering (v0.22.0+)
+
+Cards in [`cards/`](cards/) are reusable display templates. Each card is a markdown file with `${VAR}` placeholders. `render_card` loads a card, substitutes the variables, and prints to chat.
+
+### `fetch_weather_line` — weather slot for `welcome` card
+
+Uses ipapi.co for geolocation + open-meteo for current weather. Both free, no API key. 3s timeout per call; silent failure (returns empty string).
+
+```bash
+fetch_weather_line () {
+  # Opt-out via kingdom.json.welcome.weather = false
+  local enabled=$(jq -r '.welcome.weather // true' "$KJSON" 2>/dev/null)
+  [ "$enabled" = "false" ] && return 0
+
+  # Geolocation
+  local loc=$(curl -s --max-time 3 https://ipapi.co/json/ 2>/dev/null)
+  [ -z "$loc" ] && return 0
+  local city=$(echo "$loc" | jq -r '.city // empty')
+  local lat=$(echo "$loc" | jq -r '.latitude // empty')
+  local lon=$(echo "$loc" | jq -r '.longitude // empty')
+  [ -z "$lat" ] || [ -z "$lon" ] && return 0
+
+  # Weather
+  local wx=$(curl -s --max-time 3 \
+    "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&current=temperature_2m,apparent_temperature,weather_code&timezone=auto" 2>/dev/null)
+  [ -z "$wx" ] && return 0
+  local temp=$(echo "$wx" | jq -r '.current.temperature_2m // empty')
+  local feels=$(echo "$wx" | jq -r '.current.apparent_temperature // empty')
+  local code=$(echo "$wx" | jq -r '.current.weather_code // empty')
+  [ -z "$temp" ] && return 0
+
+  # WMO code → emoji + label
+  local emoji label
+  case "$code" in
+    0)     emoji="☀️";  label="clear" ;;
+    1|2)   emoji="🌤️"; label="partly cloudy" ;;
+    3)     emoji="☁️";  label="overcast" ;;
+    45|48) emoji="🌫️"; label="fog" ;;
+    51|53|55|56|57|61|63|65|66|67)
+           emoji="🌧️"; label="rain" ;;
+    71|73|75|77) emoji="❄️"; label="snow" ;;
+    80|81|82)    emoji="🌦️"; label="showers" ;;
+    95|96|99)    emoji="⛈️"; label="thunderstorm" ;;
+    *)     emoji="🌍";  label="weather" ;;
+  esac
+
+  printf '%s  %s · %s°C · %s · feels like %s°C\n' "$emoji" "$city" "$temp" "$label" "$feels"
+}
+```
+
+### `random_task_done_line` — pick a random line from `cards/task-complete.md` pool
+
+Avoids repeating the most-recent pick by keeping a small ring buffer in `<LOGS>/.last-task-done-line`.
+
+```bash
+random_task_done_line () {
+  local pool_file="$WS/.kingdom/.setting/cards/task-complete.md"
+  local last_file="$LOGS/.last-task-done-line"
+  local last=$(cat "$last_file" 2>/dev/null || echo "0")
+
+  # Extract the 20 numbered lines from the pool file
+  mapfile -t lines < <(grep -E '^[0-9]+\. ' "$pool_file" | sed 's/^[0-9]\+\. //')
+  local count=${#lines[@]}
+  [ "$count" -eq 0 ] && return 0
+
+  # Pick a random index that isn't last
+  local idx
+  while true; do
+    idx=$((RANDOM % count))
+    [ "$idx" != "$last" ] && break
+  done
+  echo "$idx" > "$last_file"
+  echo "${lines[$idx]}"
+}
+```
+
+### `render_card` — load a card, substitute variables, print
+
+```bash
+render_card () {
+  local card="$1"           # e.g. "welcome" or "welcome/morning" for variants
+  local card_file
+  case "$card" in
+    welcome/morning|welcome/afternoon|welcome/evening|welcome/late)
+      card_file="$WS/.kingdom/.setting/cards/welcome.md" ;;
+    *)
+      card_file="$WS/.kingdom/.setting/cards/${card}.md" ;;
+  esac
+  [ -f "$card_file" ] || { echo "❌ Card not found: $card_file" >&2; return 1; }
+
+  # Extract the appropriate `## Template` block (variant-aware)
+  # ... (full template-extract + envsubst logic; see commands/day.md for invocation example)
+  envsubst < "$card_file"
+}
+```
+
+(The full `render_card` implementation handles variant selection, line-drop on empty `${VAR}`, and width-padding for box alignment. See [`cards/README.md`](cards/README.md) § Variable substitution.)
+
+---
+
 ## Reference
 
 Each role doc points here for the canonical bash. If a role doc has bash that ISN'T here, that's a leak — file a fix to consolidate. Single source of truth for primitives.

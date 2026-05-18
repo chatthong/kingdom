@@ -202,24 +202,21 @@ fi
 rm -f "$REFS"
 ```
 
-Print a final summary to the user:
+Print the [`end-of-day`](../.kingdom/.setting/cards/end-of-day.md) card:
 
+```bash
+LOCAL_DATETIME=$(date '+%A, %B %-d, %Y · %H:%M %Z')
+TASKS_DONE="$DONE_COUNT"
+PRS_PUSHED=$(grep -c "feature/" "$LOGS/master_agent.log" 2>/dev/null || echo 0)
+PRS_MERGED=$(gh pr list --state merged --search "merged:>=$(date +%F)" --json number 2>/dev/null | jq length || echo 0)
+PRS_PENDING=$(gh pr list --state open --json number 2>/dev/null | jq length || echo 0)
+EXIT_HINT=$([ "$INCLUDE_KING" = "1" ] && echo "King workspace closed too." || echo "Lanes closed. Conversation kept alive.")
+
+export PROJECT="$project" LOCAL_DATETIME TASKS_DONE PRS_PUSHED PRS_MERGED PRS_PENDING EXIT_HINT
+render_card "end-of-day"
 ```
-👑 Kingdom session closed for "${project}"
 
-  Closed workspaces:
-    👷 worker-1 .. worker-N
-    🧑‍💼 co-worker-1 .. co-worker-M
-    🕵️ watchman-1 .. watchman-K
-  King's workspace: <kept | also closed>
-
-  Session stats:
-    Sentinels written:    ${DONE_COUNT}
-    Latest audit gaps:    ${GAP_COUNT}
-    Session-end logged:   master_agent.log
-
-Next time, run `/kingdom:start ${project}` to rebuild lanes.
-```
+See [`cards/end-of-day.md`](../.kingdom/.setting/cards/end-of-day.md) for the full template + variable list. The same card is also fired by `/kingdom:day` when stopping conditions are met (cap reached / all-idle).
 
 ---
 
