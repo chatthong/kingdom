@@ -41,9 +41,18 @@ cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
 # Auto-gate in progress (per Auto-gate on completion §)
 cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
 
-# Gate pass, asking Ter "push?" — also mark King's workspace unread
-# so the badge dot appears (cmux's auto-state may say "Idle" — wrong)
-cmux_set_state "⚠" "Push? · $LANE · $SUBTASK_ID · gate pass"
+# Gate pass — King MUST merge lane into kingdom for Ter's review BEFORE
+# asking "push?". See § "Kingdom as review staging — MANDATORY before any push".
+# State sequence:
+#   1) ▶ Merging <lane> into kingdom
+#   2) ⚠ Review on kingdom? · <lane> · <sub-task-id>
+#   3) (Ter approves)
+#   4) ▶ Carving feature/<topic> + pushing
+#   5) ✅ Pushed feature/<topic>
+cmux_set_state "▶" "Merging $LANE into kingdom · $SUBTASK_ID"
+
+# (after merge succeeds + review surface printed)
+cmux_set_state "⚠" "Review on kingdom? · $LANE · $SUBTASK_ID"
 cmux workspace-action --action mark-unread --workspace "$KING_WS" 2>/dev/null
 
 # Gate fail — mark the ORIGINATING lane's workspace unread (not King's;
@@ -92,12 +101,18 @@ done
 
 ### The auto-trigger rule
 
-When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail. King then surfaces results to Ter:
+When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail.
 
-- **Gate PASS** → King fires `cmux notify --workspace $KING_WS --title "👑 King · gate pass · push?" --subtitle "<lane> · <sub-task-id>"` and asks Ter in chat: "Gate passed for `<lane>` task `<ID>`. Push?"
-- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells Ter what failed. May dispatch a fix-task back to the lane (King's call).
+Then — per § "Kingdom as review staging — MANDATORY before any push" — gate-pass flows directly into kingdom merge:
 
-This eliminates the "lane finished but King stayed idle" failure mode. Real test: Ter starts a session, King reads state, sees worker-2's `sonnet-worker-2.flag` for `FE-P0-FOUND.7`, no `KING_*` report exists yet → King auto-fires gate. Test report appears in seconds; Ter sees "push?" prompt instead of having to nudge.
+- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to Ter). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?" --subtitle "<lane> · <sub-task-id>"` and asks Ter in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
+- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells Ter what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
+
+Push only happens after Ter explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
+
+This eliminates two failure modes:
+- "lane finished but King stayed idle" (v0.14.10 fix)
+- "King jumped from gate-pass to push without showing Ter the integrated review surface" (v0.15.1 fix — real test caught this)
 
 ### When this fires
 
@@ -128,7 +143,8 @@ King doesn't ask permission to run the gates — they're non-destructive. King D
 - ❌ King reports "worker-2 done" + lists state + stops. The sentinel sits un-gated; Ter has to manually say "run the gate."
 - ❌ King runs the gate but waits for Ter to ask. Same problem — the work is done; the next deterministic step is the gate.
 - ❌ King ignores sentinels older than ~24h thinking "Ter probably handled it." If Ter handled it, the test report exists and the un-gated detector skips it. If it doesn't exist, the work is genuinely un-gated and King runs it.
-- ❌ King auto-pushes after gate pass. Push approval is ALWAYS human-gated — auto-gate stops at "push?" prompt.
+- ❌ **King jumps from gate-pass directly to "push?" — skipping the kingdom merge + review surface step.** v0.15.1 makes the kingdom merge MANDATORY. See § "Kingdom as review staging".
+- ❌ King auto-pushes after Ter approves review. Push approval is ALWAYS human-gated — auto-gate-and-merge stops at the review prompt, push happens only on explicit "push" word from Ter.
 
 ---
 
@@ -648,6 +664,93 @@ Header schema (master-readable in 15 lines):
 ## Followups / TODO
 <bullets>
 ```
+
+---
+
+## Kingdom as review staging — MANDATORY before any push
+
+Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a local integration branch designed for human review** — Ter MUST see the full code-surface of all in-flight lane work integrated together BEFORE any push happens. The King's job between gate-pass and push is to **merge everything into kingdom** for that review.
+
+### Why this matters
+
+Each worker / co-worker runs its task on its own local branch. They never see each other's code. The pre-commit gate (typecheck + tests + dry-merge + cross-lane overlap) catches mechanical conflicts — but it doesn't catch **logical conflicts**, **review judgement** ("is this the right approach?"), or **bundle questions** ("should these 3 changes ship together or separately?"). Those need Ter eyeballing the integrated state.
+
+Kingdom is the local-only branch that hosts that integrated state. Never pushed; lives only on Ter's laptop. After Ter reviews on kingdom and approves, the King carves fresh `feature/<topic>` branches from each lane's tip and pushes those — keeping each PR clean, one-purpose, traceable to a single worker's commit.
+
+### Mandatory workflow
+
+After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
+
+1. **Merge the gated lane into kingdom** (local, never pushed). Conflicts on shared files (TODO_*.md, CHANGELOG.md, etc.) are hand-resolved by King — typically by keeping ALL the close-suffix headers / entries.
+2. **Print the review surface** for Ter:
+   ```bash
+   git log --oneline origin/develop..kingdom
+   git diff origin/develop..kingdom --stat
+   ```
+3. **Ask Ter to review** — NOT "push?" yet. Phrase as: "kingdom now contains <lane>'s `<sub-task-id>` work integrated with develop. Want to review on kingdom before push?"
+4. **Wait for Ter's approval**. Ter may look at specific diffs, run the project locally, comment on bundle/timing choices, ask for splits.
+5. **Only after Ter says "push" / "approve" / similar** — carve `feature/<topic>` from the lane's branch tip (NOT from kingdom; the feature branch is a fresh single-commit branch off `origin/develop`), push, open PR via `gh pr create`.
+
+### Why carve from lane tip, not from kingdom?
+
+Each PR should be one purpose, one commit, traceable to a single lane. Carving from `kingdom` would mix lanes (kingdom contains develop + lane-1 + lane-2 + lane-3 integrated). Carving from `worker-N` keeps the PR a clean one-commit feature branch matching exactly what that lane produced.
+
+```text
+origin/develop:    A --- B --- C
+                              \
+worker-1:                      D (one commit, gated, merged to kingdom)
+                              \
+worker-2:                      E (one commit, gated, merged to kingdom)
+
+kingdom (local):   A --- B --- C --- M1 --- M2 (merge commits for review)
+                                  \   \
+                                   D   E (still visible in kingdom)
+
+# After Ter reviews on kingdom and approves:
+feature/topic-1:   A --- B --- C --- D   ← push this (1 commit from worker-1 tip)
+feature/topic-2:   A --- B --- C --- E   ← push this (1 commit from worker-2 tip)
+```
+
+### Multiple in-flight lanes — merge order
+
+When ≥2 lanes are gated and ready for review at the same time, merge in completion order (oldest sentinel first):
+
+```bash
+# Reset kingdom to origin/develop tip first (clean slate)
+git checkout kingdom
+git fetch origin
+git reset --hard "origin/$BASE"
+
+# Merge each gated lane in completion order
+for LANE in $(ls -t "$LOGS/done/"*.flag | xargs -I{} basename {} | sed 's/^.*__\([^.]*\).flag/\1/' | sort -u); do
+  git merge --no-ff "$LANE" || {
+    echo "⚠️ Conflict merging $LANE — resolve manually (typically keep both close-suffix headers)"
+    # King hand-resolves common cases: TODO_*.md / CHANGELOG.md / docs/test-reports/
+    # then `git add` + `git commit`
+  }
+done
+
+# Show the review surface
+git log --oneline origin/develop..kingdom
+git diff origin/develop..kingdom --stat
+```
+
+### Common conflict patterns + canonical resolutions
+
+| Conflict on | Cause | Resolution |
+|---|---|---|
+| `TODO_*.md` (or similar task-status file) | Each lane added its own close-suffix header (e.g., `### FE-P0-FOUND.7 ✅ closed 2026-05-18`) | Keep ALL the close-suffix headers — they coexist; not a real conflict |
+| `CHANGELOG.md` | Multiple lanes appending to the same `## [Unreleased]` section | Keep both entries; order by sub-task ID |
+| `docs/test-reports/` | Multiple lanes wrote `KING_*` reports for different sub-tasks | All keep — different filenames, no real conflict |
+| Same source file edited by 2 lanes | Genuine collision — King should have caught this in pre-commit cross-lane overlap | Stop. Surface to Ter. Ask which approach wins. |
+
+### Anti-patterns
+
+- ❌ King asks "push?" immediately after gate pass, skipping kingdom merge + review
+- ❌ King carves `feature/*` from kingdom (mixes lanes; each PR loses one-purpose property)
+- ❌ King pushes without showing Ter the `git diff origin/develop..kingdom --stat` review surface
+- ❌ King auto-resolves a genuine source-file collision instead of surfacing it
+- ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
 
 ---
 

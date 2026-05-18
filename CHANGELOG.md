@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.15.1] — 2026-05-18
+
+The "kingdom is the review surface, not just the integration branch" release. Real test caught a workflow gap: King had 3 gated worker branches ready, asked for push approval directly — skipping the kingdom merge that lets Ter see the integrated code surface before any push. Ter had to manually redirect to "merge to kingdom first, then review, then push." v0.15.1 makes the merge-to-kingdom-for-review step **mandatory** between gate-pass and push.
+
+### Added
+
+- **`.kingdom/.setting/kings.md` § "Kingdom as review staging — MANDATORY before any push"** — new top-level section right before "Push approval gate". Defines:
+  - **Why**: gate catches mechanical conflicts; review catches logical conflicts, design judgement, bundle decisions
+  - **Mandatory workflow** (5 steps): merge into kingdom → print review surface → ask Ter to review → wait for approval → carve `feature/*` from lane tip (NOT from kingdom) + push + PR
+  - **Why carve from lane tip, not kingdom**: keeps PRs one-purpose, one-commit, traceable to a single lane
+  - **Multiple in-flight lanes** — merge order (oldest sentinel first) + reset-kingdom-to-origin-develop-first
+  - **Common conflict patterns table** — `TODO_*.md` (keep all close-suffix headers), `CHANGELOG.md` (keep both entries), `docs/test-reports/` (no real conflict, different filenames), same-source-file collision (STOP, surface to Ter)
+  - **Anti-patterns** — King jumping straight to "push?", carving `feature/*` from kingdom, pushing without review surface, auto-resolving real collisions
+
+### Changed
+
+- **Auto-gate flow (v0.14.10 § "The auto-trigger rule")** — gate-PASS now flows into the kingdom merge before asking Ter. Sequence:
+  1. Gate passes → merge lane into kingdom (resolve common conflicts)
+  2. Print `git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`
+  3. `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?"` + ask Ter in chat
+  4. Wait for Ter's review approval
+  5. On approval: carve `feature/<topic>` from lane tip, push, open PR
+- **Workspace description state sequence** — King's auto-gate flow workspace-description states now: `▶ Gating` → `▶ Merging <lane> into kingdom` → `⚠ Review on kingdom?` → (Ter approves) → `▶ Carving feature/<topic>` → `✅ Pushed`.
+- **Anti-patterns list** — added the new failure mode ("King jumps from gate-pass directly to push, skipping kingdom merge").
+
+### Why this matters
+
+Real test transcript: King had 3 workers gated and ready, was about to push each directly as separate feature branches. Ter caught it: "but after all you need to merge all to kingdom to let me see all code first right". King course-corrected gracefully — but the spec didn't enforce the rule. v0.15.1 codifies it as MANDATORY. The kingdom branch is what its name suggests — the staging area where the King shows you everything before anything reaches origin.
+
+### Non-breaking
+
+- Pure rule-addition; no schema, command, or behavior changes outside the gate→push flow.
+- Existing in-flight gates still work — King applies the new merge-to-kingdom step on its next gate-pass.
+
+---
+
 ## [0.15.0] — 2026-05-18
 
 The "efficient by default" release. v0.14.9 made tab the default spawn mode for visibility — but tab spawns cost ~10–20s each (full Claude session boot) while `Agent()` spawns cost ~2s (in-process). For cheap fan-outs (Haiku Layer-1 scans, `/kingdom:update`'s 4 Sonnet specialists, parallel doc digests), tab cost was 5–10× too high. v0.15.0 switches to **model-tiered defaults**: Haiku always headless, Sonnet headless by default (override to tab per-task), Opus tab by default.
