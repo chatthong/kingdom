@@ -4,6 +4,44 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.11] — 2026-05-18
+
+The "sidebar reads itself" release. cmux.app workspace descriptions are live-updatable via `cmux workspace-action --action set-description` — but the kingdom was setting them once at spawn time and never touching them again. v0.14.11 wires up dynamic descriptions so the sidebar shows a real-time status line per lane: progress bar, current layer, state emoji, blocked status, push prompts. Glance at the sidebar → know what's happening across the whole kingdom.
+
+### Added
+
+- **`.kingdom/.setting/cmux.md` § "Dynamic workspace descriptions"** — full reference for live state lines:
+  - **State-emoji vocabulary**: `▶` running · `⏸` waiting · `⚠` needs attention · `✅` done · `❌` failed · `🐾` idle · `▰▰▰▱` progress bar
+  - **Per-role description schema** with concrete examples for King / Worker / Co-worker / Watchman
+  - **Update-site table** — when each role rewrites its description (12 trigger points across roles)
+  - **`cmux_set_state` bash helper** — common pattern across all role docs
+  - **Watchman-cross-update** — when the blocked-lane scan finds a stalled lane, it ALSO updates that lane's description to `⚠ Blocked · permission prompt` (visible immediately in sidebar)
+- **`workers.md` "Live workspace description" subsection** — workers update at every layer transition (L1 → L2 → L3 → L4) + closer + idle, with the 4-layer progress bar `▰▰▰▰`.
+- **`kings.md` "Live workspace description" subsection** — King updates at idle / gate-start / gate-pass / gate-fail / pushed. Push-state holds for 5 min then reverts to idle.
+
+### Why this matters
+
+Real test feedback: "can you use description of workspace cmux.app more benefit like if it running show progress bar ascii/emoji or tell it need input or etc". cmux.app's sidebar IS the kingdom's dashboard — descriptions were under-used. With v0.14.11 live updates, you can see at a glance:
+
+```text
+👑 King · Bonfire           ⚠ Push? · worker-2 · BE-AUTH-3 · gate pass
+👷 worker-1                 ▶ BE-AUTH-3 · ▰▰▰▱ L3 Execution
+👷 worker-2                 ✅ FE-P0-FOUND.7 done · sentinel written
+👷 worker-3                 🐾 Awaiting dispatch
+🧑‍💼 co-worker-1            🐾 Dormant · activate with "pair on co-worker-1"
+🕵️ watchman-1               ▶ develop green · 2 PRs open · last tick 02:30Z
+```
+
+No clicks. Just glance.
+
+### Non-breaking
+
+- Description updates are **optional** — failures are silent (work continues without them).
+- Schema is additive — no `kingdom.json` changes.
+- Existing kingdoms get the updated role-doc behaviour next time the King reads them (or via `/kingdom:init` re-sync after `/plugin update`).
+
+---
+
 ## [0.14.10] — 2026-05-18
 
 The "King never sits on an un-gated sentinel" release. Prior versions had the King poll sentinels DURING dispatch (in-session flow) but had no rule for the cross-session case: King resumed, read state, saw a sentinel written in a prior session, reported the state... and stopped. Ter had to manually nudge "run the gate." v0.14.10 fixes this with mandatory auto-gate-on-detection.

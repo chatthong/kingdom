@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.14.10-success)
+![Version](https://img.shields.io/badge/version-0.14.11-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)

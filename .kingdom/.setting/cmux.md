@@ -398,6 +398,97 @@ Kingdom's default mapping (in `kingdom.json.cmux.workspaceColors`):
 
 The `new-workspace` command **does not accept `--color`** — set it via a second `workspace-action --action set-color` call right after creation.
 
+## Dynamic workspace descriptions (live status line)
+
+`set-description` is **idempotent and live** — the King + masters update their own workspace descriptions on every state transition, giving the sidebar a real-time activity line you can scan without clicking.
+
+### State-emoji vocabulary (kingdom convention)
+
+| Glyph | Meaning |
+|---|---|
+| `▶` | Running / active work in progress |
+| `⏸` | Paused / waiting on dependency |
+| `⚠` | Needs attention (gate fail, push prompt, blocked) |
+| `✅` | Done / passed |
+| `❌` | Failed |
+| `🐾` | Idle / dormant / awaiting dispatch |
+| `▰▰▰▱` | Progress bar (filled / empty squares for 4-layer multi-layer plan) |
+
+### Description schema per role
+
+```text
+👑 King — state line:
+   ▶ Gating worker-2 · BE-AUTH-3       (running pre-commit gate)
+   ⚠ Push? · worker-2 · BE-AUTH-3      (gate passed, awaiting Ter)
+   ✅ Pushed feature/auth-refactor 04Z  (after push complete)
+   🐾 Idle · 3 lanes active             (no active King work)
+
+👷 Worker — state line (long-lived, mirrors task file status):
+   🐾 Awaiting dispatch                 (no claim)
+   ▶ BE-AUTH-3 · ▰▱▱▱ L1 Discovery     (layer 1 of 4)
+   ▶ BE-AUTH-3 · ▰▰▱▱ L2 Strategy
+   ▶ BE-AUTH-3 · ▰▰▰▱ L3 Execution
+   ▶ BE-AUTH-3 · ▰▰▰▰ L4 Verify
+   ✅ BE-AUTH-3 done · sentinel written (between closer + next claim)
+   ⚠ Blocked · permission prompt        (set by watchman blocked-lane scan)
+
+🧑‍💼 Co-worker — state line:
+   🐾 Dormant · activate with "pair on co-worker-1"
+   ▶ UI-CHK-12 · Ter paired             (when Ter is actively pairing)
+   ✅ UI-CHK-12 done · sentinel written
+   ⚠ Blocked · permission prompt
+
+🕵️ Watchman — state line (updates every /loop tick):
+   ▶ develop green · 2 PRs open · last tick 02:30Z
+   ⚠ develop RED · 1 PR blocked · 1 lane stuck
+   ✅ All quiet · 0 PRs · last tick 02:30Z
+```
+
+### Update sites — when each role rewrites its description
+
+| Role | Trigger | New description |
+|---|---|---|
+| 👑 King | Spawn / resume | `🐾 Idle · N lanes active` (or `Your conversation · pinned · <UTC>`) |
+| 👑 King | Start pre-commit gate | `▶ Gating <lane> · <sub-task-id>` |
+| 👑 King | Gate pass | `⚠ Push? · <lane> · <sub-task-id>` |
+| 👑 King | Gate fail | `❌ Gate FAIL · <lane> · <sub-task-id>` |
+| 👑 King | Pushed | `✅ Pushed feature/<topic> · <UTC>` (held for ~5 min then reverts to Idle) |
+| 👷 Worker | Task claimed (Step 0 of task file) | `▶ <sub-task-id> · ▱▱▱▱ initialising` |
+| 👷 Worker | Layer transition | `▶ <sub-task-id> · ▰▰▰▱ L<N> <name>` |
+| 👷 Worker | Closer Step 4 (sentinel written) | `✅ <sub-task-id> done · sentinel written` |
+| 👷 Worker | Next claim or 5-min idle | `🐾 Awaiting dispatch` |
+| 🧑‍💼 Co-worker | Activated by Ter | `▶ <sub-task-id> · Ter paired` |
+| 🧑‍💼 Co-worker | Deactivated | `🐾 Dormant · activate with "pair on co-worker-1"` |
+| 🕵️ Watchman | Every `/loop` tick | `▶|⚠|✅ develop <state> · <N> PRs · last tick <UTC>` |
+| Watchman (when scanning a blocked lane) | Sees blocked-lane pattern | Sets the *target lane's* description to `⚠ Blocked · permission prompt` |
+
+### Bash helper for set-state
+
+A common helper that lives in every role's prompt:
+
+```bash
+cmux_set_state () {
+  local ws="$1" emoji="$2" text="$3"
+  cmux workspace-action --action set-description \
+    --workspace "$ws" \
+    --description "$emoji $text" 2>/dev/null
+  # Failures are silent — description is cosmetic; missing it doesn't block work.
+}
+
+# Usage examples:
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "BE-AUTH-3 · ▰▰▰▱ L3 Execution"
+cmux_set_state "$KING_WS"           "⚠" "Push? · worker-2 · BE-AUTH-3"
+cmux_set_state "$CMUX_WORKSPACE_ID" "🐾" "Awaiting dispatch"
+```
+
+### Why this matters
+
+The cmux.app sidebar is the King's dashboard. With dynamic descriptions, Ter can glance at the sidebar and read a sentence per lane describing exactly what it's doing — without clicking any workspace. Combined with workspace colors (role) + native notifications (events) + workspace names (identity), the sidebar becomes a complete status surface.
+
+### Description update is OPTIONAL but recommended
+
+Description updates are nice-to-have, not load-bearing. If a role fails to update (cmux unreachable, transient error), work continues — the audit trail in `master_agent.log` + task files remains the source of truth. Description is the **visual surface** for the audit trail, not the audit trail itself.
+
 ---
 
 ## Common pitfalls

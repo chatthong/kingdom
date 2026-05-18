@@ -24,6 +24,40 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 
 ---
 
+## Live workspace description (PRIMARY mode)
+
+The King updates its own cmux workspace description on every state transition so the sidebar reads at a glance:
+
+```bash
+cmux_set_state () {
+  cmux workspace-action --action set-description \
+    --workspace "$KING_WS" \
+    --description "$1 $2" 2>/dev/null
+}
+
+# Idle (default after spawn / resume)
+cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
+
+# Auto-gate in progress (per Auto-gate on completion §)
+cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
+
+# Gate pass, asking Ter "push?"
+cmux_set_state "⚠" "Push? · $LANE · $SUBTASK_ID · gate pass"
+
+# Gate fail
+cmux_set_state "❌" "Gate FAIL · $LANE · $SUBTASK_ID"
+
+# After push
+cmux_set_state "✅" "Pushed feature/$TOPIC · $(date -u +%Y-%m-%dT%H%MZ)"
+
+# Holds the pushed state for ~5 min, then reverts to Idle
+sleep 300 && cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active" &
+```
+
+Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
+
+---
+
 ## Auto-gate on completion (King never sits on an un-gated sentinel)
 
 Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for Ter to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).

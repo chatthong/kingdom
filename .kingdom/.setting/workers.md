@@ -114,6 +114,35 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 
 The status checkboxes are flipped sequentially as work progresses. Each Layer's bullets are checked off as their sub-agents complete. Progress notes are appended freely (one paragraph per layer-completion or significant event).
 
+### Live workspace description (PRIMARY mode)
+
+After every checkbox flip / layer transition, the worker updates its own cmux workspace description so the sidebar shows current state at a glance:
+
+```bash
+cmux_set_state () {
+  cmux workspace-action --action set-description \
+    --workspace "$CMUX_WORKSPACE_ID" \
+    --description "$1 $2" 2>/dev/null
+}
+
+# At Step 0 (task file just created)
+cmux_set_state "▶" "$SUBTASK_ID · ▱▱▱▱ initialising"
+
+# Layer transitions
+cmux_set_state "▶" "$SUBTASK_ID · ▰▱▱▱ L1 Discovery"
+cmux_set_state "▶" "$SUBTASK_ID · ▰▰▱▱ L2 Strategy"
+cmux_set_state "▶" "$SUBTASK_ID · ▰▰▰▱ L3 Execution"
+cmux_set_state "▶" "$SUBTASK_ID · ▰▰▰▰ L4 Verify"
+
+# Closer Step 4 (sentinel written)
+cmux_set_state "✅" "$SUBTASK_ID done · sentinel written"
+
+# Idle (no claim for >5 min)
+cmux_set_state "🐾" "Awaiting dispatch"
+```
+
+Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
+
 **Lifecycle:**
 - **Created** in Step 0 of every task. Lane never starts sub-agent dispatch without writing the task file first.
 - **Updated** continuously — check boxes off, append progress notes, refine plan as discovery yields surprises.
