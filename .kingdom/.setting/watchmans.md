@@ -323,6 +323,64 @@ Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify`
 
 ---
 
+## Blocked-lane scan (every tick)
+
+Lanes can silently stall on Claude Code's interactive permission prompts ("Do you want to proceed? 1. Yes / 2. Yes allow … / 3. No") or other TUI input requests. cmux.app shows the workspace as "Running" but the lane is actually idle, waiting for keyboard input. Without intervention you only notice by clicking each lane.
+
+Watchman scans for this every `/loop` tick:
+
+```bash
+# For each lane workspace ref in $LOGS/workspace-refs.env:
+source "$LOGS/workspace-refs.env"
+
+for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
+  WS_REF=$(eval echo "\$$WS_VAR")
+  LANE_LABEL=$(echo "$WS_VAR" | sed 's/_WS_/ /' | tr 'A-Z' 'a-z')   # e.g. "worker 1"
+
+  # Grab the recent surface output
+  OUTPUT=$(cmux capture-pane --workspace "$WS_REF" --lines 30 2>/dev/null)
+
+  # Patterns that indicate a blocked lane
+  if echo "$OUTPUT" | grep -qE '(Do you want to proceed\?|Esc to cancel|\[y/N\]|allow .* during this session|Press Enter)'; then
+    # Already notified this tick? Skip to avoid spam — state stored in watchman_state.json
+    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
+    if [ "$PREV_BLOCKED" != "true" ]; then
+      cmux notify --surface "$WS_REF" \
+        --title "🕵️ watchman-$WI" \
+        --subtitle "Lane blocked · $LANE_LABEL" \
+        --body "Permission prompt or input requested. Click workspace to approve."
+      cmux notify --workspace "$KING_WS" \
+        --title "🕵️ watchman-$WI" \
+        --subtitle "Lane blocked · $LANE_LABEL" \
+        --body "$LANE_LABEL is waiting on a permission prompt. Click its workspace to resolve."
+      # Mark as notified
+      jq ".blocked_lanes[\"$WS_VAR\"] = true" "$LOGS/watchman_state.json" \
+        > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+    fi
+  else
+    # Lane no longer blocked — clear state so a future block re-notifies
+    jq "del(.blocked_lanes[\"$WS_VAR\"])" "$LOGS/watchman_state.json" \
+      > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+  fi
+done
+```
+
+The scan is **idempotent + debounced** — `watchman_state.json` tracks which lanes are currently blocked so watchman doesn't re-notify every tick. Once a lane unblocks (output no longer matches the patterns), the state clears and the lane is eligible for re-notification next time it blocks.
+
+Patterns watched:
+
+| Pattern | Triggers |
+|---|---|
+| `Do you want to proceed\?` | Claude Code's standard permission prompt |
+| `Esc to cancel` | Same prompt's footer |
+| `\[y/N\]` | Common interactive y/n confirmations |
+| `allow .* during this session` | The session-scoped permission option |
+| `Press Enter` | Generic "press enter to continue" prompts |
+
+Most of these are pre-empted by the workspace `.claude/settings.json` permissions allow-list (see `commands/doctor.md` Check 10 / `commands/init.md` Step 4.5 — kingdom auto-allows `.kingdom/**` and `.worktrees/**`). The scan catches any that slip through.
+
+---
+
 ## Docs audit duty (idle-time work)
 
 When `/loop` has nothing else to do (no PRs to babysit, no `develop` movement, no smoke break), watchman runs a docs audit pass over `<workspace>/.kingdom/<project>/{tasks,logs}/`. This is the ONLY scenario where watchman has WRITE authority — and only on audit artifacts, never project source code.

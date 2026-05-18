@@ -336,6 +336,23 @@ cmux list-panes --workspace workspace:7 --json | jq '[.panes[] | {ref, surface_r
 
 The kingdom uses `cmux tree --all` in `/kingdom:doctor` and on resume to verify the expected workspaces are still alive.
 
+## Read pane contents (blocked-lane detection)
+
+cmux exposes two ways to read what a surface is showing:
+
+```bash
+# Capture-pane — last N lines (and scrollback if requested)
+cmux capture-pane --workspace "$WORKER_WS_1" --lines 30
+cmux capture-pane --workspace "$WORKER_WS_1" --lines 100 --scrollback
+
+# Read-screen — current screen (visible viewport only)
+cmux read-screen --workspace "$WORKER_WS_1"
+```
+
+Watchman uses `capture-pane` every `/loop` tick to detect lanes blocked on interactive permission prompts. Pattern match `Do you want to proceed\?`, `Esc to cancel`, `\[y/N\]`, `allow .* during this session`, `Press Enter` → fire `cmux notify` so the user knows which lane needs attention (otherwise the lane silently stalls while cmux.app still reports it as "Running"). Full detail in [`watchmans.md`](watchmans.md) → § "Blocked-lane scan".
+
+For pre-emption (preferred over detection), expand the workspace `.claude/settings.json` `permissions.allow` to include path-scoped entries for `.kingdom/**` and `.worktrees/**` so lanes can read/write within those without prompting. `/kingdom:doctor` Check 10 + `/kingdom:init` Step 4.5 both apply this expansion automatically.
+
 ---
 
 ## Pin a workspace

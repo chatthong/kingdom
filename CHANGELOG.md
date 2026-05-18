@@ -4,6 +4,41 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.6] — 2026-05-18
+
+The "lanes never silently stall" release. Fixes two related gaps: (1) Claude Code prompts for permission on every read of `.kingdom/**` and `.worktrees/**` files (lanes block until you approve), and (2) when a prompt DOES fire, cmux.app still shows the lane as "Running" — no notification, no badge, no way to know without clicking each lane.
+
+### Added (prevention)
+
+- **Expanded `.claude/settings.json` permissions allow-list.** Doctor Check 10 + Init Step 4.5 now also include path-scoped reads/writes:
+  ```
+  Read(.kingdom/**), Write(.kingdom/**), Edit(.kingdom/**),
+  Read(.worktrees/**), Write(.worktrees/**), Edit(.worktrees/**)
+  ```
+  Pre-empts the most common interactive permission prompt — lanes reading task files at `.kingdom/<project>/tasks/` or worktree files at `.worktrees/<lane>/`. Existing kingdoms get the patch on next `/kingdom:doctor` run.
+
+### Added (detection)
+
+- **Watchman blocked-lane scan** — new duty in `watchmans.md`. Every `/loop` tick, watchman `cmux capture-pane`s each lane workspace and pattern-matches the last 30 lines against:
+  - `Do you want to proceed\?` — Claude Code's standard permission prompt
+  - `Esc to cancel` — same prompt's footer
+  - `\[y/N\]` — common interactive y/n confirmations
+  - `allow .* during this session` — session-scoped permission option
+  - `Press Enter` — generic "press enter to continue" prompts
+
+  When any pattern matches, watchman fires **dual** `cmux notify`:
+  - `--surface <lane>` → blue ring on the lane's pane + tab lights up
+  - `--workspace $KING_WS` → sidebar badge on King's workspace + bell-panel entry
+
+  Idempotent + debounced via `watchman_state.json.blocked_lanes` — won't re-notify the same blocked lane every tick. Clears when the lane unblocks.
+- **`.kingdom/.setting/cmux.md` § Read pane contents** — documents `cmux capture-pane` + `cmux read-screen`, the watchman pattern set, and the prevention-vs-detection split (prevention preferred via expanded allow-list; detection catches what slips through).
+
+### Why this matters
+
+Real test case: a lane was reading `.kingdom/bfg-swt/tasks/FE-P0-FOUND.8.md`, Claude Code asked "Do you want to proceed? 1. Yes / 2. Yes allow reading from tasks/ / 3. No". The cmux.app sidebar kept showing the worker as "Running" — silent stall. Ter only found out by clicking into the worker workspace. v0.14.6 prevents the most common case (path-scoped allow-list expansion) AND detects the rest (watchman scan + dual notify).
+
+---
+
 ## [0.14.5] — 2026-05-18
 
 ### Changed

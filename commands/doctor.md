@@ -327,17 +327,17 @@ elif [ ! -s "$WS_SETTINGS" ] || ! jq empty "$WS_SETTINGS" 2>/dev/null; then
   echo "empty or invalid JSON — needs the permissions block"
   STATE=invalid
 else
-  # 2. permissions.allow includes the kingdom-essential tools?
-  REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent"]'
+  # 2. permissions.allow includes the kingdom-essential tools + path-scoped reads/writes
+  REQUIRED='["Bash","Read","Write","Edit","Grep","Glob","Agent","Read(.kingdom/**)","Write(.kingdom/**)","Edit(.kingdom/**)","Read(.worktrees/**)","Write(.worktrees/**)","Edit(.worktrees/**)"]'
   HAS_ALL=$(jq --argjson req "$REQUIRED" '
     if .permissions.allow then ($req - .permissions.allow | length == 0) else false end
   ' "$WS_SETTINGS")
   if [ "$HAS_ALL" = "true" ]; then
     STATE=ok
-    echo "✅ permissions.allow contains Bash/Read/Write/Edit/Grep/Glob/Agent"
+    echo "✅ permissions.allow contains all kingdom-required entries (tools + .kingdom/** + .worktrees/** path scopes)"
   else
     STATE=incomplete
-    echo "⚠️  permissions.allow missing one or more of Bash/Read/Write/Edit/Grep/Glob/Agent"
+    echo "⚠️  permissions.allow missing required entries — see proposed patch below"
   fi
 fi
 ```
@@ -356,7 +356,13 @@ fi
         "Edit",
         "Grep",
         "Glob",
-        "Agent"
+        "Agent",
+        "Read(.kingdom/**)",
+        "Write(.kingdom/**)",
+        "Edit(.kingdom/**)",
+        "Read(.worktrees/**)",
+        "Write(.worktrees/**)",
+        "Edit(.worktrees/**)"
       ]
     }
   }
@@ -366,17 +372,27 @@ fi
   ```
   Proposed change to .claude/settings.json (workspace-scoped):
 
-  + permissions.allow = [Bash, Read, Write, Edit, Grep, Glob, Agent]
+  + permissions.allow = [
+      Bash, Read, Write, Edit, Grep, Glob, Agent,
+      Read(.kingdom/**), Write(.kingdom/**), Edit(.kingdom/**),
+      Read(.worktrees/**), Write(.worktrees/**), Edit(.worktrees/**)
+    ]
 
   Apply? [y/N]
   ```
+
+  > **Why path-scoped reads/writes?** Without them, Claude Code prompts every time a lane reads task files at `.kingdom/<project>/tasks/` or worktree files at `.worktrees/<lane>/`. The prompt blocks the lane until you click into its workspace to approve. Pre-allowing `.kingdom/**` and `.worktrees/**` eliminates the most common prompt source. Watchman's blocked-lane scan (see `watchmans.md`) catches any other prompts that still fire.
 
   On `y`: merge the permissions into the existing JSON (or write fresh if missing/invalid). Use `jq` to preserve any other keys:
 
   ```bash
   tmp=$(mktemp)
   [ -f "$WS_SETTINGS" ] || echo '{}' > "$WS_SETTINGS"
-  jq '.permissions.allow = (((.permissions.allow // []) + ["Bash","Read","Write","Edit","Grep","Glob","Agent"]) | unique)' \
+  jq '.permissions.allow = (((.permissions.allow // []) + [
+    "Bash","Read","Write","Edit","Grep","Glob","Agent",
+    "Read(.kingdom/**)","Write(.kingdom/**)","Edit(.kingdom/**)",
+    "Read(.worktrees/**)","Write(.worktrees/**)","Edit(.worktrees/**)"
+  ]) | unique)' \
     "$WS_SETTINGS" > "$tmp" && mv "$tmp" "$WS_SETTINGS"
   ```
 
