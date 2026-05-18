@@ -65,6 +65,78 @@ Tab-spawned sub-agents run the **5-step closer** (Step 5 = `cmux tab-action --ac
 
 Agent-spawned sub-agents run the **4-step closer** only — no Step 5 (no tab to close).
 
+### Pre-warmed sub-agent pool (v0.18.0+) — instant tab spawns
+
+Tab spawns cost ~10–20s each (full Claude session boot). Layer-3 fan-out of 5 Sonnet sub-agents pre-v0.18 took ~50–100s just for spawn. **v0.18.0 pre-warms a pool of idle `claude -p` processes** in hidden tabs so sub-agent spawn becomes `cmux send` to the existing surface (~20ms) instead of `cmux tab-action --action new-terminal-right` + boot.
+
+Configured in `kingdom.json.cmux.subAgentPool`:
+
+```json
+"subAgentPool": {
+  "enabled": true,
+  "perMasterPoolSize": 2,
+  "models": ["sonnet"]
+}
+```
+
+Master initialises the pool at spawn time (background, non-blocking):
+
+```bash
+init_subagent_pool () {
+  local pool_size=$(jq -r '.cmux.subAgentPool.perMasterPoolSize // 2' "$KJSON")
+  for I in $(seq 1 "$pool_size"); do spawn_pool_slot & done
+}
+
+spawn_pool_slot () {
+  local result=$(cmux tab-action --action new-terminal-right \
+    --workspace "$CMUX_WORKSPACE_ID" --focus false 2>&1)
+  local surface=$(echo "$result" | grep -oE 'surface:[0-9]+' | head -1)
+  [ -z "$surface" ] && return 1
+
+  cmux rename-tab --surface "$surface" -- "🐱 sub · idle (pool)"
+  cmux send --surface "$surface" -- "claude -p 'AWAITING_DISPATCH'"
+  cmux send --surface "$surface" Enter
+
+  echo "$surface" >> "$LOGS/.subagent-pool-${CMUX_WORKSPACE_ID#workspace:}.list"
+}
+
+spawn_subagent_from_pool () {
+  local model="$1" brief="$2"
+  local pool_file="$LOGS/.subagent-pool-${CMUX_WORKSPACE_ID#workspace:}.list"
+  local surface=$(head -1 "$pool_file" 2>/dev/null)
+
+  if [ -z "$surface" ]; then
+    # Pool empty — fall back to standard spawn
+    spawn_subagent_tab "$model" "$brief"
+    return
+  fi
+
+  # Consume the pool slot
+  sed -i.bak '1d' "$pool_file" && rm "${pool_file}.bak"
+
+  cmux rename-tab --surface "$surface" -- "🐱 sub · $model · $(echo "$brief" | head -c 30)"
+  cmux send --surface "$surface" -- "$brief"
+  cmux send --surface "$surface" Enter
+
+  # Refill the pool in background (non-blocking)
+  spawn_pool_slot &
+}
+```
+
+Result:
+
+| Spawn pattern | Pre-v0.18 | Post-v0.18 |
+|---|---|---|
+| Layer-3 fan-out of 5 Sonnet sub-agents (tab mode) | ~50–100s | **~100ms** (5 × 20ms `cmux send`) |
+| Per-spawn boot cost (when pool hit) | 10–20s | 20ms |
+| Per-spawn boot cost (when pool miss, fallback) | 10–20s | 10–20s |
+
+Pool refills in background after each consumption so subsequent spawns also hit the fast path. **Layer-3 parallelism is effectively instant** after the first 2 spawns (or whatever `perMasterPoolSize` is set to).
+
+Applies only to **tab-mode** spawns. `Agent(...)` background spawns are already cheap (~2s) so no pool needed there.
+
+Disable via `kingdom.json.cmux.subAgentPool.enabled: false` if you want to skip pool initialization (e.g., cost-sensitive runs, debugging).
+
 ### Visual fan-out example
 
 When worker-1 hits Layer 3 (Execution) and decides to spawn 3 parallel Sonnet sub-agents for separate code chunks:
