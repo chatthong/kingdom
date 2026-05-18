@@ -32,7 +32,7 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 
 | King action | Files to read first | Why |
 |---|---|---|
-| **First message after `/kingdom:start`** (daily kickoff) | Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` | Know develop state, PR queue, blocked lanes, yesterday's gaps before planning today |
+| **First message after `/kingdom:start`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + Ter's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** | Full context: workspace rules, project conventions, Ter's preferences, watchman state. Skipping any of these breaks trust within minutes. |
 | **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
 | **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell Ter to wait until watchman reports green |
 | **Ask Ter "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
@@ -73,7 +73,53 @@ fi
 
 ### Daily kickoff routine (King's first message of the day)
 
-On the first dispatch after `/kingdom:start`, the King runs the **Watchman state read** as Step 0 of any planning task file (before the usual Layer-1 Discovery fan-out):
+On the first dispatch after `/kingdom:start`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions Ter has written.
+
+#### Step −1 — Session-start context load (mandatory)
+
+Before reading watchman state, King reads every authoritative context source:
+
+```bash
+WS="$PWD"   # workspace root (where the King was launched)
+
+# 1. Workspace-level CLAUDE.md — workspace rules, project map, cross-cutting conventions
+[ -f "$WS/CLAUDE.md" ] && Read "$WS/CLAUDE.md"
+
+# 2. Project-level CLAUDE.md — local stack, gate commands, project-specific rules
+[ -f "$WS/${PROJECT}/CLAUDE.md" ] && Read "$WS/${PROJECT}/CLAUDE.md"
+
+# 3. Auto-memory index — durable user preferences, feedback rules, project facts
+WS_KEY=$(echo "$WS" | sed 's|/|-|g; s|^-|-|')   # encode path the way Claude Code does
+MEM_DIR="$HOME/.claude/projects/${WS_KEY}/memory"
+[ -f "$MEM_DIR/MEMORY.md" ] && Read "$MEM_DIR/MEMORY.md"
+
+# 4. Skim flagged memory entries (feedback + project types — load on relevance)
+#    MEMORY.md is the index; specific entries are read JIT when the day's plan
+#    suggests they apply. King reads the index lines + the title/description of
+#    each entry to decide which are load-bearing today.
+
+# 5. Personal notes (if present + Ter has named them)
+#    Examples: TER.md, TER_WEEK.md, NOTES.md at workspace root or project root.
+#    King reads ONLY for situational awareness — NEVER paste verbatim, NEVER
+#    commit; summary into the kickoff synthesis if relevant.
+for NOTES in "$WS/TER.md" "$WS/${PROJECT}/TER.md" "$WS/NOTES.md"; do
+  [ -f "$NOTES" ] && Read "$NOTES"
+done
+```
+
+The King synthesises this into a brief "context loaded" line in the kickoff output so Ter sees what got picked up:
+
+```
+👑 Context loaded:
+   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
+   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
+   • MEMORY.md             (42 entries — 18 feedback, 7 user, 14 project, 3 reference)
+   • Personal notes        (TER.md — read but never quoted)
+```
+
+This step is **non-negotiable**. Without it, the King may dispatch tasks against rules Ter has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn Ter's trust + cycles re-correcting.
+
+#### Step 0 — Watchman state read
 
 ```text
 👑 Good morning. Checking watchman state...

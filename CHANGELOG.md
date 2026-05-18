@@ -4,6 +4,32 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.8] — 2026-05-18
+
+The "King reads ALL context at session start" release. v0.14.7 made the King read watchman state at every decision point — but that's only half the picture. The other half is the foundational context Ter has written down: workspace CLAUDE.md, project CLAUDE.md, auto-memory entries, personal notes. Without those, the King may dispatch tasks against rules Ter explicitly documented ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") — burning trust + cycles re-correcting.
+
+### Added
+
+- **`kings.md` Step −1 — Session-start context load (mandatory)** — King reads, in this order, before doing ANYTHING else (including watchman state):
+  1. **Workspace CLAUDE.md** at `$PWD/CLAUDE.md` — workspace rules, project map, cross-cutting conventions
+  2. **Project CLAUDE.md** at `$PWD/<project>/CLAUDE.md` — local stack, gate commands, project-specific rules
+  3. **Auto-memory MEMORY.md** at `~/.claude/projects/<workspace-key>/memory/MEMORY.md` — durable user preferences, feedback rules, project facts. King skims the index + decides which specific entries to load JIT during planning.
+  4. **Personal notes** (`TER.md`, `TER_WEEK.md`, etc. at workspace OR project root) — read for situational awareness; NEVER quoted, NEVER committed.
+- **Kickoff synthesis** now leads with a **"Context loaded"** block before the watchman state block, so Ter can verify King actually read the right files.
+- **Mandatory reads table** updated to include CLAUDE.md (workspace + project) + MEMORY.md + personal notes alongside the watchman files in the daily kickoff row.
+
+### Why this matters
+
+Real test feedback: "king must read all claude.md (workspace) skill memory, claude.md(project) skill memory, when start to make sure everything in place." Prior versions had the King jumping straight to watchman state — fast, but missing the human-authored rules. A King that doesn't know "never use Prisma migrations" will keep suggesting Prisma migrations even though Ter has that as a permanent memory entry. v0.14.8 closes this gap by making context load **Step −1** (before everything else) and surfacing what was loaded in the kickoff synthesis.
+
+### Non-breaking
+
+- No schema changes, no command changes. King-behaviour update only.
+- HEADLESS-only kingdoms still benefit (Step −1 is independent of watchman or cmux).
+- Kingdoms without CLAUDE.md / MEMORY.md / personal notes just skip those reads — no error, just nothing to load.
+
+---
+
 ## [0.14.7] — 2026-05-18
 
 The "King actually uses the Watchman" release. Prior versions treated watchman as background noise — it wrote `WATCH_*.md` reports, maintained `watchman_state.json`, surfaced `WATCH_DOCS_AUDIT.md` Gap findings, but nothing in the King's flow REQUIRED reading any of it. This release makes watchman first-class: King must read watchman outputs at every major decision point, otherwise the kingdom is "worse than running solo."
