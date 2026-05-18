@@ -172,117 +172,59 @@ Everything below — task dispatch, gates, audit, push approval, exit — uses t
 
 ---
 
-## 🚀 Install (30 seconds)
-
-In **any** Claude Code session, register the marketplace then install the plugin:
+## 🚀 Install
 
 ```
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
-```
-
-> First command adds this repo as a marketplace; second installs the plugin from it (plugin-name @ marketplace-name). Local-path install also works for development: `/plugin install /path/to/kingdom`.
-
-Then run the doctor to verify your machine:
-
-```
 /kingdom:doctor
 ```
 
-`/kingdom:doctor` checks `cmux.app`, `tmux`, `jq`, `gh`, and `~/.claude/settings.json`. For anything missing it prints the exact `brew install` command. For `settings.json` it shows a diff and asks before patching. **It never auto-installs system deps.**
-
-Dependencies (`/kingdom:start` auto-detects PRIMARY → FALLBACK → HEADLESS and dispatches accordingly):
-
-```bash
-brew tap manaflow-ai/cmux && brew install --cask cmux   # macOS primary dispatch
-brew install tmux jq gh                                   # CLI helpers
-gh auth login                                             # for PR babysitting
-```
-
-> **About worktrees:** The kingdom uses `git worktree` directly — built into git ≥ 2.5. No wrapper CLI needed.
-
-Update anytime:
-
-```
-/plugin update kingdom
-```
+`/kingdom:doctor` tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys) and offers to fix it.
 
 ---
 
-## 🏗 First-time setup (90 seconds)
-
-Pick a **workspace root** — a directory whose subdirectories have their own `.git/`. **Not a git repo itself.**
+## 🏗 First time (90s, once per workspace)
 
 ```bash
-mkdir -p ~/code/my-workspace
-cd ~/code/my-workspace
-# clone your projects into subfolders: bfg-swt/, my-app/, whatever
-
-claude                   # launch Claude Code AT THE WORKSPACE ROOT
+mkdir -p ~/code/my-workspace && cd ~/code/my-workspace
+claude
 ```
-
-Inside Claude, scaffold the workspace (once) AND your first project — same command, args-driven:
 
 ```
 /kingdom:init my-app
 ```
 
-This single call does **both** layers:
-- **Workspace layer** (once per workspace): creates `.kingdom/.setting/` with the 6 role docs + verifies `.claude/settings.json` has the sub-agent permissions allow-list.
-- **Project layer** (per project): creates `.kingdom/my-app/kingdom.json` + `.kingdom/my-app/{logs,tasks}/`. Default shape: **3 workers + 1 co-worker + 1 watchman**.
-
-Or run them separately if you prefer:
-
-```
-/kingdom:init                # workspace layer only
-/kingdom:init my-app         # project layer (workspace done already)
-/kingdom:init other-app      # another project, same workspace
-```
-
-Idempotent — re-running on existing scaffolding just prints status.
+Done. Edit `.kingdom/my-app/kingdom.json` once to fill in your `gate.*` commands (your project's typecheck/tests/etc, or any bash you want gated). Then never edit it again.
 
 ---
 
-## 🔁 Resume work (5 seconds)
-
-Day 2+: the kingdom is already scaffolded. Two flows depending on how you left things.
-
-### If you closed your terminal but kept cmux.app open
-
-cmux.app persists workspaces across reboots. Just click back into the 👑 King pane and keep typing — all worktrees, panes, and lane sessions are exactly where you left them.
-
-### If you closed cmux.app (or weren't using it)
-
-```bash
-cd ~/code/my-workspace
-claude                    # start the King
-```
-
-Inside Claude:
+## 🔁 Every day — your Monday-morning ritual
 
 ```
-/kingdom:start my-app     # idempotent — resumes existing worktrees, re-spawns lanes
+/kingdom:start my-app
 ```
 
-The King reads `.kingdom/my-app/{kingdom.json, tasks/, logs/}` to know:
-- Which sub-tasks were claimed (`logs/claims/*.lane`)
-- What shipped already (`master_agent.log`)
-- Which lanes are mid-task (task files with unchecked boxes)
+Monday morning. Kingdom spins back up — workers, co-worker, watchman, all in the cmux.app sidebar with colours, notifications, and the conversation state from last week.
 
-Tell the King "what's the state?" for a summary, or just continue: "👷 worker-1 — keep going on BE-AUTH-3" and the King re-dispatches.
+Tuesday morning. Same command. **Idempotent** — re-running resumes; never recreates.
 
-### When you've been away a while (weekend, vacation)
+After a vacation: `/kingdom:update my-app` first (surfaces gaps between project docs and kingdom logs), then `/kingdom:start`.
 
-```
-/kingdom:update my-app    # audit sweep before resuming
-```
+End of day: `/kingdom:exit my-app` — closes lanes gracefully, keeps your conversation alive.
 
-The 4-specialist fan-out surfaces:
-- **Gap A** — project docs claim work was done; kingdom has no log of it (out-of-band commits while you were away)
-- **Gap B** — kingdom shipped work but project docs didn't get updated
-- Stale task files, orphan logs, broken cross-refs
+That's the whole routine. **It replaces the daily overhead of "what was I doing", "did anyone push", "is develop green", "is PR #234 reviewed".** The King knows. Watchman knows. Ask the King.
 
-Run this on Monday morning. Then `/kingdom:start` to spin lanes back up.
+---
+
+## 🛡 The contract (what kingdom won't touch)
+
+- ❌ Your project files outside `.worktrees/<lane>/` — main checkout untouched until you say "push"
+- ❌ `develop` and `main` — read-only; only `feature/<topic>` reaches origin
+- ❌ Pushes — never without your explicit "push?" approval
+- ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks — zero modifications
+- ❌ Your `.gitignore` — kingdom adds ONE line (`.worktrees/`) and stops there
+- ✅ `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, branches survive intact
 
 ---
 

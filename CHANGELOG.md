@@ -4,6 +4,24 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.4] — 2026-05-18
+
+Docs polish — SEO + tighter install/setup/start. README hero gets a subtitle that includes the keywords people actually search for ("Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees + native cmux.app"). Install/setup/start sections trimmed to feel like a confident daily routine, not a tutorial. New "🛡 The contract" callout lists exactly what kingdom will not touch.
+
+### Changed
+
+- **README hero** — H3 subtitle added: "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees + native cmux.app". Plus two new badges (`multi-agent · orchestration`, `cmux.app · native`). Plus quick-link to "Compare". Plus an HTML comment with extended SEO keywords (claude code plugin, ai agent fleet, autonomous coding agent, composio agent-orchestrator alternative, etc.).
+- **Install section** — collapsed to 3 commands. No more dependency-list paragraph in the install section (doctor handles that).
+- **First-time setup** — trimmed to ~10 lines. One `mkdir`, one `claude`, one `/kingdom:init`. The detail moved to `cmux.md`.
+- **Resume work** → renamed to **"Every day — your Monday-morning ritual"**. Tight pitch: `/kingdom:start` Monday, same Tuesday, `/kingdom:update` after vacation, `/kingdom:exit` end of day. Single paragraph at the end stating "it replaces the daily overhead of what-was-I-doing / did-anyone-push / is-develop-green / is-PR-reviewed."
+- **New `## 🛡 The contract` callout** — 6 explicit promises about what kingdom won't modify (project files, develop/main, pushes, shell config, git config, .gitignore beyond one line) plus the reversibility guarantee.
+
+### Why this matters
+
+Prior README install/setup felt like a tutorial — walked through every concept inline. Real users want the confidence of "this is my daily ritual + here's exactly what it won't break." Pure docs change, no behaviour difference.
+
+---
+
 ## [0.14.3] — 2026-05-18
 
 Docs polish — show off the cmux.app integration that landed in 0.13.0–0.14.2. README now has a "What it looks like in cmux.app" section that visually demonstrates the workspace-per-master sidebar, the three notification surfaces (ring / badge / panel), the three-tier visual hierarchy, and the other cmux features the kingdom hooks into.
