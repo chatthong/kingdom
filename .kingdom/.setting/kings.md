@@ -24,6 +24,75 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 
 ---
 
+## Auto-gate on completion (King never sits on an un-gated sentinel)
+
+Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for Ter to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).
+
+### Detection — un-gated sentinel pattern
+
+A lane completion produces a sentinel at `<LOGS>/done/<ID>__<sub>-<lane>.flag`. The King's pre-commit gate, when it runs, produces a test report at `<project>/docs/test-reports/KING_<UTC>__<lane>__<sub-task-id>.md`.
+
+**Definition:** an **un-gated sentinel** is a flag at `<LOGS>/done/<ID>__*-<lane>.flag` with NO matching `KING_*__<lane>__<sub-task-id-from-flag>.md` test report.
+
+```bash
+# Find un-gated sentinels at session start (and pre-every-Ter-interaction)
+for FLAG in "$LOGS"/done/*.flag; do
+  [ -f "$FLAG" ] || continue
+  BASE=$(basename "$FLAG" .flag)
+  # Filename format: <ID>__<sub>-<lane>
+  ID="${BASE%%__*}"
+  LANE_PART="${BASE#*__}"          # e.g., sonnet-worker-2
+  LANE=$(echo "$LANE_PART" | sed 's/^[a-z]*-//')   # strip "sonnet-" → worker-2
+
+  # Already gated?
+  if ! ls "$PROJ/docs/test-reports/KING_"*"__${LANE}__${ID}.md" >/dev/null 2>&1; then
+    echo "UN_GATED: $LANE / $ID"
+  fi
+done
+```
+
+### The auto-trigger rule
+
+When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail. King then surfaces results to Ter:
+
+- **Gate PASS** → King fires `cmux notify --workspace $KING_WS --title "👑 King · gate pass · push?" --subtitle "<lane> · <sub-task-id>"` and asks Ter in chat: "Gate passed for `<lane>` task `<ID>`. Push?"
+- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells Ter what failed. May dispatch a fix-task back to the lane (King's call).
+
+This eliminates the "lane finished but King stayed idle" failure mode. Real test: Ter starts a session, King reads state, sees worker-2's `sonnet-worker-2.flag` for `FE-P0-FOUND.7`, no `KING_*` report exists yet → King auto-fires gate. Test report appears in seconds; Ter sees "push?" prompt instead of having to nudge.
+
+### When this fires
+
+| Trigger | Action |
+|---|---|
+| **Session resume** (first message after `/kingdom:start`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
+| **Pre-Ter-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
+| **Post-dispatch polling** (King dispatched a task and is polling for its sentinel) | Standard in-session flow — sentinel detected → continue to gate |
+| **Watchman notify** (cmux notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
+
+### Daily kickoff additions (Step 0.5)
+
+The kickoff synthesis (after Context loaded + Watchman state) now includes a section if any un-gated sentinels exist:
+
+```text
+Un-gated work (auto-firing gates):
+   • worker-2 / FE-P0-FOUND.7  →  running gate now
+   • worker-1 / BE-AUTH-3      →  running gate now
+
+   (results will appear as test reports in docs/test-reports/ +
+    "push?" prompts in this chat as each gate completes)
+```
+
+King doesn't ask permission to run the gates — they're non-destructive. King DOES ask permission before each push.
+
+### Anti-patterns
+
+- ❌ King reports "worker-2 done" + lists state + stops. The sentinel sits un-gated; Ter has to manually say "run the gate."
+- ❌ King runs the gate but waits for Ter to ask. Same problem — the work is done; the next deterministic step is the gate.
+- ❌ King ignores sentinels older than ~24h thinking "Ter probably handled it." If Ter handled it, the test report exists and the un-gated detector skips it. If it doesn't exist, the work is genuinely un-gated and King runs it.
+- ❌ King auto-pushes after gate pass. Push approval is ALWAYS human-gated — auto-gate stops at "push?" prompt.
+
+---
+
 ## Working WITH the Watchman (mandatory when one exists)
 
 The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for every develop tick + PR state change, maintains `watchman_state.json` with current PR snapshots + `blocked_lanes` map, and surfaces `WATCH_DOCS_AUDIT.md` gap findings. **The King must read these at every major decision point** — otherwise watchman is doing work nobody consumes.

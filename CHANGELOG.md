@@ -4,6 +4,31 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.10] — 2026-05-18
+
+The "King never sits on an un-gated sentinel" release. Prior versions had the King poll sentinels DURING dispatch (in-session flow) but had no rule for the cross-session case: King resumed, read state, saw a sentinel written in a prior session, reported the state... and stopped. Ter had to manually nudge "run the gate." v0.14.10 fixes this with mandatory auto-gate-on-detection.
+
+### Added
+
+- **`kings.md` § "Auto-gate on completion (King never sits on an un-gated sentinel)"** — new top-level section before "Working WITH the Watchman". Defines:
+  - **Detection rule**: an un-gated sentinel = `<LOGS>/done/<ID>__*-<lane>.flag` with NO matching `KING_*__<lane>__<sub-task-id>.md` test report.
+  - **Auto-trigger rule**: King auto-fires the pre-commit gate (non-destructive: typecheck + tests + dry-merge) on every un-gated sentinel detected. Gate PASS → `cmux notify "push?"` to Ter. Gate FAIL → `cmux notify "gate FAIL"` to lane's workspace + may dispatch fix-task.
+  - **When this fires**: session resume, pre-Ter-interaction sweep, post-dispatch polling, watchman done-notify.
+  - **Daily kickoff Step 0.5**: synthesis now includes "Un-gated work (auto-firing gates)" section listing what's being gated right now.
+  - **Anti-patterns**: 4 things King MUST NOT do (report-and-stop, wait-for-Ter, ignore-old-sentinels, auto-push).
+
+### Why this matters
+
+Real test feedback (paraphrased): "after master done, king still idle. It not auto trigger king. King + master must always [be active]." Cross-session resume was the failure mode: King saw sentinels written in prior sessions, summarised, sat there. v0.14.10 makes the rule explicit: **every sentinel without a test report → auto-gate, no asking**. Push approval still requires human "push" word.
+
+### Non-breaking
+
+- No schema changes, no command changes.
+- Gate is non-destructive (read-only commands inside the lane's worktree), so auto-firing is safe.
+- Push approval gate is unchanged — still human-gated with FINAL `git merge-tree` conflict check.
+
+---
+
 ## [0.14.9] — 2026-05-18
 
 The "parallel work is now visible" release. v0.13.0 introduced tab-spawned sub-agents but defaulted to `"background"` (headless `Agent()`) — meaning by default, you couldn't see lane masters fanning out. v0.14.9 flips the default to **`"tab"`** so masters' parallel sub-agent work appears live in their workspace, auto-closing when each finishes. Also strengthens auto-close guarantees with a Watchman orphan-tab sweep.
