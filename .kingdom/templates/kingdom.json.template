@@ -42,10 +42,11 @@
     "enabled": true,
     "pinKingWorkspace": true,
     "workspaceColors": {
-      "king":     "amber",
-      "worker":   "violet",
-      "coworker": "blue",
-      "watchman": "rose"
+      "_comment": "cmux named-color set (case-insensitive): Red Crimson Orange Amber Olive Green Teal Aqua Blue Navy Indigo Purple Magenta Rose Brown Charcoal. Or use #RRGGBB hex. NOTE: 'violet' is NOT a cmux color — use 'Purple' (or 'Indigo' as alternative).",
+      "king":     "Amber",
+      "worker":   "Purple",
+      "coworker": "Blue",
+      "watchman": "Rose"
     },
     "subAgentSpawnDefault": "tab",
     "_subAgentSpawnComment": "'tab' (default) = visible new tab in master's workspace; auto-closes via 5-step closer Step 5. Best for visibility into parallel sub-agent work. 'background' = Agent(...) headless (cheaper, no UI) — use explicitly when masters fan out cheap Haiku reads (Layer-1 scans, doc digests) that don't need watching. 'split' = visible new split inside master's workspace; only useful for ≤2 parallel sub-agents (more is cramped). The master decides per-task; this value is the default.",

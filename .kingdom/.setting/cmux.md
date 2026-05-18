@@ -391,12 +391,52 @@ Kingdom's default mapping (in `kingdom.json.cmux.workspaceColors`):
 
 | Role | Color |
 |---|---|
-| 👑 King | `amber` |
-| 👷 Worker | `violet` (alias `Purple`) |
-| 🧑‍💼 Co-worker | `blue` |
-| 🕵️ Watchman | `rose` |
+| 👑 King | `Amber` |
+| 👷 Worker | `Purple` |
+| 🧑‍💼 Co-worker | `Blue` |
+| 🕵️ Watchman | `Rose` |
+
+> **Color name pitfall:** `violet` is NOT in cmux's named-color set — use `Purple` instead. Prior versions of the template used `"violet"` and required runtime substitution by the King. Fixed in v0.14.13.
 
 The `new-workspace` command **does not accept `--color`** — set it via a second `workspace-action --action set-color` call right after creation.
+
+## Spawn → name → color → describe (the 4-call pattern)
+
+Real test confirms: `cmux new-workspace --name "X"` does NOT make the sidebar display "X" — cmux shows the active surface title (`"✳ Claude Code"` by default for Claude Code sessions) until the workspace name is explicitly enforced via `workspace-action --action rename`. The kingdom uses a **4-call pattern per lane** to guarantee the sidebar reflects intent:
+
+```bash
+spawn_lane () {
+  local label="$1" path="$2" color="$3"
+
+  # Step 1: create the workspace (capture ref robustly — awk pipeline
+  #         broke in real test runs; grep -oE is more reliable)
+  local result=$(cmux new-workspace \
+    --name "$label" \
+    --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
+    --cwd "$path" \
+    --command "claude" \
+    --focus false 2>&1)
+  local ref=$(echo "$result" | grep -oE 'workspace:[0-9]+' | head -1)
+  [ -z "$ref" ] && { echo "❌ spawn failed: $result" >&2; return 1; }
+
+  # Step 2: FORCE the sidebar name (override auto-surface title "✳ Claude Code")
+  cmux workspace-action --action rename --workspace "$ref" --title "$label" 2>/dev/null
+
+  # Step 3: set color (new-workspace doesn't accept --color)
+  [ -n "$color" ] && \
+    cmux workspace-action --action set-color --workspace "$ref" --color "$color" 2>/dev/null
+
+  # Step 4: force-set description (same reason as Step 2 — auto-title
+  #         can clobber what was passed to new-workspace --description)
+  cmux workspace-action --action set-description \
+    --workspace "$ref" \
+    --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" 2>/dev/null
+
+  echo "$ref"
+}
+```
+
+All four calls are silent-on-failure — descriptions, colors, and badges are cosmetic. The audit trail in `<LOGS>/` is the source of truth.
 
 ## Attention markers — mark-read / mark-unread
 

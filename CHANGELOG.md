@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.13] — 2026-05-18
+
+The "stop fighting `/kingdom:start`" release. Real test surfaced four friction points that turned an 18-min King planning phase into a 25-min flow with manual fixups. v0.14.13 codifies the hard-won patterns so the spawn is **18 min of planning + ~3 sec of execution** with no prompts and no fixups.
+
+### Changed
+
+- **Removed the "Proceed with the spawn?" prompt** at Phase 1 step 7. The user invoking `/kingdom:start` IS the consent for the spawn's side effects (worktree creation, workspace spawning, branch attachment). Print the resolved plan and move directly to Phase 2.
+- **Phase 4 worktree creation made silently idempotent** — 3-case logic via new `attach_or_create_worktree ()` helper:
+  - Case A: worktree directory exists → reuse silently
+  - Case B: branch exists (created by prior kingdom session) → attach worktree to existing branch silently
+  - Case C: neither exists → create fresh branch from `origin/<base>` + worktree
+  Previous behaviour (`git worktree add -b` + `|| cd`) crashed when the branch existed but worktree didn't.
+- **Phase 5 PRIMARY `spawn_master_workspace ()` rewritten with the hard-won 4-call pattern:**
+  1. `cmux new-workspace --name "X" --cwd ... --command "claude" --focus false`
+  2. `cmux workspace-action --action rename --workspace <ref> --title "X"` ← **mandatory** — without this, sidebar shows `"✳ Claude Code"` (the auto-surface title) instead of `"X"`. Hard-won from real test where King had to manually re-fire renames.
+  3. `cmux workspace-action --action set-color --workspace <ref> --color <color>` (since `new-workspace` doesn't accept `--color`)
+  4. `cmux workspace-action --action set-description --workspace <ref> --description "..."` (same reason as Step 2 — description can be clobbered)
+- **Robust ref capture** — `grep -oE 'workspace:[0-9]+' | head -1` replaces `awk '/workspace:/ {print $2}'`. The awk pattern broke silently in real test pipelines (returned blank, broke workspace-refs.env reconstruction).
+- **Default `workspaceColors.worker`: `"violet"` → `"Purple"`** — `violet` is NOT in cmux's named-color set (Red, Crimson, Orange, Amber, Olive, Green, Teal, Aqua, Blue, Navy, Indigo, Purple, Magenta, Rose, Brown, Charcoal). Prior runs required the King to substitute Indigo manually.
+
+### Added
+
+- **`.kingdom/.setting/cmux.md` § "Spawn → name → color → describe (the 4-call pattern)"** — explicit doc of the hard-won 4-call sequence per workspace creation, with the full `spawn_lane ()` helper and rationale for each step.
+- **Color-name pitfall callout** in `cmux.md` — explicitly notes `violet` is not in cmux's set; use `Purple`.
+
+### Why this matters
+
+Real test transcript (paraphrased): "Cooked for 18m 5s ... Proceed with the spawn? [yes] ... cmux's `--name` didn't make name stick, had to fire `workspace-action --action rename` ... ref-capture awk pipe broke, reconstructed env file manually ... violet isn't a cmux color, substituted Indigo." Four separate manual fixups for what should be a one-command spawn. v0.14.13 puts every fixup into the spec so future runs need none.
+
+### Non-breaking
+
+- No schema changes, no command-name changes.
+- `kingdom.json.cmux.workspaceColors.worker` default flipped from `violet` (invalid) to `Purple` (valid). Existing kingdoms with `"violet"` explicitly will still work IF cmux substitutes silently (it appears to fall back to a default colour), but updating to `"Purple"` makes the colour intent explicit.
+
+---
+
 ## [0.14.12] — 2026-05-18
 
 The "override cmux's wrong auto-state" release. cmux.app auto-detects "Running" / "Idle" / "Needs input" badges per workspace, but the detection is heuristic — a lane stuck on a permission prompt may still show as "Running"; a King with a pending "push?" may show as "Idle". cmux does NOT expose direct CLI control over these auto-labels. v0.14.12 wires up the **manually controllable** badge — `mark-unread` / `mark-read` — to override cmux's wrong auto-state with three explicit signals: badge + description + notify.

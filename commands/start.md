@@ -248,16 +248,21 @@ for I in $(seq 1 "$WATCHMEN"); do
         {pane: {surfaces: [{type: "terminal", command: $t}]}},
         {pane: {surfaces: [{type: "terminal", command: $b}]}}
       ]}')
-    WATCHMAN_WS["$I"]=$(cmux new-workspace \
+    RESULT=$(cmux new-workspace \
       --name "🕵️ watchman-$I" \
       --description "Kingdom monitor · $(date -u +%Y-%m-%dT%H%MZ)" \
       --cwd "$PROJ/.worktrees/watchman-$I" \
       --layout "$LAYOUT_JSON" \
-      --focus false \
-      | awk '/workspace:/ {print $2}')
-    # Set watchman color (rose) — new-workspace doesn't accept --color
-    [ -n "${WATCHMAN_WS[$I]}" ] && \
-      cmux workspace-action --action set-color --workspace "${WATCHMAN_WS[$I]}" --color "$WATCHMAN_COLOR" 2>/dev/null
+      --focus false 2>&1)
+    WATCHMAN_WS["$I"]=$(echo "$RESULT" | grep -oE 'workspace:[0-9]+' | head -1)
+    if [ -n "${WATCHMAN_WS[$I]}" ]; then
+      # Force-set rename/color/description (same hard-won pattern as
+      # spawn_master_workspace — new-workspace --name doesn't override
+      # the auto-surface title shown in the sidebar)
+      cmux workspace-action --action rename       --workspace "${WATCHMAN_WS[$I]}" --title "🕵️ watchman-$I" 2>/dev/null
+      cmux workspace-action --action set-color    --workspace "${WATCHMAN_WS[$I]}" --color "$WATCHMAN_COLOR" 2>/dev/null
+      cmux workspace-action --action set-description --workspace "${WATCHMAN_WS[$I]}" --description "Kingdom monitor · $(date -u +%Y-%m-%dT%H%MZ)" 2>/dev/null
+    fi
   else
     WATCHMAN_WS["$I"]=$(spawn_master_workspace "🕵️ watchman-$I" "$PROJ/.worktrees/watchman-$I" "$WATCHMAN_COLOR")
   fi
