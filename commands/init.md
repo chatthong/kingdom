@@ -75,6 +75,9 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/rules.md"       "$PWD/.kingdom/.sett
 mkdir -p "$PWD/.kingdom/.setting/cards"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cards/"*.md "$PWD/.kingdom/.setting/cards/"
 
+# v0.23.0+: per-task skill routing
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/skill-routing.md" "$PWD/.kingdom/.setting/skill-routing.md"
+
 wc -l "$PWD/.kingdom/.setting/"*.md
 ```
 

@@ -19,6 +19,9 @@ Dependencies: ${DEPENDENCIES}
 Reference: ${REFERENCE}
 Deadline: ${DEADLINE}
 
+Suggested skills (per-task; pick what fits, ignore if unavailable):
+${SUGGESTED_SKILLS}
+
 Layer plan:
   L1 Discovery   — pattern grep, identify existing conventions (R8 mandatory)
   L2 Strategy    — choose approach, list edits
@@ -59,6 +62,21 @@ King's auto-gate poll will pick it up and run Tier-1, then overlay onto kingdom 
 | `${PROJECT}` | active project | `bfg-swt` |
 | `${UTC}` | UTC timestamp `YYYY-MM-DDTHHMMZ` | `2026-05-18T1142Z` |
 | `${COMMIT_STYLE}` | from `kingdom.json.git.commitStyle` | `Conventional Commits: feat/fix/docs/...` |
+| `${SUGGESTED_SKILLS}` | output of `pick_skills_for_task` (or user override). 0-3 lines, each prefixed `  → Skill <name> · <why>`. If empty, the `Suggested skills` line + its content are both dropped from the brief. | (multi-line, see below) |
+
+## `${SUGGESTED_SKILLS}` rendering
+
+The helper `pick_skills_for_task` (in [`_primitives.md`](../_primitives.md)) returns 0-3 entries, each formatted as:
+
+```text
+  → Skill nextjs-best-practices · matches keyword: "app router"
+  → Skill shadcn-ui · matches keyword: "components.json"
+  → Skill supabase:supabase · matches keyword: "supabase-js"
+```
+
+If the helper returns empty (no keyword matched), the entire `Suggested skills:` line is dropped from the brief along with its block — no hollow heading.
+
+If the user passed `skill=<name>[,<name>...]` in the instruction, the helper short-circuits and uses that list verbatim. `skill=none` → empty list → dropped section.
 
 ## Notes
 

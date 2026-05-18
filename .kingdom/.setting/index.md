@@ -16,7 +16,9 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, lifecycle, dual-view layout |
 | [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, PR conventions |
 | [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
-| [`_primitives.md`](_primitives.md) | **Shared bash helpers** (v0.19.0+) — canonical implementations of every helper the role docs reference (`cmux_set_state`, `attach_or_create_worktree`, `spawn_master_workspace`, `spawn_pool_slot`, `kingdom_*`, `carve_and_push_feature`, `generate_pr_body_from_task_file`, `pattern_grep_fanout`, etc). Single source of truth for shared bash. |
+| [`_primitives.md`](_primitives.md) | **Shared bash helpers** (v0.19.0+) — canonical implementations of every helper the role docs reference (`cmux_set_state`, `attach_or_create_worktree`, `spawn_master_workspace`, `spawn_pool_slot`, `kingdom_*`, `carve_and_push_feature`, `generate_pr_body_from_task_file`, `pattern_grep_fanout`, `fetch_weather_line`, `render_card`, `pick_skills_for_task`, etc). Single source of truth for shared bash. |
+| [`cards/`](cards/) | **Card display library** (v0.22.0+) — 19 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
+| [`skill-routing.md`](skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
 
 ---
 

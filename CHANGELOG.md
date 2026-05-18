@@ -4,6 +4,29 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.23.0] — 2026-05-19
+
+Per-task skill routing. King now picks up to 3 Claude Code skills per dispatch from a keyword mapping table, and the dispatch-brief carries them into the lane. Skills are **per-task, not per-lane-lifetime**: worker-2 doing a Supabase task gets `supabase:supabase`; the same worker-2 doing a shadcn task tomorrow gets `shadcn:shadcn-ui`. Previous-task skills don't persist (skills are per-invocation via the `Skill` tool anyway).
+
+### Added
+
+- **`.kingdom/.setting/skill-routing.md`** — canonical keyword → skill mapping table (~40 mappings across P1/P2/P3 tiers). Covers Next.js, shadcn, Tailwind, OKLCH, frontend-design; Supabase + Postgres; Stripe; Claude API; PDF/XLSX/PPTX/DOCX/lark-doc; Figma; Hugging Face; plugin-dev (commands/agents/skills/hooks/MCP); CLAUDE.md management; code review; security review; superpowers process skills (brainstorming, writing-plans, TDD, systematic-debugging, verification-before-completion); commit-commands; git worktrees; doc-coauthoring; playground.
+- **`pick_skills_for_task` helper** in `_primitives.md` — reads the routing table, greps task brief + AC + linked reference files (lowercase, whole-word, case-insensitive), returns up to 3 matching skills sorted by priority. Returns multi-line text ready for `${SUGGESTED_SKILLS}` substitution in the dispatch-brief.
+- **`cards/dispatch-brief.md` updated** — new `Suggested skills` block in the template + `${SUGGESTED_SKILLS}` variable. If empty (no keyword matched), the entire section is dropped from the brief.
+- **User override surface** — `worker-2: skill=figma:figma-implement-design pick BE-P0-AUTH.2` short-circuits the matcher with the user's verbatim skill list. `skill=none` clears the list (no skills suggested). Multiple skills comma-separated.
+
+### Changed
+
+- `commands/init.md` Step 2 now copies `skill-routing.md` into the workspace scaffold alongside `cards/`.
+- `index.md` doc-index table updated to register `cards/` and `skill-routing.md` (was missing both from the canonical entry-point doc).
+- `plugin.json`, `marketplace.json`, README badge — version → `0.23.0`.
+
+### Customisation note
+
+Edit the workspace copy at `.kingdom/.setting/skill-routing.md` (not the plugin source) to add project-specific mappings. Matcher reads the workspace copy at every dispatch, so changes apply on the next task without restarting the King. Common additions: project-specific framework keywords (Vue/Nuxt, Rust), internal DSL reserved words, organisation-specific skills.
+
+---
+
 ## [0.22.0] — 2026-05-18
 
 Card library: 17 reusable display templates for everything the kingdom prints to the user. Plus weather card on `/kingdom:day` kickoff, random "task complete" lines from a 20-entry pool, and an explicit task-counting-unit definition that the King echoes back so `cap=N` / `target=N-M/<period>` are unambiguous.
