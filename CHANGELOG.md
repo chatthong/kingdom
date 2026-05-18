@@ -4,6 +4,31 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.21.0] — 2026-05-18
+
+README slimmed from 739 to ~200 lines; long-form content split into `docs/`. The cmux.app sidebar mockup is now a mermaid diagram (was a code-fence ASCII box). No behavioural changes; all moved content is reachable via the README's `## 📚 Docs` table.
+
+### Added
+
+- `docs/` directory with 8 focused topic files:
+  - `docs/daily-ritual.md` — first-time setup, every-day command, `target=`/`cap=` reference, plugin updates
+  - `docs/configuration.md` — project shape choices, `/kingdom:init` parameters, `kingdom.json` reference
+  - `docs/roles.md` — King + workers + co-workers + watchmen + sub-agents
+  - `docs/branch-model.md` — lifecycle mermaid, GitHub Desktop overlay mockup, three rules, what-lives-where, two-tier gate, why-this-design
+  - `docs/cmux-integration.md` — cmux.app sidebar mermaid, three notification surfaces, three-tier visual hierarchy, what `/kingdom:start` does
+  - `docs/how-it-works.md` — internals, the 4-step closer, task files
+  - `docs/why.md` — the problem kingdom solves
+  - `docs/faq.md` — common questions
+- README "📚 Docs" table linking out to each of the above plus existing role specs.
+
+### Changed
+
+- **README rewritten as a landing page**: badges, value prop, 3-command quick start, agent topology mermaid, "Why kingdom?" 5 bullets, install, contract, roles-at-a-glance, slash commands table, docs map, contributing, license. All deep dives moved to `docs/`.
+- **cmux.app sidebar mockup is now a mermaid `graph TB`** (was an ASCII code-fenced box). Same visual intent, but renders as a real diagram on GitHub.
+- `plugin.json`, `marketplace.json`, README badge — version → `0.21.0`.
+
+---
+
 ## [0.20.0] — 2026-05-18
 
 `/kingdom:day` is promoted to THE daily ritual. Always runs `/kingdom:update` (no >24h skip-gate) + `/kingdom:start` (idempotent) + a richer kickoff brief (local date+time + Suggested next task synthesis) + the auto-gate-poll loop. New argument surface for soft budgets (`target=N-M/<period>` with auto-split across day/week/month) and a hard daily ceiling (`cap=N`). `/kingdom:update` and `/kingdom:start` remain available as standalone building blocks for power users.
