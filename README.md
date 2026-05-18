@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.16.0-success)
+![Version](https://img.shields.io/badge/version-0.16.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -387,51 +387,62 @@ The leaves of the tree. Spawned by the King (for planning) or by any master (for
 
 ## 🌳 Branch model
 
-Five 🖥️ LOCAL-only branches never leave your laptop. Only `feature/<topic>` ever reaches origin. The King is the **sole pusher** — lanes are private workshops, features are the public surface.
+> **TL;DR** — Lanes work on `worker-N` (local). King merges them into `kingdom` (local) for Tier-2 tests + your review. After you approve, King carves `feature/<topic>` **from the worker-N tip** (not from kingdom) and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.**
 
-### Worked example — 3 lanes in flight
+### The lifecycle
 
 ```mermaid
-graph TB
-    subgraph ONLINE ["☁️ ONLINE — origin, visible to your team"]
+graph LR
+    subgraph LOCAL ["🖥️  LOCAL only — never pushed"]
         direction TB
-        MAIN([main<br/>🔒 protected · production])
+        W1([👷 worker-1<br/>1 commit per task])
+        W2([👷 worker-2])
+        W3([👷 worker-3])
+        K([👑 kingdom<br/>integration · Tier-2 gate · review])
+
+        W1 -.->|"git merge --no-ff"| K
+        W2 -.->|"merge --no-ff"| K
+        W3 -.->|"merge --no-ff"| K
+    end
+
+    subgraph ONLINE ["☁️  ONLINE — origin, your team sees this"]
+        direction TB
         DEV([develop<br/>👥 lead-controlled · PR target])
-        F1([feature/auth-refactor<br/>📤 from 👷 worker-1])
-        F2([feature/checkout-flow<br/>📤 from 🧑‍💼 co-worker-1])
-        F3([feature/db-migrate<br/>📤 from 👷 worker-2])
+        F1([feature/auth-refactor<br/>1 commit · from worker-1 tip])
+        F2([feature/checkout<br/>1 commit · from worker-2 tip])
+        F3([feature/db-migrate<br/>1 commit · from worker-3 tip])
+        MAIN([main<br/>🔒 production])
+
+        F1 -.->|"PR · lead reviews · squash merge"| DEV
+        F2 -.->|"PR · squash merge"| DEV
+        F3 -.->|"PR · squash merge"| DEV
+        DEV -.->|"release cycle"| MAIN
     end
 
-    subgraph LOCAL ["🖥️ LOCAL — laptop only, never pushed"]
-        direction TB
-        K([👑 kingdom<br/>integration view<br/>develop ⊕ all lane tips])
-        W1([👷 worker-1<br/>BE-AUTH-3])
-        W2([👷 worker-2<br/>OPS-DB-7])
-        W3([👷 worker-3<br/>idle])
-        CW1([🧑‍💼 co-worker-1<br/>UI-CHK-12 · paired])
-        WM1([🕵️ watchman-1<br/>tracks origin/develop])
-    end
+    DEV ==>|"git fetch + merge<br/>(/kingdom:start)"| K
 
-    DEV -.->|"git fetch + merge<br/>(/kingdom:start, /kingdom:update)"| K
-    K -.->|"git worktree add<br/>from origin/develop"| W1 & W2 & W3 & CW1 & WM1
+    W1 ==>|"Ter approves on kingdom<br/>→ King carves from worker-1 tip<br/>git push + gh pr create"| F1
+    W2 ==> F2
+    W3 ==> F3
 
-    W1 ==>|"👑 King carves<br/>git push + gh pr create"| F1
-    CW1 ==>|"same flow"| F2
-    W2 ==>|"same flow"| F3
+    classDef local fill:#ecfdf5,stroke:#10b981,stroke-width:2px,color:#064e3b
+    classDef integration fill:#fef3c7,stroke:#f59e0b,stroke-width:3px,color:#78350f
+    classDef online fill:#eef2ff,stroke:#6366f1,stroke-width:2px,color:#1e1b4b
+    classDef feature fill:#fff7ed,stroke:#ea580c,stroke-width:2px,color:#7c2d12
+    classDef protected fill:#fef2f2,stroke:#dc2626,stroke-width:3px,color:#7f1d1d
 
-    F1 & F2 & F3 ==>|"PR review →<br/>squash merge"| DEV
-    DEV ==>|"release cycle"| MAIN
-
-    classDef online stroke:#6366f1,stroke-width:2px,fill:#eef2ff,color:#1e1b4b
-    classDef local stroke:#10b981,stroke-width:2px,fill:#ecfdf5,color:#064e3b
-    classDef protected stroke:#dc2626,stroke-width:3px,fill:#fef2f2,color:#7f1d1d
-    classDef feature stroke:#f59e0b,stroke-width:1.5px,fill:#fffbeb,color:#78350f
-
-    class MAIN protected
+    class W1,W2,W3 local
+    class K integration
     class DEV online
     class F1,F2,F3 feature
-    class K,W1,W2,W3,CW1,WM1 local
+    class MAIN protected
 ```
+
+### Three rules to remember
+
+1. **Lane branches stay local.** `worker-N` / `co-worker-N` / `watchman-N` never reach origin. They live only on your laptop, accumulating one commit per completed task.
+2. **`kingdom` is local-only review + test staging.** King merges all in-flight lanes into kingdom, runs the **Tier-2 gate** (full tests + smoke + lint on the integrated state), prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`), then asks "push?". `kingdom` is never pushed.
+3. **PRs carve from `worker-N` tip, not from `kingdom`.** Each `feature/<topic>` is a single-commit branch carved from the lane's tip — keeps every PR one-purpose, one-commit, traceable to a single lane. Carving from kingdom would mix lanes; that's an anti-pattern.
 
 ### What lives where
 
@@ -439,21 +450,32 @@ graph TB
 |---|---|---|---|---|
 | `main` | online (protected) | permanent | release manager | ✅ origin/main |
 | `develop` | online | permanent | lead via PR merge | ✅ origin/develop |
-| `feature/<topic>` | online | one PR, then deleted | 👑 King (carve + push + PR) | ✅ origin/feature/* |
-| `kingdom` | local only | permanent | 👑 King (fetch + merge from origin/develop) | ❌ never |
-| `worker-N` | local only | slot identity — reset per PR | 👷 worker-N | ❌ never |
-| `co-worker-N` | local only | slot identity — reset per PR | 🧑‍💼 co-worker-N | ❌ never |
-| `watchman-N` | local only | reset every `/loop` tick to `origin/develop` | 🕵️ watchman-N (read-only) | ❌ never |
+| `feature/<topic>` | online | one PR, then deleted | 👑 King (carve from worker-N tip + push + PR) | ✅ origin/feature/* |
+| `kingdom` | **local only** | permanent | 👑 King (fetch + merge develop, merge lanes, run Tier-2 gate) | ❌ never |
+| `worker-N` | **local only** | slot identity — same lane does many tasks over time | 👷 worker-N | ❌ never |
+| `co-worker-N` | **local only** | slot identity | 🧑‍💼 co-worker-N | ❌ never |
+| `watchman-N` | **local only** | reset every `/loop` tick to `origin/develop` | 🕵️ watchman-N (read-only on source) | ❌ never |
 
-### The two-surface decoupling
+### Two-tier gate (v0.16.0+)
 
-**Work surface** (`worker-N`, `co-worker-N`) — long-lived local slots. They get hard-reset to a fresh tip per PR, but the slot itself persists across many tasks. Same `worker-1` does BE-AUTH-3 this week and FE-ICONS-9 next week.
+The kingdom is both review staging AND the test environment. Gates run at two tiers:
 
-**PR surface** (`feature/<topic>`) — one PR, one branch. Carved fresh at push time, deleted after merge. The branch name is descriptive (`feature/auth-refactor`, not `feature/worker-1-week-15`) so reviewers see what they're reviewing, not who.
+| Tier | Where | What runs | Speed | Catches |
+|---|---|---|---|---|
+| **Tier 1** | `.worktrees/worker-N` | `gate.typecheck` only | seconds | Obvious in-lane breakage (typecheck error, import miss) |
+| **Tier 2** | `kingdom` (after merge) | `gate.tests` + `gate.smoke` + `gate.lint` on the integrated state | minutes | Cross-lane integration bugs Tier 1 misses |
 
-This decoupling means lane numbers are **operational identifiers** (which tmux pane, which worktree directory) — not **content identifiers**. The repo history stays clean because no `worker-N` ever leaves the laptop.
+Push approval requires Tier-2 pass. The single-lane Tier-1 gate is fast feedback; the kingdom-integrated Tier-2 gate is the trust gate.
 
-Full commit flow + push gate + FINAL conflict check: [`git.md`](.kingdom/.setting/git.md).
+### Why this design
+
+**Work surface** (`worker-N`, `co-worker-N`) = long-lived local slots. Same `worker-1` does BE-AUTH-3 this week and FE-ICONS-9 next week. Slot persists; tasks rotate through it.
+
+**PR surface** (`feature/<topic>`) = one PR, one branch, one commit, descriptive name. Reviewers see what they're reviewing (`feature/auth-refactor`), not who did it (`feature/worker-1-week-15`).
+
+**Integration surface** (`kingdom`) = the local crucible where all in-flight lane work integrates and gets stress-tested before any byte reaches origin. Tier-2 gate runs here. You review the integrated diff here. Decisions to ship happen here.
+
+Full commit flow + push gate + FINAL conflict check details: [`git.md`](.kingdom/.setting/git.md) and [`kings.md`](.kingdom/.setting/kings.md).
 
 ---
 

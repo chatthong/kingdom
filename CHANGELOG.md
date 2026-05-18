@@ -4,6 +4,28 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.16.1] — 2026-05-18
+
+Docs polish — README branch model section rewritten for clarity.
+
+### Changed
+
+- **README `## 🌳 Branch model` section rewritten**:
+  - **New TL;DR callout** at top — one paragraph stating the canonical flow (lanes work locally → kingdom integrates + Tier-2 tests + Ter reviews → King carves feature/* from worker-N tip → PR to develop)
+  - **Mermaid diagram simplified to `graph LR`** (left-right flow) showing local-to-online progression more visually. Removed busy co-worker + watchman nodes from the diagram to keep the lifecycle clear (they're documented in the table below).
+  - **"Three rules to remember"** numbered callout — the non-negotiable contract that gets confused most often:
+    1. Lane branches stay local
+    2. `kingdom` is local-only review + test staging (NEVER pushed)
+    3. PRs carve from `worker-N` tip, not from `kingdom`
+  - **New "Two-tier gate (v0.16.0+)" subsection** — explicitly documents Tier-1 (typecheck-only in lane) vs Tier-2 (full tests on kingdom) with what each catches + push approval requires Tier-2 pass
+  - **Three "Why" paragraphs** at the end — work surface / PR surface / integration surface — explaining the design choice in plain language
+
+### Why this matters
+
+Real user check-in: "so it like commit PR to 'kingdom' then but when fire to PR feature it push from worker-N branch to develop right" — mental model was right, but the prior diagram + table required puzzling to confirm. v0.16.1 makes the rules immediately visible: TL;DR at top, three numbered rules below the diagram, two-tier gate explicit.
+
+---
+
 ## [0.16.0] — 2026-05-18
 
 The "60% conservative + 40% industrial scheduler" release. Real test feedback: "use master as much as possible, don't let them rest; King must plan for maximum capacity; King can run same job on two workers to compare." Calibrated as a balance — conservative core (push gates, kingdom merge, human approvals) stays non-negotiable; industrial overlay (auto-delegate big work, load idle capacity, parallel dispatch) layers on top for capacity-loading behaviour.
