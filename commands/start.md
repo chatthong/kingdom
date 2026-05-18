@@ -178,6 +178,11 @@ On approval, spawn each master as its own workspace:
 KING_WS="${CMUX_WORKSPACE_ID:-workspace:1}"
 declare -A WORKER_WS COWORKER_WS WATCHMAN_WS
 
+# Rename the King's own workspace — it's just "Claude Code" by default
+cmux tab-action --action rename \
+  --workspace "$KING_WS" \
+  --title "👑 King · $PROJECT" 2>/dev/null
+
 # Pin the King's workspace so it stays at top of sidebar (per cmux.json config)
 PIN_KING=$(jq -r '.cmux.pinKingWorkspace // true' "$KJSON")
 [ "$PIN_KING" = "true" ] && cmux tab-action --action pin --workspace "$KING_WS" 2>/dev/null

@@ -4,6 +4,14 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.13.1] — 2026-05-18
+
+### Fixed
+
+- **`/kingdom:start` PRIMARY mode forgot to rename the King's own workspace.** After spawning master workspaces (workers/co-workers/watchman) with proper emoji-prefixed names, the King's workspace stayed at the default `Claude Code` label. Real test: sidebar showed 👷 worker-1, 👷 worker-2, 🧑‍💼 co-worker-1, 🕵️ watchman-1 — but the King's session was just `Claude Code · Idle`. Now Phase 5 PRIMARY runs `cmux tab-action --action rename --workspace "$KING_WS" --title "👑 King · <project>"` before pinning. Renames before pinning so the pin operation reflects the correct title immediately.
+
+---
+
 ## [0.13.0] — 2026-05-18
 
 The "three-tier cmux hierarchy" release. Big spec correction + new cmux reference doc. PRIMARY mode now uses cmux.app properly: each master gets its own workspace (sidebar entry), sub-agents spawn as tabs (auto-close on sentinel) when visibility is wanted, watchman gets a predefined dual-view split. Fixes the broken `cmux claude-teams` flow from prior versions.
