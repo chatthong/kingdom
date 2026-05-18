@@ -4,6 +4,54 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.15.0] — 2026-05-18
+
+The "efficient by default" release. v0.14.9 made tab the default spawn mode for visibility — but tab spawns cost ~10–20s each (full Claude session boot) while `Agent()` spawns cost ~2s (in-process). For cheap fan-outs (Haiku Layer-1 scans, `/kingdom:update`'s 4 Sonnet specialists, parallel doc digests), tab cost was 5–10× too high. v0.15.0 switches to **model-tiered defaults**: Haiku always headless, Sonnet headless by default (override to tab per-task), Opus tab by default.
+
+### Changed
+
+- **`kingdom.json.cmux.subAgentSpawnDefault` → `subAgentSpawnByModel` block** — per-model defaults instead of one-size-fits-all:
+  ```json
+  "subAgentSpawnByModel": {
+    "haiku":  "background",   // always cheap → Agent()
+    "sonnet": "background",   // default cheap; override per-task to "tab"
+    "opus":   "tab"           // expensive + slow → tab
+  },
+  "subAgentSpawnFallback": "tab"
+  ```
+- **`workers.md` "Tab vs Agent decision" rewritten** — now explains the **spawn-cost reality** table (tab ~10–20s vs Agent ~2s), the **model-tiered defaults**, and a **per-task override** mechanism via the dispatch brief's `Spawn mode:` line.
+- **`kings.md` dispatch brief schema** — added optional `Spawn mode: tab|background|split` field. Master honours the override; otherwise uses model-tiered defaults.
+
+### Why this matters
+
+Real-world example: `/kingdom:update`'s Layer-1 Discovery fan-out spawns 5–10 Haiku scanners. Pre-v0.15.0 (default `"tab"`) cost ~10s × 10 = 100s just for spawn. Post-v0.15.0 (Haiku → background) costs ~2s × 10 = 20s with `Agent()` running in parallel headless. Five times faster on the bottleneck step of an audit pass.
+
+For Sonnet fan-outs (e.g., worker's Layer-3 parallel edits), the default is also `"background"` — but the **per-task override** lets Ter say "watch worker-1 do BE-AUTH-3" and the dispatch brief includes `Spawn mode: tab`, forcing visibility for that specific task.
+
+### Communication efficiency (full picture)
+
+| Hop | Latency |
+|---|---|
+| King → Master (`cmux send` text + Enter) | ~50ms (cmux requires 2 RPC calls; can't collapse) |
+| Master → King (sentinel + notify) | ~10ms write + ≤5s poll worst-case |
+| Master → Sub-agent (Agent, default for haiku/sonnet) | **~2s** (was 10–20s for tab) |
+| Master → Sub-agent (Tab, default for opus + override) | ~10–20s (visibility tax) |
+| Sub-agent → Master (closer) | ~10ms + ≤5s poll |
+
+### Non-breaking
+
+- Existing `kingdom.json` with `subAgentSpawnDefault: "tab"` is honoured as fallback when `subAgentSpawnByModel` is missing — graceful migration.
+- Per-task override via dispatch brief is opt-in; masters without explicit Spawn mode fall back to model-tiered defaults.
+
+### Other improvements considered (skipped)
+
+- **Streaming between agents** — not how CC works
+- **Shared memory across sub-agents** — not how CC works
+- **Hooks-based auto-notify** — user's hook config is broken (recurring `Hook JSON output validation failed`); worth fixing separately, not as kingdom feature
+- **Pre-warmed Claude session pool** (eliminate tab boot cost via `cmux send` to idle session) — deferred to v0.16+; model-tiered defaults capture 80% of the win without new infrastructure
+
+---
+
 ## [0.14.13] — 2026-05-18
 
 The "stop fighting `/kingdom:start`" release. Real test surfaced four friction points that turned an 18-min King planning phase into a 25-min flow with manual fixups. v0.14.13 codifies the hard-won patterns so the spawn is **18 min of planning + ~3 sec of execution** with no prompts and no fixups.

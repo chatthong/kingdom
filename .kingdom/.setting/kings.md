@@ -390,6 +390,13 @@ worker-1, task <sub-task-id>:
   Gate:         runs kingdom.json.gate.* after completion (standard)
   Closer:       4-step (raw + curated + log + sentinel flag) per workers.md
   Task file:    Step 0 — write <workspace>/.kingdom/<project>/tasks/<UTC>__worker-1__<id>.md before any sub-agent dispatch
+  Spawn mode:   (optional) tab | background | split
+                Override for sub-agents spawned by this task. If omitted,
+                worker uses kingdom.json.cmux.subAgentSpawnByModel[<model>]
+                defaults (haiku → background, sonnet → background, opus → tab).
+                Add this line when Ter says "watch worker-1 do BE-AUTH-3"
+                (set to "tab") or "fast scan, don't bother showing me"
+                (set to "background"). See workers.md → "Per-task override".
 ```
 
 **No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:

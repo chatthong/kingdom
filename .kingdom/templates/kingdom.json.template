@@ -48,8 +48,14 @@
       "coworker": "Blue",
       "watchman": "Rose"
     },
-    "subAgentSpawnDefault": "tab",
-    "_subAgentSpawnComment": "'tab' (default) = visible new tab in master's workspace; auto-closes via 5-step closer Step 5. Best for visibility into parallel sub-agent work. 'background' = Agent(...) headless (cheaper, no UI) — use explicitly when masters fan out cheap Haiku reads (Layer-1 scans, doc digests) that don't need watching. 'split' = visible new split inside master's workspace; only useful for ≤2 parallel sub-agents (more is cramped). The master decides per-task; this value is the default.",
+    "subAgentSpawnByModel": {
+      "_comment": "Model-tiered default spawn mode (v0.15.0+). Tab spawns cost ~10-20s each (full Claude session boot); Agent() spawns cost ~2s (in-process). Cheap fan-outs (Haiku Layer-1 scans, /kingdom:update specialists) shouldn't pay the tab cost. Sonnet defaults to background; override to 'tab' per-task when visibility matters. Opus defaults to tab (slow + expensive tasks deserve to be watched).",
+      "haiku":  "background",
+      "sonnet": "background",
+      "opus":   "tab"
+    },
+    "subAgentSpawnFallback": "tab",
+    "_subAgentSpawnFallbackComment": "Used when model is unknown / not in subAgentSpawnByModel. Defaults to 'tab' (safer — visibility on unexpected work).",
     "watchmanLayout": {
       "_comment": "Dual-view watchman: top pane is the watchman Claude session (/loop), bottom pane is a live gh PR monitor. Set to null to disable the split and use a single-pane watchman workspace.",
       "direction": "vertical",
