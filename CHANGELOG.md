@@ -4,6 +4,24 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.19.1] — 2026-05-18
+
+Closing the post-push overlay-discard loophole. The behaviour was already documented in `kings.md` Step 8 and implemented as `kingdom_discard_overlay` in `_primitives.md`, but it wasn't enforced via `rules.md` — so a lane-spawned King session could (and today did) skip it and leave the kingdom branch with stale overlay files after push.
+
+### Added
+
+- **R29 (Tier 2) After every successful push, kingdom MUST be reset to `origin/develop` tip** — `git reset --hard origin/develop` + `git clean -fd` fires immediately after the last `gh pr create` in the batch returns. Distinguished from R26 (post-merge resync, which fires when the lead clicks Merge and advances `origin/develop`). R29 fires per-push (no remote movement); R26 fires per-merge (remote advances).
+
+### Incident summary (motivating R29)
+
+A King session pushed 4 PRs to bfg-swt (#255, #257, #258, #259) successfully, but never ran `kingdom_discard_overlay` after `gh pr create`. Ter opened GitHub Desktop, saw 18 stale uncommitted files on the kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes. `kings.md` Step 8 said so, but `rules.md` didn't, so the sub-King missed it.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.19.1`.
+
+---
+
 ## [0.19.0] — 2026-05-18
 
 Priority-tiered rules doc + post-merge automation + parallel-by-default execution model. King's session-start context-read now expanded to a full 0-7 ordered list. Closer mandate + task file lifecycle codified as Tier 1 rules. Post-merge kingdom resync + PR-number backfill move from "King's serial chores" to "watchman's parallel duty."

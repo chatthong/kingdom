@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work — any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.19.0-success)
+![Version](https://img.shields.io/badge/version-0.19.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -396,41 +396,41 @@ The leaves of the tree. Spawned by the King (for planning) or by any master (for
 
 ## 🌳 Branch model
 
-> **TL;DR** — Lanes work on `worker-N` (local). King **overlays** their changes onto `kingdom`'s working tree as **UNCOMMITTED files** (never commits on kingdom) so you can review every line in GitHub Desktop's Changes tab. Tier-2 gate runs against the overlay. After you approve, King carves `feature/<topic>` **from the worker-N tip** (byte-for-byte) and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.** After push, King discards the kingdom overlay (`git restore .`) — kingdom is back to clean `origin/develop`.
+> **TL;DR.** Lanes work on `worker-N` (local). King overlays their changes onto `kingdom`'s working tree as **UNCOMMITTED files**, never as commits, so you can review every line in GitHub Desktop's Changes tab. Tier-2 gate runs against the overlay. After you approve, King carves `feature/<topic>` from the `worker-N` tip byte-for-byte and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.** After push, King discards the kingdom overlay (`git restore .`); kingdom is back to clean `origin/develop`.
 
 ### The lifecycle
 
 ```mermaid
 graph LR
-    subgraph LOCAL ["🖥️  LOCAL only — never pushed"]
+    subgraph LOCAL ["LOCAL only, never pushed"]
         direction TB
-        W1([👷 worker-1<br/>1 commit per task])
-        W2([👷 worker-2])
-        W3([👷 worker-3])
-        K([👑 kingdom<br/>WORKING-TREE OVERLAY<br/>(never commit)<br/>Tier-2 gate · review])
+        W1([worker-1<br/>1 commit per task])
+        W2([worker-2])
+        W3([worker-3])
+        K([kingdom<br/>WORKING-TREE OVERLAY<br/>never commit<br/>Tier-2 gate, review])
 
-        W1 -.->|"git diff worker-1 \| git apply<br/>(overlay, no commit)"| K
+        W1 -.->|"git diff worker-1 \| git apply<br/>overlay, no commit"| K
         W2 -.->|"overlay, no commit"| K
         W3 -.->|"overlay, no commit"| K
     end
 
-    subgraph ONLINE ["☁️  ONLINE — origin, your team sees this"]
+    subgraph ONLINE ["ONLINE: origin, your team sees this"]
         direction TB
-        DEV([develop<br/>👥 lead-controlled · PR target])
-        F1([feature/auth-refactor<br/>1 commit · from worker-1 tip])
-        F2([feature/checkout<br/>1 commit · from worker-2 tip])
-        F3([feature/db-migrate<br/>1 commit · from worker-3 tip])
-        MAIN([main<br/>🔒 production])
+        DEV([develop<br/>lead-controlled, PR target])
+        F1([feature/auth-refactor<br/>1 commit from worker-1 tip])
+        F2([feature/checkout<br/>1 commit from worker-2 tip])
+        F3([feature/db-migrate<br/>1 commit from worker-3 tip])
+        MAIN([main<br/>production])
 
-        F1 -.->|"PR · lead reviews · squash merge"| DEV
-        F2 -.->|"PR · squash merge"| DEV
-        F3 -.->|"PR · squash merge"| DEV
+        F1 -.->|"PR, lead reviews, squash merge"| DEV
+        F2 -.->|"PR, squash merge"| DEV
+        F3 -.->|"PR, squash merge"| DEV
         DEV -.->|"release cycle"| MAIN
     end
 
-    DEV ==>|"git fetch + reset --hard origin/develop<br/>(start of each review cycle)"| K
+    DEV ==>|"git fetch + reset --hard origin/develop<br/>start of each review cycle"| K
 
-    W1 ==>|"Ter reviews live diff in GitHub Desktop<br/>→ approves push<br/>→ King carves from worker-1 tip<br/>→ git push + gh pr create<br/>→ git restore . (discard overlay)"| F1
+    W1 ==>|"Ter reviews live diff in GitHub Desktop,<br/>approves push,<br/>King carves from worker-1 tip,<br/>git push + gh pr create,<br/>git restore . to discard overlay"| F1
     W2 ==> F2
     W3 ==> F3
 
@@ -473,8 +473,8 @@ Click any file → see the diff in the right pane. No commit history to navigate
 ### Three rules to remember
 
 1. **Lane branches stay local.** `worker-N` / `co-worker-N` / `watchman-N` never reach origin. They live only on your laptop, accumulating one commit per completed task.
-2. **`kingdom` is a local working-tree overlay — never commit on it.** King resets `kingdom` to `origin/develop`, then overlays each in-flight lane's changes onto the working tree (via `git diff worker-N | git apply` or `git checkout worker-N -- <files>`). Result: every change shows up as UNCOMMITTED in GitHub Desktop's "Changes" tab / VS Code's source-control panel / `git status` — review files line-by-line in one view. Tier-2 gate runs on this overlay. After push, `git restore .` discards the overlay; `kingdom` is clean for the next cycle. `kingdom` is never pushed AND never commits.
-3. **PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical.** Each `feature/<topic>` is a fast-forward checkout of the lane's tip — NO commits added on the feature branch after carving. Whatever's on `worker-N` IS what ships. If you want extra content in the PR, put it on `worker-N` first (worker commits it) or open a **separate PR** (different concern → different PR). Adding commits to `feature/*` after carving breaks the kingdom-as-truth-of-what-ships invariant.
+2. **`kingdom` is a local working-tree overlay. Never commit on it.** King resets `kingdom` to `origin/develop`, then overlays each in-flight lane's changes onto the working tree (via `git diff worker-N | git apply` or `git checkout worker-N -- <files>`). Result: every change shows up as UNCOMMITTED in GitHub Desktop's "Changes" tab, VS Code's source-control panel, or `git status`. Review files line-by-line in one view. Tier-2 gate runs on this overlay. After push, `git restore .` discards the overlay; `kingdom` is clean for the next cycle. `kingdom` is never pushed AND never commits.
+3. **PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical.** Each `feature/<topic>` is a fast-forward checkout of the lane's tip; no commits are added on the feature branch after carving. Whatever's on `worker-N` IS what ships. If you want extra content in the PR, put it on `worker-N` first (worker commits it) or open a separate PR (different concern, different PR). Adding commits to `feature/*` after carving breaks the kingdom-as-truth-of-what-ships invariant.
 
 ### What lives where
 
@@ -484,7 +484,7 @@ Click any file → see the diff in the right pane. No commit history to navigate
 | `develop` | online | permanent | lead via PR merge | ✅ origin/develop |
 | `feature/<topic>` | online | one PR, then deleted | 👑 King (carve from worker-N tip + push + PR) | ✅ origin/feature/* |
 | `kingdom` | **local only · no commits** | permanent branch, transient working-tree overlay (reset to origin/develop, overlay lanes, review, discard) | 👑 King (reset + overlay + Tier-2 gate + discard) | ❌ never |
-| `worker-N` | **local only** | slot identity — same lane does many tasks over time | 👷 worker-N | ❌ never |
+| `worker-N` | **local only** | slot identity; same lane does many tasks over time | 👷 worker-N | ❌ never |
 | `co-worker-N` | **local only** | slot identity | 🧑‍💼 co-worker-N | ❌ never |
 | `watchman-N` | **local only** | reset every `/loop` tick to `origin/develop` | 🕵️ watchman-N (read-only on source) | ❌ never |
 
@@ -505,7 +505,7 @@ Push approval requires Tier-2 pass. The single-lane Tier-1 gate is fast feedback
 
 **PR surface** (`feature/<topic>`) = one PR, one branch, one commit, descriptive name. Reviewers see what they're reviewing (`feature/auth-refactor`), not who did it (`feature/worker-1-week-15`).
 
-**Integration surface** (`kingdom`) = the local crucible where all in-flight lane work integrates as UNCOMMITTED working-tree changes before any byte reaches origin. Tier-2 gate runs against the overlay. You review file-by-file in GitHub Desktop's Changes tab (or any diff tool). After push, the overlay is discarded — kingdom branch itself never accumulates commits, never gets pushed.
+**Integration surface** (`kingdom`) = the local staging area where all in-flight lane work integrates as UNCOMMITTED working-tree changes before any byte reaches origin. Tier-2 gate runs against the overlay. You review file-by-file in GitHub Desktop's Changes tab (or any diff tool). After push, the overlay is discarded. The `kingdom` branch itself never accumulates commits, never gets pushed.
 
 Full commit flow + push gate + FINAL conflict check details: [`git.md`](.kingdom/.setting/git.md) and [`kings.md`](.kingdom/.setting/kings.md).
 
