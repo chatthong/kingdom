@@ -204,7 +204,10 @@ The worker prompt has **four mandatory closing actions** done at the end of each
 1. **Write raw** → `<LOGS>/raw/<ID>__<sub>-<lane-name>.md` (full raw output of the task)
 2. **Write curated** → `<LOGS>/<ID>.md` with `## TL;DR` at top (machine-readable digest)
 3. **Append 1-line status** → `<LOGS>/master_agent.log`
-4. **Touch sentinel flag** → `<LOGS>/done/<ID>__<sub>-<lane-name>.flag` (+ optional `cmux notify --pane <self> 'lane <lane-name> done: <ID>'` for sidebar badge)
+4. **Touch sentinel flag** → `<LOGS>/done/<ID>__<sub>-<lane-name>.flag` — AND fire two `cmux notify` calls (mandatory in PRIMARY mode):
+   - `cmux notify --surface "$CMUX_SURFACE_ID" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR from curated digest>"` — gives this pane a blue ring + tab lights up in cmux.app
+   - `cmux notify --workspace "$KING_WS" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR>"` — King's sidebar entry gets a badge + bell-icon panel logs the event
+   `$KING_WS` is sourced from `<LOGS>/workspace-refs.env`. See `cmux.md` → § Notification system for visual targeting reference.
 
 4-step write chain:
 

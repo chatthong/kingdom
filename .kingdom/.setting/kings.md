@@ -303,7 +303,26 @@ for OTHER_LANE in worker-1 worker-2 worker-3 co-worker-1; do
 done
 ```
 
-If any check fails: King writes the failure to the test report (below), does NOT request push approval, may dispatch a fix-task to the lane.
+If any check fails: King writes the failure to the test report (below), does NOT request push approval, may dispatch a fix-task to the lane. King also fires `cmux notify` to the originating master's workspace so the lane gets a blue ring + sidebar badge:
+
+```bash
+source "$LOGS/workspace-refs.env"   # exposes $WORKER_WS_N etc.
+cmux notify --workspace "$WORKER_WS_1" \
+  --title "👑 King · gate FAIL" \
+  --subtitle "<lane> · <sub-task-id>" \
+  --body "<which check failed in one line — typecheck / tests / dry-merge / overlap>"
+```
+
+If the gate PASSES and King is about to ask Ter "push?", fire a notification to the King's own workspace so Ter sees the prompt even when looking at a different workspace:
+
+```bash
+cmux notify --workspace "$KING_WS" \
+  --title "👑 King · gate pass · push?" \
+  --subtitle "<lane> · <sub-task-id>" \
+  --body "All gates green. Reply 'push' in King chat to publish feature/<topic>."
+```
+
+See [`cmux.md`](cmux.md) → § Notification system for `--surface` vs `--workspace` targeting (blue ring vs sidebar badge vs bell-panel entry).
 
 ---
 

@@ -108,7 +108,16 @@ Even though dispatch is interactive, the **artifact protocol is unchanged**. Whe
 
 Slug = `co-worker-N`. Master polls the flag the same way it does for autonomous workers.
 
-When Ter says "we're done with this UI task on co-worker-1", the co-worker fires the closer and signals the King. Then Ter can ask for the pre-commit gate + push.
+When Ter says "we're done with this UI task on co-worker-1", the co-worker fires the closer and signals the King. The closer Step 4 ALSO fires mandatory notifications (PRIMARY mode):
+
+```bash
+cmux notify --surface "$CMUX_SURFACE_ID" \
+  --title "🧑‍💼 co-worker-1 done" --subtitle "$ID" --body "$(head -1 $LOGS/$ID.md)"
+cmux notify --workspace "$KING_WS" \
+  --title "🧑‍💼 co-worker-1 done" --subtitle "$ID" --body "$(head -1 $LOGS/$ID.md)"
+```
+
+The co-worker's own pane gets a blue ring; the King's sidebar gets a badge. Then Ter can ask for the pre-commit gate + push. See [`workers.md`](workers.md) → "4-step closer" and [`cmux.md`](cmux.md) → § Notification system for the targeting reference.
 
 ---
 

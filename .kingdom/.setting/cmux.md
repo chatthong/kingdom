@@ -234,9 +234,17 @@ Or manually right-click the workspace in cmux.app sidebar → "Close Workspace".
 
 ---
 
-## Notify
+## Notification system
 
-Native cmux.app notifications. Kingdom uses this for cross-workspace alerts (Watchman → King; King → Ter on push-ready, gate-pass).
+cmux.app has a rich notification UX. Three visible surfaces:
+
+| Visual | Triggered by | What user sees |
+|---|---|---|
+| 🔵 **Blue ring on a pane / tab lights up** | `cmux notify --surface <ref>` | Pane border ring + tab title highlights. Best for "this pane needs attention now." |
+| 🔔 **Sidebar badge on workspace entry** | `cmux notify --workspace <ref>` | Workspace card shows numbered badge in the sidebar + dot indicator. Best for "this lane has news." |
+| 📋 **Notification panel (bell icon)** | Both above | Click the bell at the top of the sidebar — shows scrollable list of all unread notifications across workspaces. Jump to most-recent with one click. |
+
+**Most events use BOTH `--surface` AND `--workspace`** so the originating pane shows a ring AND the destination (typically the King's workspace) gets a sidebar badge. Two calls, two visual cues, one event.
 
 ```bash
 cmux notify \
@@ -248,12 +256,55 @@ cmux notify \
 
 | Flag | Effect |
 |---|---|
-| `--workspace` | Where the notification appears (typically `$KING_WS` so Ter sees it). |
-| `--title` | Bold header (prefix with role emoji). |
-| `--subtitle` | Secondary line (use for the type of event). |
-| `--body` | Main text (one short paragraph). |
+| `--workspace <ref>` | Sidebar badge on this workspace + bell-panel entry. |
+| `--surface <ref>` | Blue ring on this pane + tab light. (Targets a specific surface within a workspace.) |
+| `--title` | Bold header. **Always prefix with role emoji** (👑/👷/🧑‍💼/🕵️/🐱). |
+| `--subtitle` | Secondary line. Use for event class ("done", "develop RED", "CI failed", "push?"). |
+| `--body` | Main text — one short paragraph or sentence. |
 
-Watchman uses `cmux notify --workspace "$KING_WS"` for develop-RED, CI-fail, PR-mergeable alerts. King uses `cmux notify --workspace "$KING_WS"` to surface "push?" prompts when in a different workspace context.
+### Kingdom notification schema (canonical events)
+
+| Who | When | `--surface` | `--workspace` | Title | Subtitle |
+|---|---|---|---|---|---|
+| 👷 Worker / 🧑‍💼 Co-worker | 4-step closer Step 4 (sentinel just written) | own (`$CMUX_SURFACE_ID`) | `$KING_WS` | `👷 worker-N done` / `🧑‍💼 co-worker-N done` | `<sub-task-id>` |
+| 🐱 Tab sub-agent | 5-step closer Step 4 (before Step 5 self-close) | own | parent master ws | `🐱 sub · <model> · <slug>` | `<sub-task-id>` |
+| 🕵️ Watchman | develop RED detected | (skip) | `$KING_WS` | `🕵️ watchman-N` | `develop RED` |
+| 🕵️ Watchman | CI fail on a kingdom PR | (skip) | `$KING_WS` | `🕵️ watchman-N` | `CI failed · PR #N` |
+| 🕵️ Watchman | PR mergeable + green + approved + idle 30m | (skip) | `$KING_WS` | `🕵️ watchman-N` | `Ready to merge · PR #N` |
+| 👑 King | Pre-commit gate FAIL | (skip) | originating master ws | `👑 King · gate FAIL` | `<lane> · <sub-task-id>` |
+| 👑 King | Pre-commit gate PASS, asking "push?" | (skip) | `$KING_WS` | `👑 King · gate pass · push?` | `<lane> · <sub-task-id>` |
+| 👑 King → `/kingdom:exit` | Session ending, 5s heads-up per lane | (skip) | each lane ws | `👑 kingdom:exit` | `Session ending` |
+
+The schema keeps notifications scan-able in the bell panel: role emoji always in title, subtitle is the event class, body has the specific context.
+
+### Targeting cheat-sheet
+
+```bash
+# This pane needs attention NOW (blue ring on the sender's own pane)
+cmux notify --surface "$CMUX_SURFACE_ID" --title "👷 worker-1 done" --subtitle "BE-AUTH-3" --body "12 files, gates green"
+
+# That workspace has news (sidebar badge — most common for cross-workspace alerts)
+cmux notify --workspace "$KING_WS" --title "🕵️ watchman-1" --subtitle "develop RED" --body "Smoke broke on a1b2c3d4"
+
+# Both — ring on me + badge on the King's sidebar
+cmux notify --surface "$CMUX_SURFACE_ID" --workspace "$KING_WS" --title "👷 worker-1 done" --subtitle "BE-AUTH-3" --body "12 files"
+```
+
+### Notification panel
+
+The bell icon at the top of cmux.app's sidebar shows the count of unread notifications across all workspaces. Click it to see the rolling list, click any entry to jump to the originating workspace/pane. Kingdom relies on this panel as the "what needs my attention" dashboard — no separate `/kingdom:status` UI needed (though that's coming in v0.16 for a CLI summary).
+
+### What NOT to notify
+
+Don't fire `cmux notify` for low-value events:
+
+- ❌ Every `Bash` call a lane runs — too noisy
+- ❌ Every git fetch — happens constantly
+- ❌ Every sub-agent spawn — Agent(...) headless ones are silent by design; only tab-spawned ones notify on closer
+- ❌ Periodic heartbeats from watchman — write to log only, no notify
+- ❌ Mid-task progress per Layer — the closer event is the only checkpoint that notifies
+
+Reserve notifications for events that change what Ter or the King would do next.
 
 ---
 

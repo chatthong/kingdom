@@ -4,6 +4,31 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.2] — 2026-05-18
+
+The "actually wire up cmux.app notifications" release. Prior spec mentioned `cmux notify` but inconsistently — `--pane` (wrong flag), missing for some events, no dual-target pattern. This patch threads notifications through every kingdom event that needs Ter's attention, using cmux.app's three visible surfaces: blue ring on pane, sidebar badge on workspace, bell-panel entry.
+
+### Changed (notifications now mandatory in PRIMARY mode)
+
+- **4-step closer Step 4** in `workers.md` and `co-workers.md` — mandatory dual `cmux notify` calls:
+  - `--surface "$CMUX_SURFACE_ID"` → blue ring on the lane's own pane + tab lights up
+  - `--workspace "$KING_WS"` → badge on King's sidebar entry + bell-panel logs the event
+  - Previously was an optional "+ optional `cmux notify --pane <self>`" with the wrong flag (`--pane` doesn't exist; correct is `--surface`).
+- **Watchman alerts** in `watchmans.md` — schema standardised: `--title "🕵️ watchman-N"` + `--subtitle "<event class>"` (e.g., `develop RED`, `CI failed · PR #N`, `Ready to merge · PR #N`) + `--body "<one-line context>"`. All target `--workspace "$KING_WS"`.
+- **King gate notifications** in `kings.md`:
+  - Pre-commit gate FAIL → notify originating master's workspace (so the lane gets a sidebar badge + ring)
+  - Pre-commit gate PASS, asking "push?" → notify `$KING_WS` (Ter may be in another workspace; sidebar badge surfaces the prompt)
+
+### Added
+
+- **`.kingdom/.setting/cmux.md` § Notification system** — fully rewritten with three visible surfaces table (ring / badge / panel), kingdom notification schema (8 canonical events), targeting cheat-sheet, "what NOT to notify" list. Single source of truth for every notification call across the kit.
+
+### Why this matters
+
+cmux.app's notification UX is its strongest feature — blue rings, tab lights, sidebar badges, bell-icon panel with jump-to-recent. Prior versions used the wrong flag (`--pane` instead of `--surface`), missed events, and didn't use the dual-target pattern. v0.14.2 makes the kingdom's notification surface as polished as cmux.app's.
+
+---
+
 ## [0.14.1] — 2026-05-18
 
 ### Fixed

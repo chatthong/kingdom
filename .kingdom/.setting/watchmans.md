@@ -105,7 +105,10 @@ if [ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] || [ daily_smoke_overdue ]; the
     - Failing: <which command(s)>
     - **Next action:** King investigates; lanes paused until develop is green again.
     EOF
-    cmux notify --workspace kingdom "develop RED: <reason>"
+    cmux notify --workspace "$KING_WS" \
+      --title "🕵️ watchman-$WI" \
+      --subtitle "develop RED" \
+      --body "Smoke broke on origin/develop ${NEW_DEVELOP_SHA:0:8}. Lanes paused pending King review."
   fi
 fi
 
@@ -117,9 +120,24 @@ gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,merg
 # (5) Write WATCH_*.md for any state change
 # e.g., WATCH_<UTC>__pr-<N>_CI_failed.md, WATCH_<UTC>__pr-<N>_ready_to_merge.md, …
 
-# (6) cmux notify on alert-worthy transitions
-# - CI just failed → notify King
-# - PR mergeable + green + lead-approved + idle ≥30 min → notify Ter "PR #N ready to merge"
+# (6) cmux notify on alert-worthy transitions (target $KING_WS so the
+#     sidebar gets a badge + bell-icon panel logs the alert).
+# All watchman alerts use this schema:
+#   --title    "🕵️ watchman-N"
+#   --subtitle "<event class>"  e.g. "CI failed · PR #234"
+#   --body     "<one-line context>"
+#
+# Cases:
+#   - CI just failed     → cmux notify --workspace "$KING_WS" \
+#                            --title "🕵️ watchman-$WI" \
+#                            --subtitle "CI failed · PR #$N" \
+#                            --body "$(gh pr view $N --json statusCheckRollup -q '.statusCheckRollup[0].name')"
+#   - PR mergeable +
+#     green + approved +
+#     idle ≥30 min       → cmux notify --workspace "$KING_WS" \
+#                            --title "🕵️ watchman-$WI" \
+#                            --subtitle "Ready to merge · PR #$N" \
+#                            --body "All checks pass, lead approved, idle 30m+. Ter to merge."
 
 # (7) Update sidebar status
 cmux set-status --pane <self> "develop: <green|RED> | open PRs: <n> (<g> green, <r> red)"
