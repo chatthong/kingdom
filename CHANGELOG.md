@@ -4,6 +4,15 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.14.5] — 2026-05-18
+
+### Changed
+
+- **README: `## ⚡ Quick start` block added right after the hero** — popular-GitHub style. 4 commands you can copy-paste-and-go, plus a one-line "you now have 5 AI agents in cmux.app's sidebar" payoff, plus jump-links to the detail sections. Replaces the need to scroll past the cmux showcase + pillars to find install. The detail sections (Install, First time, Every day, The contract) stay where they are for users who want the full read.
+- **Hero quick-links updated** — now includes `[Quick start]` as the first link, `[Every day]` instead of `[Setup]`, and drops `[Compare]` (no comparison section yet).
+
+---
+
 ## [0.14.4] — 2026-05-18
 
 Docs polish — SEO + tighter install/setup/start. README hero gets a subtitle that includes the keywords people actually search for ("Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees + native cmux.app"). Install/setup/start sections trimmed to feel like a confident daily routine, not a tutorial. New "🛡 The contract" callout lists exactly what kingdom will not touch.
