@@ -150,6 +150,8 @@ ls -1t "$WS"/.kingdom/<project>/tasks/*__worker-3__*.md | head -1
 - ❌ Lane name in different positions across artifacts (must always be segment 2 for shell glob consistency)
 - ❌ Renaming a task file after creation (it's a frozen snapshot — write once)
 - ❌ Putting two lanes' work in one task file (one lane, one file, period)
+- ❌ **Implementing without exhaustive pattern grep first.** "I assume the project doesn't have X" is not allowed without grep evidence proving it. Use sub-agents — capacity is unlimited. The lazy-implementor failure mode caught by v0.17.2: worker added `metadata: Metadata = { canonical: "https://webshop.bonfire.gg/" }` at module top-level (hardcoded literal) when the project's `lib/brand-defaults.ts` had a comment block explicitly documenting "Read by `app/layout.tsx` via `process.env.X ?? BRAND_Y` pattern. Env reads live INSIDE the async RootLayout function so Next.js doesn't inline at build." Worker read the brief but didn't read the convention docs alongside.
+- ❌ **Saying "scripts/foo.sh doesn't seed X" without grepping all of `scripts/`.** Real failure: King said "compose.stateless.yml and 000_superscript.sh don't seed APP_BASE_URL" → user pushed back → King discovered `scripts/026_provision_frontend_env.sh` DOES seed it. **Don't claim absence without exhaustive grep.**
 
 ### `/kingdom:update` and other non-lane artifacts
 
@@ -184,9 +186,21 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 
 ## Plan (multi-layer)
 
-### Layer 1 — Discovery
-- [ ] Spawn N× Agent(haiku) to read <file globs>
-- [ ] Synthesise findings
+### Layer 1 — Discovery (MANDATORY exhaustive pattern search before any implementation)
+
+> **The "lazy implementor antidote" rule (v0.17.2+):** Before deciding "no existing pattern exists" or "I'll invent a new approach", the worker MUST exhaustively grep the project for existing references, conventions, env handling, scripts, and doc comments. Capacity is unlimited — fan out 5-10 Haiku scanners in parallel if needed. Default stance: **the project HAS a pattern; my job is to find it. Burden of proof is on me to demonstrate one doesn't exist.**
+
+- [ ] **Pattern grep — fan-out N× Agent(haiku) in parallel:**
+  - [ ] `grep -rln "<key-term>" --include='*.{ts,tsx,js,py,sh,yml,yaml,json,md,env,env.example}' .` (any file types relevant)
+  - [ ] Read every `.env*` and `.env.example` in the relevant subtree — these encode env conventions
+  - [ ] Read all `scripts/` files matching the topic — they often seed env / fixtures / provisioning
+  - [ ] Read all `lib/*-defaults.{ts,js,py}` / `lib/brand-defaults.*` / similar config-default files — they often have HOW-TO comments
+  - [ ] Read `compose.*.yml` / `docker-compose*.yml` for container env contracts
+  - [ ] Read `CLAUDE.md` (project) for project-specific conventions
+- [ ] **Synthesise findings — list in task file Step 1:**
+  - "Pattern found: `<file:line>` shows `<approach>` is the convention. Reusing it." → follow the pattern
+  - OR: "No pattern found. Grepped <N> files; checked <list>. Confirming new approach is safe with King before implementing." → escalate to King; do NOT silently invent
+- [ ] **Read any flagged comment-docs** — if `lib/<X>-defaults.ts` says "Read by `app/layout.tsx` via `process.env.X ?? BRAND_Y` pattern", THAT IS THE PATTERN. Follow it.
 
 ### Layer 2 — Strategy
 - [ ] Based on Layer 1, decide approach

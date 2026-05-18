@@ -4,6 +4,37 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.17.2] — 2026-05-18
+
+The "lazy implementor antidote" release. Real test caught a discipline failure: King had unlimited sub-agent capacity but used them as one-shot implementers without first doing exhaustive pattern discovery. Result: worker hardcoded a canonical URL when the project's `lib/brand-defaults.ts` already documented the env-driven pattern; King claimed `scripts/000_superscript.sh` doesn't seed `APP_BASE_URL` only to discover `scripts/026_provision_frontend_env.sh` DOES.
+
+User feedback (paraphrased): "We got many master with unlimited sub-agent but I still need to push back on common standard — it not understand project like lazy implementor."
+
+### Changed
+
+- **`.kingdom/.setting/workers.md` Layer-1 Discovery section rewritten** with the "lazy implementor antidote" rule:
+  - **Default stance**: "The project HAS a pattern; my job is to find it. Burden of proof is on me to show one doesn't exist."
+  - **Mandatory exhaustive pattern grep** before any implementation. Use sub-agents in parallel (capacity is unlimited).
+  - Concrete checklist: grep across the project, read `.env*` and `.env.example`, read all relevant `scripts/`, read `lib/*-defaults.*` for HOW-TO comments, read `compose.*.yml`, read project `CLAUDE.md`.
+  - Synthesise findings in task file Step 1: either "pattern found at <file:line>, reusing it" OR "no pattern found; grepped N files; confirming new approach with King BEFORE implementing".
+- **`.kingdom/.setting/kings.md` dispatch brief schema gets a NEW mandatory field**: `Patterns to grep first` — King specifies the file globs / search terms the worker MUST grep before implementing. Plus a `Default stance` line: "The project HAS a pattern. Find it before inventing. Burden of proof: if 'no pattern exists' — show me the grep output that proves it."
+
+### Added (anti-patterns)
+
+- ❌ **Implementing without exhaustive pattern grep first.** "I assume the project doesn't have X" is forbidden without grep evidence. Real failure: worker hardcoded `canonical: "https://webshop.bonfire.gg/"` at module top-level when `lib/brand-defaults.ts` had a comment block documenting the env pattern.
+- ❌ **Claiming "scripts/foo doesn't seed X" without grepping all of `scripts/`.** Real failure: King said "000_superscript.sh doesn't seed APP_BASE_URL" → user push-back → discovered `026_provision_frontend_env.sh` does.
+
+### Why this matters
+
+Capacity isn't the bottleneck — **discipline is**. King has unlimited sub-agents but was spawning them as "write this thing for me" rather than "find me everywhere this pattern might already live, then implement consistent with it." v0.17.2 makes pattern discovery a **mandatory first step** of every Layer-1 Discovery, with the burden of proof on the worker to demonstrate no pattern exists (via grep output) before inventing a new approach.
+
+### Non-breaking
+
+- No schema, command, or behaviour changes outside the procedural rules.
+- Existing in-flight tasks: King's next dispatch brief should include the `Patterns to grep first` field. Workers should run the exhaustive grep at Step 1 before any code change.
+
+---
+
 ## [0.17.1] — 2026-05-18
 
 Docs catch-up — v0.17.0 flipped the kingdom-merge model to working-tree overlay, but the README "Branch model" diagram + TL;DR still said "King merges them into kingdom" with `git merge --no-ff` arrows.

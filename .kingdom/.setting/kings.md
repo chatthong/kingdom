@@ -576,6 +576,14 @@ worker-1, task <sub-task-id>:
 
   Brief:        <2-4 lines — what to do + acceptance criteria>
   Source link:  <CSV row / GH issue URL / file path / anything pointing to the canonical task spec>
+  Patterns to grep first (MANDATORY — Layer 1 Discovery):
+    <file-or-glob #1>            # e.g. "lib/brand-defaults.ts" — read its comments for the pattern
+    <file-or-glob #2>            # e.g. ".env.example in apps/*/"
+    <file-or-glob #3>            # e.g. "scripts/*provision* *.sh"
+    <search-term>                # e.g. grep -rln "APP_BASE_URL"
+  Default stance:  The project HAS a pattern. Find it before inventing.
+                   Burden of proof: if "no pattern exists" — show me the grep
+                   output that proves it.
   Gate:         runs kingdom.json.gate.* after completion (standard)
   Closer:       4-step (raw + curated + log + sentinel flag) per workers.md
   Task file:    Step 0 — write <workspace>/.kingdom/<project>/tasks/<UTC>__worker-1__<id>.md before any sub-agent dispatch
