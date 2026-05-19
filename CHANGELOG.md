@@ -4,6 +4,38 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.24.0] — 2026-05-19
+
+**Critical fix: King is dispatcher, not executor.** A King session spent ~1m48s drafting a 9-batch "Worker-1 plan (final)" execution table in chat — scope decisions, file lists, AC flip targets, verification steps — instead of dispatching to worker-1. Lane workspaces had never been spawned. Zero tasks completed in the session. This release codifies three Tier-1 rules + adds a pre-dispatch lane-readiness gate to prevent recurrence.
+
+### Added
+
+- **R30 (Tier 1) King is ORCHESTRATOR ONLY — never executes task work itself.** Allowed verbs: plan-the-day, dispatch (`cmux send`), gate-fire, overlay onto kingdom, request push approval, read audits. BANNED: write code, make scoping decisions in chat, draft "Batch 1..N" execution plans in chat, run gates manually for a lane. **Hard 60s time budget** from `/kingdom:day` Step 4 reaching auto-dispatch to first `cmux send` firing.
+- **R31 (Tier 1) Lane workspaces MUST be spawned + verified BEFORE any dispatch.** `workspace-refs.env` must list every lane from `kingdom.json.shape`. `cmux tree --all` must show them alive. If missing, spawn first (idempotent). Render `spawn-complete` card BEFORE dispatch begins so the user visually confirms the sidebar shape. Prevents silent-failure pattern where King dispatches to non-existent workspace refs and polls forever.
+- **R32 (Tier 2) "Staged / waiting / dormant" is co-worker-ONLY.** Workers auto-claim from queue (per `kings.md` § Lane utilisation). If queue empty, lane shows `🐾 Idle (no claimable task)` but King keeps polling. Workers NEVER sit "awaiting your dictation" — only co-workers wait, only for explicit `pair on co-worker-N`. Watchmen always run `/loop`, never idle/waiting.
+- **`/kingdom:day` Step 0.5 — Lane-readiness gate.** New mandatory step BETWEEN Step 0 (parse args) and Step 1 (audit). Verifies every expected lane is listed in `workspace-refs.env` AND alive in `cmux tree --all`. Forces a `/kingdom:start` re-run if any lane is missing or stale. No dispatch fires until lanes are confirmed.
+- **`/kingdom:day` Step 4 — R30 budget enforcement.** Explicit `DISPATCH_START` timestamp; warns at 60s elapsed without first `cmux send`. Anti-pattern call-outs in step 4 prose: no multi-batch tables in chat, no "waiting for direction" for workers.
+
+### Incident summary (2026-05-19 morning)
+
+User's day: zero tasks completed. Symptoms:
+1. King chat history showed "Worker-1 plan (final)" 9-row markdown table with scope decisions ("Admin dropped from FE-P0-FOUND.5") + file-by-file changes + verification steps. That's worker work, not King work.
+2. Screenshot showed ONE cmux pane (King only). No worker / co-worker / watchman workspace tabs in the sidebar.
+3. King displayed `co-worker-1 staged · awaiting your dictation` AND treated worker-1 as if it was waiting too. User: "WTF for waiting i said that for co-working but you waiting for wtf is that shit."
+4. King had been "Crunched for 1m 48s · 1 local agent still running" — local agent was King's own planning, no real lane work.
+
+Root cause: previous rules said WHAT King does (`kings.md` § Dispatch) but didn't HARD-BAN King from executing work itself. R30/R31/R32 close those gaps as Tier-1/2 rules.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.24.0`.
+
+### Companion file
+
+- **`CLAUDE.md` (new at repo root)** — orients future Claude sessions to project state, recent version history, 13 key architectural decisions, working conventions, open threads, and pointers. Read this on every fresh session BEFORE touching the plugin.
+
+---
+
 ## [0.23.0] — 2026-05-19
 
 Per-task skill routing. King now picks up to 3 Claude Code skills per dispatch from a keyword mapping table, and the dispatch-brief carries them into the lane. Skills are **per-task, not per-lane-lifetime**: worker-2 doing a Supabase task gets `supabase:supabase`; the same worker-2 doing a shadcn task tomorrow gets `shadcn:shadcn-ui`. Previous-task skills don't persist (skills are per-invocation via the `Skill` tool anyway).

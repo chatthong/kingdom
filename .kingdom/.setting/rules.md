@@ -105,6 +105,50 @@ After gate-pass, King overlays the lane onto kingdom + prints review surface + a
 
 Sentinel exists + no matching test report exists → King auto-fires the gate without asking. Auto-gate ≠ auto-push; push still requires R1.
 
+### R30. King is ORCHESTRATOR ONLY — never executes task work itself — Tier 1 (v0.24.0+)
+
+**Allowed King verbs:** plan-the-day, dispatch (`cmux send`), gate-fire (`run_tier1_gate` / `run_tier2_gate`), overlay onto kingdom, request push approval, read audits.
+
+**BANNED King verbs:**
+
+- Write or edit project source code
+- Make scoping decisions in chat ("Admin dropped from FE-P0-FOUND.5", "Batch 1: dev_data.sql + ...", etc) — scoping happens in the **task file** written by the lane, not in chat
+- Run gates manually for a lane (lane's Tier-1 fires inside the lane's worktree)
+- Draft "Worker-N plan (final)" multi-batch tables in chat — that's a lane's `## Plan` section in its task file
+- Pause to "brainstorm" implementation details with the user — those decisions belong in the lane's Layer-2 Strategy after dispatch
+
+**Incident that motivated this rule (2026-05-19):** a King session spent ~1m48s "Crunched" drafting a 9-batch execution plan for `FE-P0-FOUND.5` in chat — files to touch, scope decisions (admin in/out), AC flip targets, verification steps — instead of dispatching to worker-1. Zero tasks completed in the session. Cause: King was acting as worker. Fix: this rule, plus R31 (verify lanes exist before dispatch) and R32 (workers don't "wait").
+
+**Hard time budget:** from `/kingdom:day` Step 4 reaching auto-dispatch, **no more than 60 seconds** elapses before the first `cmux send` fires to a worker. If King exceeds 60s of "planning in chat" between audit-done and first dispatch, that's a violation — re-read this rule and dispatch with whatever plan exists.
+
+### R31. Lane workspaces MUST be spawned + verified BEFORE any dispatch — Tier 1 (v0.24.0+)
+
+Before ANY `cmux send --workspace <ref>` fires:
+
+1. **Check `<LOGS>/workspace-refs.env`** exists and lists every lane from `kingdom.json.shape` (every worker, co-worker, watchman).
+2. **Run `cmux tree --all`** to verify the workspace refs are alive (not just in the env file, but actually rendered in cmux.app's sidebar).
+3. If any lane is missing, **spawn it FIRST** (idempotent — re-running `/kingdom:start` resumes existing lanes + creates missing ones).
+4. **Render the `spawn-complete` card** so the user visually confirms the sidebar shape BEFORE dispatch begins.
+5. Only after Step 4 does dispatch fire.
+
+**Silent-failure pattern this prevents:** King writes a beautiful dispatch brief, calls `cmux send --workspace workspace:24 -- "..."` to a workspace that no longer exists (closed, never spawned, or stale ref). cmux returns success on the send. No lane ever receives the brief. King polls for a sentinel that will never appear. User sees "lane idle" but King sees "dispatched, waiting." Hours wasted.
+
+**Incident that motivated this rule (2026-05-19):** King session ran without ever actually spawning lane workspaces. Sidebar had ONE pane (King's own). All "dispatches" landed in the void. User reported "since morning still 0 job."
+
+### R32. "Staged / waiting / dormant" is co-worker-ONLY — workers auto-claim — Tier 2 (v0.24.0+)
+
+Per-role idle behaviour:
+
+| Role | Idle behaviour |
+|---|---|
+| 👷 **Worker** | **Auto-claim** from queue per `kings.md` § Lane utilisation. If queue empty, lane shows `🐾 Idle` but King keeps polling for new pending tasks (Step 5c of `/kingdom:day` poll loop). Worker NEVER sits "awaiting your dictation". |
+| 🧑‍💼 **Co-worker** | **Dormant by default.** Activates only when user says `pair on co-worker-N`. Shows `💤 staged · awaiting pair-on signal`. This is the ONLY role where "waiting for user input" is correct. |
+| 🕵️ **Watchman** | **Always runs `/loop`.** Never idle, never waiting. Dynamic-pacing (5-15 min) means it's "asleep until next tick" — that's different from "waiting on user." |
+
+**Anti-pattern:** chat shows `worker-1 awaiting your dictation` or `worker-2 staged · waiting for direction`. Both are bugs. Workers don't wait — they pull. If no task fits worker-1's slot, dispatch it the next-best one, or mark it `🐾 idle (no claimable task)` and re-poll on the next cycle.
+
+**The morning of 2026-05-19 incident:** King treated worker-1 like a co-worker, "pausing" for user direction on scope decisions instead of dispatching it the task with the brief and letting Layer-2 Strategy happen inside the lane. That's R32 violation + R30 violation simultaneously.
+
 ### R22. The closer (4-step or 5-step) MUST fire on EVERY task completion — Tier 1
 
 Even on `blocked` / `cancelled` / `errored` exit, the worker writes:

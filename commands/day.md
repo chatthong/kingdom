@@ -84,6 +84,54 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 
 So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. King echoes this unit definition back in the kickoff brief.
 
+## Step 0.5 — Lane-readiness gate (rules.md R31 · MANDATORY) (v0.24.0+)
+
+Before ANY further step, verify that lane workspaces actually exist in cmux.app. **Skipping this is R31 violation.**
+
+```bash
+LANES_EXPECTED=$(jq -r '
+  (.shape.workers // 0) as $w
+  | (.shape["co-workers"] // 0) as $c
+  | (.shape.watchman // 0) as $wm
+  | (
+      [range(1; $w + 1)  | "worker-\(.)"],
+      [range(1; $c + 1)  | "co-worker-\(.)"],
+      [range(1; $wm + 1) | "watchman-\(.)"]
+    ) | flatten | .[]
+' "$PWD/.kingdom/${project}/kingdom.json")
+
+REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
+MISSING=""
+for lane in $LANES_EXPECTED; do
+  if ! grep -q "^${lane}_WS=" "$REFS_FILE" 2>/dev/null; then
+    MISSING="$MISSING $lane"
+  fi
+done
+
+if [ -n "$MISSING" ]; then
+  echo "⚠ Lanes not spawned: $MISSING"
+  echo "   Spawning before dispatch (R31)..."
+  # Force /kingdom:start to run (idempotent)
+  FORCE_SPAWN=1
+fi
+
+# Verify cmux side too — refs in env file but cmux.app doesn't show them = stale env
+if command -v cmux >/dev/null; then
+  ALIVE_REFS=$(cmux tree --all 2>/dev/null | grep -oE 'workspace:[0-9]+' | sort -u)
+  for lane in $LANES_EXPECTED; do
+    REF=$(grep "^${lane}_WS=" "$REFS_FILE" 2>/dev/null | cut -d= -f2)
+    if [ -n "$REF" ] && ! echo "$ALIVE_REFS" | grep -qF "$REF"; then
+      echo "⚠ Stale ref for $lane (env=$REF but not in cmux tree)"
+      FORCE_SPAWN=1
+    fi
+  done
+fi
+```
+
+If `FORCE_SPAWN=1`, Step 2 (`/kingdom:start`) is mandatory before Step 4 dispatch fires. Render the [`spawn-complete`](../.kingdom/.setting/cards/spawn-complete.md) card AFTER spawn so the user visually confirms the cmux sidebar shape before dispatch begins.
+
+**Never `cmux send --workspace <ref>` to a workspace not confirmed alive in `cmux tree`.** Silent failure pattern: send succeeds (cmux returns OK), but the workspace is gone, no lane receives the brief, King polls forever for a sentinel that won't appear.
+
 ## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
 
 ```bash
@@ -166,9 +214,39 @@ The **Suggested next task** synthesis draws from (in priority order):
 
 King picks 1-3 candidates and presents them as a numbered choice; the user can pick one or say "go" to accept the first.
 
-## Step 4 — Auto-dispatch (within cap/target)
+## Step 4 — Auto-dispatch (within cap/target) — HARD 60s TIME BUDGET (R30)
 
-For each idle lane with an obvious pending task match (per kings.md § Lane utilisation rules), King dispatches automatically. Respects `cap` (hard) and `target` (soft):
+**R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching — STOP and dispatch with the brief as-is. Layer-2 Strategy happens INSIDE the lane after dispatch, not in chat before dispatch.
+
+```bash
+DISPATCH_START=$(date +%s)
+for lane in $IDLE_LANES; do
+  # Skip co-workers (R32 — co-workers wait for explicit pair-on signal)
+  [[ "$lane" == co-worker-* ]] && continue
+  # Skip watchmen (always running /loop, never task-dispatched)
+  [[ "$lane" == watchman-* ]] && continue
+
+  # Pick next task from queue (skill-routing applied per R23)
+  TASK=$(pick_next_task_for "$lane")
+  [ -z "$TASK" ] && { echo "🐾 $lane idle (no claimable task)"; continue; }
+
+  SUGGESTED_SKILLS=$(pick_skills_for_task "$TASK" "$lane")
+  export LANE="$lane" TASK_ID="$TASK" SUGGESTED_SKILLS
+  BRIEF=$(render_card "dispatch-brief")
+
+  cmux send --workspace "$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)" -- "$BRIEF"
+  echo "▶ Dispatched $lane → $TASK"
+  TASKS_DISPATCHED_TODAY=$((TASKS_DISPATCHED_TODAY + 1))
+
+  # R30 budget check
+  ELAPSED=$(( $(date +%s) - DISPATCH_START ))
+  if [ "$ELAPSED" -gt 60 ]; then
+    echo "⚠ R30: dispatch budget exceeded (${ELAPSED}s). Continuing remaining dispatches but flag for review."
+  fi
+done
+```
+
+Cap/target enforcement:
 
 ```bash
 if [ "$TASKS_DISPATCHED_TODAY" -ge "$CAP" ]; then
@@ -182,6 +260,10 @@ fi
 ```
 
 Workers begin work in parallel (per rules.md R28 parallel-by-default).
+
+**Anti-pattern (R30 violation):** drafting "Worker-N plan (final)" multi-batch tables in CHAT before dispatching. That table belongs in the lane's task file as `## Plan` (Layer-2 Strategy), written BY the lane AFTER it receives the brief. King's brief lists the task ID + AC + skills + dependencies — not a 9-batch execution plan.
+
+**Anti-pattern (R32 violation):** printing `worker-1 staged · awaiting your dictation`. Workers don't wait. If worker-1 has no claimable task, mark it `🐾 idle (no claimable task)` and continue to the next lane. Only co-workers wait, and only for the explicit `pair on co-worker-N` signal.
 
 ## Step 5 — Auto-gate-poll loop (the perpetual part)
 
