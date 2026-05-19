@@ -18,9 +18,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-`v0.29.1: 4 commands, autonomous watchman, state-based save.`
+`v0.29.2: 4 commands, autonomous watchman, state-based save.`
 
-![Version](https://img.shields.io/badge/version-0.29.1-success)
+![Version](https://img.shields.io/badge/version-0.29.2-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -32,6 +32,28 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 [Quick start](#-quick-start) · [Install](#-install) · [Contract](#-the-contract) · [Slash commands](#-slash-commands) · [Docs](#-docs)
 
 </div>
+
+> [!WARNING]
+> ```text
+>                                       ╱─ ✦
+>                                     ╱
+>                                   ╱   ★
+>                           ╱╲    ╱
+>                          ╱  ╲ ╱       ✧
+>                         ╱ ★  ╳
+>                        ╱─────╲         ⚝
+>                    ┏━━━━━━━━━━━━━┓
+>                    ┃             ┃    ╱┃
+>                    ┃  ██    ██   ┃   ╱ ┃
+>                    ┃             ┃  ╱  ┃
+>                ┏━━━┫             ┣━┛   ┃
+>                ┃   ┃             ┃    ⬡
+>                ┗━━━┻━━━━━━━━━━━━━┛    ⬡
+>                      ┃ ┃  ┃ ┃          ⬡
+>                      ┃ ┃  ┃ ┃         ⬡
+>                      ╨ ╨  ╨ ╨        ⬡
+>               ✦   .  ★  .  ✧  .  ⚝  .  ✦
+> ```
 
 ---
 
@@ -52,11 +74,37 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 `/kingdom:work` is the daily ritual. It audits the project, spawns lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches and gates work until something needs your approval. You stay in one chat with the King. At end of day, `/kingdom:save` snapshots lane + task state so the next `/kingdom:work` picks up where you left off.
 
 ```bash
-# Optional caps + targets
-/kingdom:work my-app cap=5                  # hard stop at 5 task-completions today
-/kingdom:work my-app target=30-50/week      # soft budget; auto-splits to ~6-10/day
-/kingdom:work my-app target=30-50/day       # auto-splits to ~150-250/week
+# ── default daily ────────────────────────────────────────────────
+/kingdom:work my-app                          # use kingdom.json shape
+
+# ── caps + targets (pace control) ────────────────────────────────
+/kingdom:work my-app cap=5                    # hard stop at 5 task-completions today
+/kingdom:work my-app target=30-50/week        # soft budget; auto-splits to ~6-10/day
+/kingdom:work my-app target=30-50/day         # heavy pace; auto-splits to ~150-250/week
+
+# ── shape overrides (per-session, not persisted to kingdom.json) ─
+/kingdom:work my-app worker=1                 # solo prototype: 1 autonomous worker
+/kingdom:work my-app worker=2 co-worker=1     # mixed: 2 autonomous + 1 paired
+/kingdom:work my-app worker=0 co-worker=2     # pair-programming day, no auto work
+/kingdom:work my-app worker=5 watchman=2      # unattended overnight, heavy monitoring
+/kingdom:work my-app worker=1 co-worker=0 watchman=0   # quick session, no overhead
+
+# ── combined: shape + cap + target ───────────────────────────────
+/kingdom:work my-app worker=3 co-worker=1 cap=8                   # full day, capped
+/kingdom:work my-app worker=5 watchman=2 target=40-60/day         # heavy auto, weekly visible
+/kingdom:work my-app worker=2 co-worker=1 target=30-50/week       # standard pace
 ```
+
+**Pick a shape by situation:**
+
+| Situation | Recommended | Why |
+|---|---|---|
+| Solo prototype / one-person repo | `worker=1 co-worker=0 watchman=0` | Minimal overhead; one autonomous lane |
+| Standard day (default) | `worker=3 co-worker=1 watchman=1` | 3 autonomous + 1 paired + monitoring |
+| UI/design session | `worker=0 co-worker=2 watchman=1` | All paired with you; watchman covers `develop` |
+| Heavy autonomous batch | `worker=5 co-worker=0 watchman=2` | Maximum parallelism; double watchmen for safety |
+| Quick focused session | `worker=2 cap=3` | 2 lanes, hard stop at 3 task-completions |
+| Sustainable weekly cadence | `worker=3 target=30-50/week` | Soft budget; King paces dispatch to hit band |
 
 You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman — each in its own colour-coded workspace, all coordinated through your one chat with the King.
 

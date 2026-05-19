@@ -4,6 +4,22 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.29.2] — 2026-05-19
+
+README polish: ASCII wizard mascot under the header (wrapped in `[!WARNING]` for amber/orange tint in GitHub rendering — closest to the mascot's terracotta colour without resorting to SVG) + expanded `/kingdom:work` shape-override examples with situation guide.
+
+### Added
+
+- **ASCII wizard mascot** in `README.md` header (Option E, "wizard mid-cast" — mascot + staff + casting sigil + warding stars). Rendered inside a `> [!WARNING]` GitHub alert frame so it gets an amber/orange-tinted border that approximates the mascot's terracotta. GitHub markdown doesn't support arbitrary inline text colour, so `[!WARNING]` is the closest stock option.
+- **Expanded `/kingdom:work` examples** in Quick start. Previous block had 3 examples (`cap` + 2 `target` variants). New block has 12 examples in 4 categories: default daily, caps + targets (pace control), shape overrides (per-session, not persisted), combined patterns.
+- **Shape-by-situation guide** (new 6-row table in Quick start). Maps common scenarios to recommended shape + reason: solo prototype, standard day, UI/design session, heavy autonomous batch, quick focused session, sustainable weekly cadence.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge + tagline — version → `0.29.2`.
+
+---
+
 ## [0.29.1] — 2026-05-19
 
 Audit + fix-up: stale references to v0.29.0-deleted commands across 22 files. Shipped via 5 parallel Haiku audits + 4 parallel Sonnet fixers + README polish pass.
