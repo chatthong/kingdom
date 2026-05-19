@@ -18,9 +18,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-`v0.29.2: 4 commands, autonomous watchman, state-based save.`
+`v0.29.3: 4 commands, autonomous watchman, state-based save, skill-aware execution.`
 
-![Version](https://img.shields.io/badge/version-0.29.2-success)
+![Version](https://img.shields.io/badge/version-0.29.3-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -32,28 +32,6 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 [Quick start](#-quick-start) · [Install](#-install) · [Contract](#-the-contract) · [Slash commands](#-slash-commands) · [Docs](#-docs)
 
 </div>
-
-> [!WARNING]
-> ```text
->                                       ╱─ ✦
->                                     ╱
->                                   ╱   ★
->                           ╱╲    ╱
->                          ╱  ╲ ╱       ✧
->                         ╱ ★  ╳
->                        ╱─────╲         ⚝
->                    ┏━━━━━━━━━━━━━┓
->                    ┃             ┃    ╱┃
->                    ┃  ██    ██   ┃   ╱ ┃
->                    ┃             ┃  ╱  ┃
->                ┏━━━┫             ┣━┛   ┃
->                ┃   ┃             ┃    ⬡
->                ┗━━━┻━━━━━━━━━━━━━┛    ⬡
->                      ┃ ┃  ┃ ┃          ⬡
->                      ┃ ┃  ┃ ┃         ⬡
->                      ╨ ╨  ╨ ╨        ⬡
->               ✦   .  ★  .  ✧  .  ⚝  .  ✦
-> ```
 
 ---
 

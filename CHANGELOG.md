@@ -4,6 +4,43 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.29.3] — 2026-05-19
+
+Skill-aware execution: King + lanes resolve a skill set BEFORE any work. New R41 makes this a Tier-1 obligation. Plus removed the ASCII wizard from README (rendered poorly in dark mode) + 15 new skill rows in routing table (prisma family + remaining superpowers family).
+
+### Added
+
+- **R41 (Tier 1) Auto-discover and use the right skill BEFORE any work.** At task receipt, actor resolves a skill set via 3-step priority: (1) fast path = `pick_skills_for_task` against routing table; (2) fallback = system-reminder skill list match by description; (3) no-skill is valid (skip rather than load a vaguely-related skill). Includes a 12-row domain→skill quick map (frontend, prisma, supabase, stripe, figma, plugin-dev, file formats, claude api, hugging face, security, code review, git workflow) and a 10-skill process map for King-side planning (brainstorming, writing-plans, TDD, systematic-debugging, verification-before-completion, dispatching-parallel-agents, subagent-driven-development, using-git-worktrees, finishing-a-development-branch, etc).
+- **skill-routing.md mapping rows** — 15 new P1 entries:
+  - **Prisma family (7):** `prisma-cli`, `prisma-client-api`, `prisma-database-setup`, `prisma-postgres`, `prisma-postgres-setup`, `prisma-upgrade-v7`, `prisma-driver-adapter-implementation`
+  - **Remaining superpowers (8):** `executing-plans`, `subagent-driven-development`, `dispatching-parallel-agents`, `using-git-worktrees`, `finishing-a-development-branch`, `requesting-code-review`, `receiving-code-review`, `writing-skills`
+- **Auto-discovery fallback section** in `skill-routing.md` — documents the 4-step fallback when routing table returns 0 matches (list available skills → match by description → invoke best fit → skip if no confident match). Distinguishes King-side process skills (invoked directly) from lane-side domain skills (via dispatch-brief).
+
+### Removed
+
+- **ASCII wizard mascot** from README. Rendered poorly in dark mode terminals (sigil column looked like floating debris next to mascot). Removed entirely — README header is cleaner without it.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge + tagline — version → `0.29.3`. Tagline updated to "4 commands, autonomous watchman, state-based save, skill-aware execution."
+
+### Cumulative rules count
+
+| Tier | Count | IDs |
+|---|---|---|
+| Tier 1 (IRON-CLAD) | 18 (was 17, +R41) | R1-R7, R22, R23, R30, R31, R33-R39, R41 |
+| Tier 2 (STRONG DEFAULTS) | 17 | R8-R16, R24-R29, R32, R40 |
+| Tier 3 (CONVENTIONS) | 5 | R17-R21 |
+| **Total** | **40** | |
+
+Wait — that's 18+17+5 = 40, but R41 brings the highest ID to 41 with R32 (Tier 2) between R31 and R33. Let me recount: R1-R7 (7) + R22 (1) + R23 (1) + R30 (1) + R31 (1) + R33 (1) + R34 (1) + R35 (1) + R36 (1) + R37 (1) + R38 (1) + R39 (1) + R41 (1) = 18 Tier 1. R8-R16 (9) + R24-R29 (6) + R32 (1) + R40 (1) = 17 Tier 2. R17-R21 (5) = 5 Tier 3. Total = **40 active rules**. ID range R1-R41 with no R20a/R30a sub-rules, just plain monotonic numbering. ✅
+
+### Apply on consumer side
+
+Re-run `/kingdom:init <project>` to sync the new `skill-routing.md` rows + updated `rules.md` (R41) into the workspace copy. Next `/kingdom:work` invocation will pick up the routing table changes automatically (matcher reads workspace copy each dispatch).
+
+---
+
 ## [0.29.2] — 2026-05-19
 
 README polish: ASCII wizard mascot under the header (wrapped in `[!WARNING]` for amber/orange tint in GitHub rendering — closest to the mascot's terracotta colour without resorting to SVG) + expanded `/kingdom:work` shape-override examples with situation guide.
