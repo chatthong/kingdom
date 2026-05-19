@@ -4,6 +4,38 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.25.0] — 2026-05-19
+
+**Critical fix: King now actually seeks existing job state at session start.** v0.24.0 added R31 to verify lanes are spawned before dispatch, but the check was cmux-centric and missed two cases: (a) AGENT-mode fallback where `.worktrees/` is the real "lanes exist" signal, and (b) **King not reading `.kingdom/<project>/tasks/` at all before deciding what to dispatch** — leading to fresh task files opened on top of in-flight ones.
+
+### Added
+
+- **R33 (Tier 1) King MUST read existing task state BEFORE dispatching new tasks.** At session start AND every `/kingdom:day` Step 4 dispatch round, King scans `.kingdom/<project>/tasks/*.md` newest-first, classifies each by Status + sentinel presence, builds a **resume queue** (in-flight, no sentinel) and a **decision queue** (blocked, awaiting user input). Resume takes priority over new dispatch. NEVER open a fresh task file for a lane that already has an in-flight one.
+- **R31 expanded — three-mode-aware** (PRIMARY=cmux / FALLBACK=tmux / AGENT=in-process). Universal "lanes exist" check is `.worktrees/<lane>/` directories. Mode-specific dispatch mechanism verified ON TOP (cmux refs OR tmux session OR nothing extra for AGENT). If worktrees exist but PRIMARY verification fails, fall back to AGENT mode instead of re-spawning cmux workspaces. Prevents wasted re-spawn attempts when prior session left worktrees alive.
+- **`/kingdom:day` Step 0.5 rewritten** for mode awareness. `.worktrees/` check first (universal), then mode detection (PRIMARY → FALLBACK → AGENT), then mode-appropriate spawn-complete card render.
+- **`/kingdom:day` Step 0.6 — Resume scan** (new mandatory step BETWEEN Step 0.5 lane-readiness and Step 1 audit). Scans task files, builds resume + decision queues, renders new `resume-queue` card if either has items.
+- **`cards/resume-queue.md`** (new, 20th card) — `[!IMPORTANT]` flavour, renders in-flight tasks + blocked tasks, prompts user for `resume all` / `resume <lane>` / `unblock <task-id>` / `cancel <task-id>` / `go`.
+
+### Incident summary (2026-05-19 afternoon)
+
+User ran `/kingdom:day bfg-swt`. Symptoms:
+1. King ran R31 check, saw `workspace-refs.env` missing, said "lanes not spawned" — but `.worktrees/worker-1` through `.worktrees/watchman-1` all existed (from prior PRIMARY session). King didn't check worktrees, only cmux refs.
+2. King considered spawning 5 fresh cmux workspaces, ran ~5 minutes of investigation, eventually printed a manual kickoff brief in chat instead.
+3. King's "Suggested next tasks" pulled candidates from project TODO ledger while ignoring the worker-1 task file from morning marked `discovery-complete` with 2 soft blockers needing user input.
+4. User: "it not event seek for kingdom latest job ... scan on current branch we start work for 3 brach already, recheck at task ... i want continue work 3 worker."
+
+Root cause: R31 was cmux-centric (missed worktree truth in AGENT-mode); no rule required reading task state before dispatch (R33 closes this).
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.25.0`.
+
+### Apply on consumer side
+
+Re-run `/kingdom:init` (workspace-only) to sync new `rules.md` (R31 expanded + R33 added) and the new `cards/resume-queue.md` into the workspace copy.
+
+---
+
 ## [0.24.0] — 2026-05-19
 
 **Critical fix: King is dispatcher, not executor.** A King session spent ~1m48s drafting a 9-batch "Worker-1 plan (final)" execution table in chat — scope decisions, file lists, AC flip targets, verification steps — instead of dispatching to worker-1. Lane workspaces had never been spawned. Zero tasks completed in the session. This release codifies three Tier-1 rules + adds a pre-dispatch lane-readiness gate to prevent recurrence.

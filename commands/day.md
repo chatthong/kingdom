@@ -84,9 +84,9 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 
 So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. King echoes this unit definition back in the kickoff brief.
 
-## Step 0.5 — Lane-readiness gate (rules.md R31 · MANDATORY) (v0.24.0+)
+## Step 0.5 — Lane-readiness gate (rules.md R31 · MANDATORY) (v0.24.0+, mode-aware in v0.25.0)
 
-Before ANY further step, verify that lane workspaces actually exist in cmux.app. **Skipping this is R31 violation.**
+Before ANY further step, verify lane infrastructure. Per R31, the kingdom runs in three modes (PRIMARY=cmux / FALLBACK=tmux / AGENT=in-process) and the universal "lanes exist" check is **`.worktrees/<lane>/` directories**.
 
 ```bash
 LANES_EXPECTED=$(jq -r '
@@ -100,37 +100,101 @@ LANES_EXPECTED=$(jq -r '
     ) | flatten | .[]
 ' "$PWD/.kingdom/${project}/kingdom.json")
 
-REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
-MISSING=""
+# Step 0.5a — Universal check: .worktrees/ directories exist
+PROJ="$PWD/${project}"
+MISSING_WORKTREES=""
 for lane in $LANES_EXPECTED; do
-  if ! grep -q "^${lane}_WS=" "$REFS_FILE" 2>/dev/null; then
-    MISSING="$MISSING $lane"
-  fi
+  [ -d "$PROJ/.worktrees/$lane" ] || MISSING_WORKTREES="$MISSING_WORKTREES $lane"
 done
 
-if [ -n "$MISSING" ]; then
-  echo "⚠ Lanes not spawned: $MISSING"
-  echo "   Spawning before dispatch (R31)..."
-  # Force /kingdom:start to run (idempotent)
-  FORCE_SPAWN=1
+if [ -n "$MISSING_WORKTREES" ]; then
+  echo "⚠ Worktrees missing: $MISSING_WORKTREES"
+  echo "   Running /kingdom:start to create them (idempotent)..."
+  FORCE_START=1
 fi
 
-# Verify cmux side too — refs in env file but cmux.app doesn't show them = stale env
-if command -v cmux >/dev/null; then
+# Step 0.5b — Mode detection (PRIMARY vs FALLBACK vs AGENT)
+MODE="AGENT"   # default
+REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
+
+if command -v cmux >/dev/null 2>&1 && [ -f "$REFS_FILE" ]; then
   ALIVE_REFS=$(cmux tree --all 2>/dev/null | grep -oE 'workspace:[0-9]+' | sort -u)
+  ALL_ALIVE=1
   for lane in $LANES_EXPECTED; do
     REF=$(grep "^${lane}_WS=" "$REFS_FILE" 2>/dev/null | cut -d= -f2)
-    if [ -n "$REF" ] && ! echo "$ALIVE_REFS" | grep -qF "$REF"; then
-      echo "⚠ Stale ref for $lane (env=$REF but not in cmux tree)"
-      FORCE_SPAWN=1
+    if [ -z "$REF" ] || ! echo "$ALIVE_REFS" | grep -qF "$REF"; then
+      ALL_ALIVE=0
+      break
     fi
   done
+  [ "$ALL_ALIVE" = "1" ] && MODE="PRIMARY"
+fi
+
+if [ "$MODE" = "AGENT" ] && tmux ls 2>/dev/null | grep -q "^kingdom-${project}:"; then
+  MODE="FALLBACK"
+fi
+
+echo "▶ Dispatch mode: $MODE"
+```
+
+**If `FORCE_START=1`**: run Step 2 (`/kingdom:start`) before Step 4 dispatch.
+
+**If worktrees exist but PRIMARY/FALLBACK verification failed**: do NOT re-spawn cmux workspaces. Drop to `MODE=AGENT` and dispatch via `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<lane> && ...")`. Re-spawning cmux when worktrees are already alive wastes time and may re-enter prior silent-failure modes (per memory `feedback_kingdom_cmux_dispatch_fallback.md`).
+
+Render the [`spawn-complete`](../.kingdom/.setting/cards/spawn-complete.md) card with the detected MODE so the user knows which dispatch mechanism is active.
+
+**Never dispatch to a lane whose worktree directory doesn't exist.** That's the silent-failure invariant: worktree absent = dispatch goes to /dev/null.
+
+## Step 0.6 — Resume scan (rules.md R33 · MANDATORY) (v0.25.0+)
+
+Read existing task state BEFORE deciding what to dispatch. King MUST resume in-flight work before opening new task files.
+
+```bash
+TASKS_DIR="$PWD/.kingdom/${project}/tasks"
+DONE_DIR="$PWD/.kingdom/${project}/logs/done"
+
+RESUME_QUEUE=""
+DECISION_QUEUE=""
+
+# Scan tasks newest-first
+for task_file in $(ls -1t "$TASKS_DIR"/*.md 2>/dev/null); do
+  base=$(basename "$task_file" .md)
+  lane=$(echo "$base" | sed 's/^[0-9-]*T[0-9]*Z__//;s/__.*//')
+  task_id=$(echo "$base" | sed 's/.*__//')
+
+  # Check status
+  status=$(grep -E '^- \[x\] (planning|executing|verifying|done|blocked|cancelled)' "$task_file" | tail -1 | grep -oE '(planning|executing|verifying|done|blocked|cancelled)')
+  [ -z "$status" ] && status="planning"
+
+  # Check sentinel
+  has_sentinel=0
+  ls "$DONE_DIR"/*"__${lane}__${task_id}.flag" >/dev/null 2>&1 && has_sentinel=1
+
+  case "$status" in
+    done|cancelled)
+      continue ;;
+    blocked)
+      DECISION_QUEUE+="${lane}|${task_id}|blocked"$'\n' ;;
+    planning|executing|verifying)
+      if [ "$has_sentinel" = "0" ]; then
+        RESUME_QUEUE+="${lane}|${task_id}|${status}"$'\n'
+      fi
+      ;;
+  esac
+done
+
+# Render the resume-queue card if anything in either queue
+if [ -n "$RESUME_QUEUE" ] || [ -n "$DECISION_QUEUE" ]; then
+  export RESUME_QUEUE DECISION_QUEUE
+  render_card "resume-queue"
 fi
 ```
 
-If `FORCE_SPAWN=1`, Step 2 (`/kingdom:start`) is mandatory before Step 4 dispatch fires. Render the [`spawn-complete`](../.kingdom/.setting/cards/spawn-complete.md) card AFTER spawn so the user visually confirms the cmux sidebar shape before dispatch begins.
+**Resume queue takes priority over new dispatch.** In Step 4, lanes already in-flight get re-briefed with `[RESUME]` flag pointing at the same task ID + the last `## Progress notes` line. NEVER open a fresh task file for a lane that already has an in-flight one — that orphans the old file and confuses the audit trail.
 
-**Never `cmux send --workspace <ref>` to a workspace not confirmed alive in `cmux tree`.** Silent failure pattern: send succeeds (cmux returns OK), but the workspace is gone, no lane receives the brief, King polls forever for a sentinel that won't appear.
+**Decision queue items** surface in the [`suggested-task`](../.kingdom/.setting/cards/suggested-task.md) card as `→ Unblock <task-id>` candidates so the user resolves blockers before new work loads.
+
+## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
 
 ## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
 

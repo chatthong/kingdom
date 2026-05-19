@@ -121,19 +121,37 @@ Sentinel exists + no matching test report exists → King auto-fires the gate wi
 
 **Hard time budget:** from `/kingdom:day` Step 4 reaching auto-dispatch, **no more than 60 seconds** elapses before the first `cmux send` fires to a worker. If King exceeds 60s of "planning in chat" between audit-done and first dispatch, that's a violation — re-read this rule and dispatch with whatever plan exists.
 
-### R31. Lane workspaces MUST be spawned + verified BEFORE any dispatch — Tier 1 (v0.24.0+)
+### R31. Lane infrastructure MUST be spawned + verified BEFORE any dispatch — Tier 1 (v0.24.0+, expanded v0.25.0)
 
-Before ANY `cmux send --workspace <ref>` fires:
+The kingdom can run in **three modes** for lane dispatch (per memory `feedback_kingdom_cmux_dispatch_fallback.md`):
 
-1. **Check `<LOGS>/workspace-refs.env`** exists and lists every lane from `kingdom.json.shape` (every worker, co-worker, watchman).
-2. **Run `cmux tree --all`** to verify the workspace refs are alive (not just in the env file, but actually rendered in cmux.app's sidebar).
-3. If any lane is missing, **spawn it FIRST** (idempotent — re-running `/kingdom:start` resumes existing lanes + creates missing ones).
-4. **Render the `spawn-complete` card** so the user visually confirms the sidebar shape BEFORE dispatch begins.
-5. Only after Step 4 does dispatch fire.
+| Mode | Lane backing | Verification source-of-truth |
+|---|---|---|
+| **PRIMARY** (cmux.app) | `cmux new-workspace` per lane | `workspace-refs.env` + `cmux tree --all` shows alive |
+| **FALLBACK** (tmux) | `tmux new-session -d -s kingdom-<project>` + windows | `tmux ls` shows the session |
+| **AGENT** (in-process) | `Agent(subagent_type=...)` sub-agents inside King's session | `.worktrees/<lane>/` directories exist + lane branches exist |
 
-**Silent-failure pattern this prevents:** King writes a beautiful dispatch brief, calls `cmux send --workspace workspace:24 -- "..."` to a workspace that no longer exists (closed, never spawned, or stale ref). cmux returns success on the send. No lane ever receives the brief. King polls for a sentinel that will never appear. User sees "lane idle" but King sees "dispatched, waiting." Hours wasted.
+**In ALL modes, the `.worktrees/<lane>/` directories MUST exist BEFORE dispatch.** That's the universal truth: worktrees = lanes exist for git purposes. The cmux refs / tmux session / Agent calls are mode-specific dispatch mechanisms ON TOP of worktrees.
 
-**Incident that motivated this rule (2026-05-19):** King session ran without ever actually spawning lane workspaces. Sidebar had ONE pane (King's own). All "dispatches" landed in the void. User reported "since morning still 0 job."
+**Verification sequence (in this order):**
+
+1. **`.worktrees/<lane>/` directories exist** for every lane in `kingdom.json.shape` — `ls .worktrees/worker-1 .worktrees/worker-2 ...`. If missing, run `git worktree add` (idempotent).
+2. **Mode-specific dispatch mechanism is alive:**
+   - PRIMARY: `workspace-refs.env` lists every lane + `cmux tree --all` shows them.
+   - FALLBACK: `tmux ls | grep kingdom-<project>` matches.
+   - AGENT: no extra check (in-process, always available; just confirm worktrees from step 1).
+3. **Render `spawn-complete` card** so the user visually confirms shape (cmux sidebar for PRIMARY, tmux session list for FALLBACK, "Agent fallback mode" notice for AGENT) BEFORE dispatch begins.
+4. Only after Step 3 does any dispatch fire.
+
+**Silent-failure pattern this prevents:** King writes a beautiful dispatch brief, sends to a target that doesn't exist (missing workspace ref, dead tmux session, missing worktree). Dispatch returns success. No lane ever receives the brief. King polls for a sentinel that will never appear. Hours wasted.
+
+**Mode detection:** if PRIMARY checks fail but worktrees exist, fall back to AGENT mode (King uses `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<lane> && ...")` — same brief, no cmux required). Don't insist on cmux when worktrees already exist; that's the gap that wasted ~5 minutes of "lanes not spawned" investigation when worktrees were sitting there the whole time.
+
+**Incident sequence (2026-05-19):**
+- Session A (early): King session ran without ever spawning lane workspaces. Sidebar had ONE pane. All "dispatches" landed in the void. User: "since morning still 0 job."
+- Session B (later same day, after v0.24.0): K31 fired (workspace-refs.env missing) and triggered a spawn flow — but `.worktrees/` already had all 5 lanes from a prior PRIMARY session. King could have used AGENT-mode dispatch immediately; instead it considered spawning 5 fresh cmux workspaces, ran ~5m of investigation, then printed a manual kickoff brief. User: "it not even seek for kingdom latest job."
+
+The fix: R31 now treats `.worktrees/` as the canonical "lanes exist" check; cmux refs are the PRIMARY-mode overlay, not the only valid form.
 
 ### R32. "Staged / waiting / dormant" is co-worker-ONLY — workers auto-claim — Tier 2 (v0.24.0+)
 
@@ -148,6 +166,27 @@ Per-role idle behaviour:
 **Anti-pattern:** chat shows `worker-1 awaiting your dictation` or `worker-2 staged · waiting for direction`. Both are bugs. Workers don't wait — they pull. If no task fits worker-1's slot, dispatch it the next-best one, or mark it `🐾 idle (no claimable task)` and re-poll on the next cycle.
 
 **The morning of 2026-05-19 incident:** King treated worker-1 like a co-worker, "pausing" for user direction on scope decisions instead of dispatching it the task with the brief and letting Layer-2 Strategy happen inside the lane. That's R32 violation + R30 violation simultaneously.
+
+### R33. King MUST read existing task state BEFORE dispatching new tasks — Tier 1 (v0.25.0+)
+
+At session start (per R14) and at every `/kingdom:day` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**:
+
+1. **`ls -t .kingdom/<project>/tasks/*.md`** — newest first.
+2. For each task file: read `## Status` checkboxes. Classify:
+   - `done` / `cancelled` → ignore.
+   - `planning` / `executing` / `verifying` (no matching sentinel in `<LOGS>/done/`) → **resume queue**.
+   - `blocked` → **decision queue** (lane needs user input or dependency resolution).
+3. **Resume queue takes priority over new dispatch.** Lanes already in-flight get re-briefed with `[RESUME]` flag + same task ID + their last `## Progress notes` line. NEVER open a fresh task file for a lane that already has an in-flight one.
+4. **Decision queue items get surfaced in the `suggested-task` card** with `→ Unblock <task-id>` as a candidate so the user can resolve before new work loads.
+5. Only AFTER resume + decision queues are addressed does Step 4 auto-dispatch reach for new tasks from the project ledger.
+
+**Render** the `resume-queue` card (new in v0.25.0) right after `daily-status` if any in-flight task files exist.
+
+**Anti-pattern:** King ignores `.kingdom/<project>/tasks/2026-05-19T0353Z__worker-1__FE-P0-FOUND.5.md` (status: discovery-complete, 2 soft blockers), starts drafting a fresh dispatch for worker-1 from scratch. Now worker-1 has TWO task files for overlapping work, the old one rots, sentinels mismatch, audit-trail corrupts.
+
+**Why Tier 1:** ignoring in-flight task files = orphaning real work + duplicating effort + confusing the audit trail. This is correctness, not cosmetic.
+
+**Incident that motivated this rule (2026-05-19):** King session greeted user with "Suggested next tasks:" candidates pulled from the project ledger, while `.kingdom/bfg-swt/tasks/` had a worker-1 task file from the morning with Status=discovery-complete waiting on 2 user-decision blockers. The right behaviour: open with "Resume worker-1 FE-P0-FOUND.5? Two blockers need your call: A=<X> B=<Y>" — that's both decision-queue item + resume candidate in one prompt. King missed it entirely because R14 read-order didn't enforce reading task state, only meta-state (memory, watchman state, README).
 
 ### R22. The closer (4-step or 5-step) MUST fire on EVERY task completion — Tier 1
 
