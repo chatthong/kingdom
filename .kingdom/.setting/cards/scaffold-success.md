@@ -20,8 +20,8 @@
 > │                                                         │
 > │  Next:                                                  │
 > │    1. Edit .kingdom/${PROJECT}/kingdom.json → gate.*    │
-> │    2. Run /kingdom:doctor to verify deps                │
-> │    3. Run /kingdom:day ${PROJECT} to start your day     │
+> │    2. Run /kingdom:self-care to verify deps             │
+> │    3. Run /kingdom:work ${PROJECT} to start your day    │
 > ╰────────────────────────────────────────────────────────╯
 > ```
 ```

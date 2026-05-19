@@ -1,7 +1,7 @@
 # task-complete
 
 **Fires when:** Tier-2 gate passes on a lane's overlay; just before `push-prompt` fires.
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 5 auto-gate-poll loop.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5 auto-gate-poll loop.
 
 ## Template
 

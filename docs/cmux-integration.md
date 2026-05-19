@@ -2,7 +2,7 @@
 
 > Part of the [kingdom](../README.md) docs.
 
-The kingdom is built for **manaflow/cmux.app** as the PRIMARY mode (raw tmux + headless `claude -p` are graceful fallbacks). When you run `/kingdom:day my-app`, cmux.app's sidebar fills with one **workspace per role**, each in its own colour, each with its own Claude session, each notify-able independently.
+The kingdom is built for **manaflow/cmux.app** as the PRIMARY mode (raw tmux + headless `claude -p` are graceful fallbacks). When you run `/kingdom:work my-app`, cmux.app's sidebar fills with one **workspace per role**, each in its own colour, each with its own Claude session, each notify-able independently.
 
 ```mermaid
 graph TB
@@ -56,7 +56,7 @@ graph TB
     W[🪟 cmux.app window<br/>where you launch claude]
     W ==> K[🏢 Workspace · 👑 King<br/>amber · pinned · your conversation]
 
-    K -.->|"/kingdom:start spawns<br/>cmux new-workspace ×N"| M1[🏢 Workspace · 👷 worker-1<br/>Purple · autonomous lane]
+    K -.->|"/kingdom:work spawns<br/>cmux new-workspace ×N"| M1[🏢 Workspace · 👷 worker-1<br/>Purple · autonomous lane]
     K -.->|spawns| M2[🏢 Workspace · 👷 worker-2<br/>Purple]
     K -.->|spawns| CW[🏢 Workspace · 🧑‍💼 co-worker-1<br/>Blue · paired with you]
     K -.->|spawns| WM[🏢 Workspace · 🕵️ watchman-1<br/>Rose · vertical split inside]
@@ -85,7 +85,7 @@ graph TB
 
 **What the arrows mean:**
 - `══>` solid bold: you launch the King inside cmux.app (start of your conversation)
-- `-.->` dashed: **spawn** relationships. King spawns lane workspaces via `/kingdom:start`; lane masters spawn sub-agent tabs via `Agent()` (background) or `cmux tab-action --action new-terminal-right` (visible).
+- `-.->` dashed: **spawn** relationships. King spawns lane workspaces via `/kingdom:work`; lane masters spawn sub-agent tabs via `Agent()` (background) or `cmux tab-action --action new-terminal-right` (visible).
 - `-->` solid plain: internal split layout (watchman's dual-view top/bottom).
 
 All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (under the same window), but the King is the **dispatcher** that creates the lane workspaces. The diagram shows the spawn relationship rather than the flat sibling layout.
@@ -105,10 +105,10 @@ All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (un
 - **`cmux send --workspace <ref>`**: King dispatches task briefs by workspace ref (stable across the session, persisted to `<LOGS>/workspace-refs.env`). No tab-name guessing, no escaping fights.
 - **`cmux tree --all`**: King's introspection tool for verifying the layout after spawn or resume.
 
-## What `/kingdom:start` does in PRIMARY mode (one call, all of the above)
+## What `/kingdom:work` does in PRIMARY mode (spawn phase)
 
 ```bash
-/kingdom:start my-app
+/kingdom:work my-app
 ```
 
 Behind the scenes:
@@ -122,7 +122,7 @@ Behind the scenes:
 
 Everything below (task dispatch, gates, audit, push approval, exit) uses those workspace refs. No `cmux claude-teams`, no manual tab juggling.
 
-Note: most users invoke this indirectly via [`/kingdom:day`](../commands/day.md), which calls `/kingdom:start` automatically as one of its phases.
+Note: spawn is Step 0.4 of `/kingdom:work` — it runs automatically when you invoke [`/kingdom:work`](../commands/work.md).
 
 ## See also
 

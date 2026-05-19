@@ -121,4 +121,4 @@ Full commit flow + push gate + FINAL conflict check details: [`git.md`](../.king
 
 - [`how-it-works.md`](how-it-works.md): the run-time mechanics behind the branch dance
 - [`roles.md`](roles.md): who's allowed to touch which branch
-- [`daily-ritual.md`](daily-ritual.md): how `/kingdom:day` exercises all of this
+- [`work-cycle.md`](work-cycle.md): how `/kingdom:work` exercises all of this

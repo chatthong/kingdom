@@ -1,7 +1,7 @@
 # audit-summary
 
-**Fires when:** `/kingdom:update` finishes the audit pass.
-**Used by:** [`commands/update.md`](../../../commands/update.md) final step. Also fired by `/kingdom:day` Step 1 as a confirmation that the audit ran.
+**Fires when:** `/kingdom:work` finishes the audit pass.
+**Used by:** [`commands/work.md`](../../../commands/work.md) final step. Also fired by `/kingdom:work` Step 1 as a confirmation that the audit ran.
 
 ## Template
 

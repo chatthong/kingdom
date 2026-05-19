@@ -18,6 +18,8 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
+`v0.29.0: 4 commands, autonomous watchman, state-based save.`
+
 ![Version](https://img.shields.io/badge/version-0.29.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
@@ -40,14 +42,14 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
 
-# 2. Scaffold a workspace, once per workspace (~90s)
-/kingdom:init my-app
+/kingdom:init my-app          # scaffold once — workspace + git worktrees (~90s)
+/kingdom:self-care            # check prereqs once — cmux.app, tmux, jq, gh, git
 
-# 3. Run the day, the ONE command you type every morning
-/kingdom:work my-app
+/kingdom:work my-app          # daily — audit, spawn, dispatch, poll
+/kingdom:save my-app          # end of session — snapshot state, close lane workspaces
 ```
 
-`/kingdom:work` is the canonical daily ritual. It audits the project, spawns the lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches + auto-gates work until something needs your approval. You stay in one chat with the King.
+`/kingdom:work` is the daily ritual. It audits the project, spawns lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches and gates work until something needs your approval. You stay in one chat with the King. At end of day, `/kingdom:save` snapshots lane + task state so the next `/kingdom:work` picks up where you left off.
 
 ```bash
 # Optional caps + targets
@@ -56,7 +58,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /kingdom:work my-app target=30-50/day       # auto-splits to ~150-250/week
 ```
 
-You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
+You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman — each in its own colour-coded workspace, all coordinated through your one chat with the King.
 
 ```mermaid
 graph TB
@@ -94,9 +96,9 @@ graph TB
     class LOG,TSK store
 ```
 
-A Claude Code plugin that turns one Claude session into a coordinated team: each lane in its own git worktree on its own branch. **You stay in one chat with the King.** The King runs gates, asks before every push, and writes audit artifacts you can grep next month. No new runtime, no daemons. Just Claude + git worktrees + a clean discipline.
+A Claude Code plugin that turns one session into a coordinated team: each lane in its own git worktree, each branch isolated until you approve the push. The King gates every commit, writes audit artifacts you can grep next month, and never touches your main checkout. No new runtime, no daemons.
 
-**Domain-agnostic by design.** Code, research, finance models, scientific notebooks, manuscripts: anything you version in git, the kingdom can orchestrate. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
+**Domain-agnostic by design.** Anything you version in git — code, research, finance models, scientific notebooks, manuscripts — the kingdom can orchestrate. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
 
 ---
 

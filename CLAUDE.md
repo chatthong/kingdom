@@ -48,7 +48,7 @@ commands/                  # 4 slash commands
 
 .kingdom/.setting/         # role docs + helpers + cards + routing (canonical source — copied into workspace by /kingdom:init)
   index.md                 # entry-point router
-  rules.md                 # 37 enforceable rules (R1-R38), Tier 1/2/3
+  rules.md                 # 40 enforceable rules (R1-R40), Tier 1/2/3
   _primitives.md           # shared bash helpers (cmux_*, kingdom_*, render_card, pick_skills_for_task, etc)
   kings.md / workers.md / co-workers.md / watchmans.md / git.md / cmux.md   # role specs
   cards/                   # 21 display templates (welcome, daily-status, task-complete, resume-queue, what-to-work-on, etc) + README
@@ -102,7 +102,7 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 19. **King never copies uncommitted changes between worktrees** (R35, v0.26.0). Each `.worktrees/<lane>/` is the exclusive work surface for that lane. Banned: `cp .worktrees/worker-1/file .worktrees/worker-2/file` + commit on worker-2. Cross-worktree read for context is allowed; `git diff <lane> | git apply` onto kingdom overlay only.
 
-20. **Visible workspace progress within ~10s of `/kingdom:day`** (R36, v0.28.0). King renames its own workspace to `👑 King · <project>` within ~1s; ALL lane workspaces from `kingdom.json.shape` spawn in parallel before any audit/dispatch starts; `spawn-complete` card renders before processing. No "crunched for 30s while sidebar looks dead."
+20. **Visible workspace progress within ~10s of `/kingdom:work`** (R36, v0.28.0). King renames its own workspace to `👑 King · <project>` within ~1s; ALL lane workspaces from `kingdom.json.shape` spawn in parallel before any audit/dispatch starts; `spawn-complete` card renders before processing. No "crunched for 30s while sidebar looks dead."
 
 21. **Heavy processing runs IN lane workspaces, not King's session** (R37, v0.28.0). Audit fan-outs, pattern-grep scans, doc-digest fan-outs dispatch to lanes via `cmux send`. King's main session: read state, render cards, make dispatch decisions only. Lanes are parallel compute; use them.
 
@@ -174,7 +174,7 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 - **Branch model + lifecycle:** `docs/branch-model.md`.
 - **Card library structure:** `.kingdom/.setting/cards/README.md`.
 - **Skill routing table:** `.kingdom/.setting/skill-routing.md`.
-- **The 37 rules:** `.kingdom/.setting/rules.md`. Tier 1 = iron-clad (16); Tier 2 = strong defaults (16); Tier 3 = conventions (5).
+- **The 40 rules:** `.kingdom/.setting/rules.md`. Tier 1 = iron-clad (18); Tier 2 = strong defaults (17); Tier 3 = conventions (5).
 - **Helper bash:** `.kingdom/.setting/_primitives.md`. Every role doc points here for shared functions.
 
 ---

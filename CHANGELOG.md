@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.29.1] — 2026-05-19
+
+Audit + fix-up: stale references to v0.29.0-deleted commands across 22 files. Shipped via 5 parallel Haiku audits + 4 parallel Sonnet fixers + README polish pass.
+
+### Audit findings (5 parallel Haiku scans)
+
+- ❌ ~50 stale `/kingdom:day` / `/kingdom:start` / `/kingdom:update` / `/kingdom:exit` / `/kingdom:doctor` references across rules.md (8 lines), watchmans.md (5 lines), cards/*.md (16 files affected), docs/branch-model.md, docs/cmux-integration.md (6 lines), docs/faq.md (Q/A headers — historical, kept), CLAUDE.md (rule counts wrong).
+- ❌ CLAUDE.md rule count claim was stale: "37 enforceable rules" / "Tier 1 = 16, Tier 2 = 16, Tier 3 = 5". Actual: **40 rules** (Tier 1 = 18, Tier 2 = 17, Tier 3 = 5).
+- ✅ R39/R40 consistent across rules.md + watchmans.md + kingdom.json.template + _primitives.md (verified live).
+- ✅ Cards index (cards/README.md) clean — 22 cards listed, 22 files present.
+
+### Fixed (4 parallel Sonnet agents)
+
+- **rules.md**: 8 replacements. R30 / R32 / R33 / R36 / R37 / R20 → updated to use `/kingdom:work` (audit phase folded), `/kingdom:save`, `/kingdom:self-care`. R20 command list now shows 4 commands (init / self-care / work / save) instead of 6.
+- **watchmans.md**: 5 replacements. `/kingdom:update` → `/kingdom:work audit phase`.
+- **All 16 affected cards/*.md** files updated (fires-when + used-by + body refs + path links). Affected: end-of-day, scaffold-success, what-to-work-on, suggested-task, audit-summary, welcome, daily-status, doctor-report, dispatch-plan, cap-reached, resume-queue, spawn-complete, gate-fail, pr-merged, push-prompt, task-complete. Already clean: watchman-alert, watchman-tick, session-saved, dispatch-brief, conflict-detected, blocked-lane.
+- **CLAUDE.md**: rule count claim fixed (40 total, Tier 1 = 18, Tier 2 = 17, Tier 3 = 5). One stray `/kingdom:day` on line 105 → `/kingdom:work`. Version-history table entries kept as historical references (they describe what each release shipped at the time).
+- **docs/branch-model.md**: 1 replacement + fixed leftover `daily-ritual.md` link → `work-cycle.md` (file was renamed in v0.29.0).
+- **docs/cmux-integration.md**: 5 replacements + 1 section heading rename ("What `/kingdom:start` does" → "What `/kingdom:work` does in PRIMARY mode (spawn phase)").
+- **docs/faq.md**: 0 edits. Q/A headers naming old commands intentionally preserved as historical context; answer bodies already correctly point to new commands.
+
+### README polish
+
+- 210 lines (was 209). One-line v0.29.1 tagline added: `v0.29.1: 4 commands, autonomous watchman, state-based save.`
+- Quick start now shows the full 4-command arc (init → self-care → work → save) in one block.
+- Tightened "daily ritual" prose (dropped "canonical"; "spawns the lanes" → "spawns lanes"; etc).
+- Added save/resume sentence: "At end of day, `/kingdom:save` snapshots lane + task state so the next `/kingdom:work` picks up where you left off."
+- Dropped slogany phrases ("Just Claude + git worktrees + a clean discipline").
+- All internal links verified — no broken refs.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.29.1`.
+
+---
+
 ## [0.29.0] — 2026-05-19
 
 **Hard break: 6 commands collapsed to 4. Autonomous watchman with Haiku x10 fan-out. State.json save protocol.** Major restructure shipped via 8 parallel Sonnet agents.

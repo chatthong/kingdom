@@ -1,7 +1,7 @@
 # what-to-work-on
 
-**Fires when:** `/kingdom:day` invoked with no args (interactive mode, v0.28.0+).
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 0.0.
+**Fires when:** `/kingdom:work` invoked with no args (interactive mode, v0.28.0+).
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 0.0.
 
 ## Template
 
@@ -72,7 +72,7 @@ After the card is rendered, King waits for the user's reply (next chat message).
 | `30-50 per week on cert-site` | `project=cert-site`, `target=30-50/week` |
 | `till lunch` | `project=<current>`, soft hint (no cap, King decides) |
 | `cancel` / `nvm` / `forget it` | Exit without starting the kingdom. |
-| `hi` / `what's up` / a question | Treat as conversational, NOT a kingdom invocation. Reply normally; user can re-run `/kingdom:day` when ready. |
+| `hi` / `what's up` / a question | Treat as conversational, NOT a kingdom invocation. Reply normally; user can re-run `/kingdom:work` when ready. |
 
 ## Project resolution
 
@@ -80,7 +80,7 @@ Fuzzy substring match against `${AVAILABLE_PROJECTS}` from Step 0.0. If multiple
 
 ## Confirmation gate
 
-Before proceeding to Step 0.1 (and the rest of `/kingdom:day`), King prints the parsed interpretation back:
+Before proceeding to Step 0.1 (and the rest of `/kingdom:work`), King prints the parsed interpretation back:
 
 ```text
 👑 Parsed:
@@ -98,9 +98,9 @@ User corrects → King re-parses + re-prints confirmation.
 
 ## Why this card exists
 
-Lowers the friction for "I have a vague idea what I want to do today, just figure it out." Without this mode, `/kingdom:day` requires the user to remember the exact project name + the precise budget syntax. The card gives them context (live state across all projects) + accepts natural-language replies.
+Lowers the friction for "I have a vague idea what I want to do today, just figure it out." Without this mode, `/kingdom:work` requires the user to remember the exact project name + the precise budget syntax. The card gives them context (live state across all projects) + accepts natural-language replies.
 
 ## Notes
 
 - The card explicitly lists what's actionable so the user doesn't have to remember which PRs are open or which tasks are blocked. Cuts the "what was I doing again?" cognitive load.
-- This is the ONLY card that pauses the `/kingdom:day` flow waiting on user input — other cards (welcome, suggested-task, etc) display + continue. Interactive-mode cards block until reply.
+- This is the ONLY card that pauses the `/kingdom:work` flow waiting on user input — other cards (welcome, suggested-task, etc) display + continue. Interactive-mode cards block until reply.

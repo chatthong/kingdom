@@ -1,7 +1,7 @@
 # daily-status
 
-**Fires when:** `/kingdom:day` kickoff, second card after `welcome`.
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 3.
+**Fires when:** `/kingdom:work` kickoff, second card after `welcome`.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 3.
 
 ## Template
 

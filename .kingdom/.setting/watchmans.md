@@ -840,9 +840,9 @@ High-risk: watchman writes findings to `WATCH_DOCS_AUDIT.md` (single rolling fil
 
 ### Project state scan (idle, bounded)
 
-In addition to scanning `tasks/` + `logs/`, watchman also performs a **bounded** project-state scan during idle ticks. Same pattern as `/kingdom:update` Step 3.0, but smaller: at most 5 project doc files per tick (newest by mtime), `.md` + `.txt` + `.csv`. For each, watchman extracts completion markers and cross-refs against `master_agent.log`. Findings are **flag-only** → appended to `WATCH_DOCS_AUDIT.md` under `## Gap A` / `## Gap B`. Watchman NEVER edits project source code based on a gap — only flags. King runs `/kingdom:update` for a full sweep when the gap list grows.
+In addition to scanning `tasks/` + `logs/`, watchman also performs a **bounded** project-state scan during idle ticks. Same pattern as `/kingdom:work` audit phase Step 3.0, but smaller: at most 5 project doc files per tick (newest by mtime), `.md` + `.txt` + `.csv`. For each, watchman extracts completion markers and cross-refs against `master_agent.log`. Findings are **flag-only** → appended to `WATCH_DOCS_AUDIT.md` under `## Gap A` / `## Gap B`. Watchman NEVER edits project source code based on a gap — only flags. King runs `/kingdom:work` audit phase for a full sweep when the gap list grows.
 
-This keeps the doc-audit honest without making watchman expensive — full project scans happen on demand via `/kingdom:update`, not on every `/loop` tick.
+This keeps the doc-audit honest without making watchman expensive — full project scans happen on demand via `/kingdom:work` audit phase, not on every `/loop` tick.
 
 ### `WATCH_DOCS_AUDIT.md` schema
 
@@ -870,7 +870,7 @@ Last scan: <UTC>
 - `master_agent.log:89` shipped `kc26-script-patches` 2026-04-28T2110Z — `STEP.md` still lists it as pending
 ```
 
-King reviews → dispatches `/kingdom:update` or a targeted sub-agent. Watchman never edits high-risk items, never edits project source code; the Gap sections are flag-only.
+King reviews → dispatches `/kingdom:work` audit phase or a targeted sub-agent. Watchman never edits high-risk items, never edits project source code; the Gap sections are flag-only.
 
 ### Boundary
 
@@ -880,11 +880,11 @@ Watchman's write authority is scoped to `<workspace>/.kingdom/<project>/{tasks,l
 - `kingdom.json`
 - `.git/` or branches
 
-If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom:update` sweeps it); cost of a wrong autonomous edit is reputational.
+If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom:work` audit phase sweeps it); cost of a wrong autonomous edit is reputational.
 
 ### Cadence
 
-Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom:update` (explicit) rather than continuously.
+Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom:work` audit phase (explicit) rather than continuously.
 
 ---
 

@@ -1,7 +1,7 @@
 # doctor-report
 
-**Fires when:** `/kingdom:doctor` completes its prerequisite-check sweep.
-**Used by:** [`commands/doctor.md`](../../../commands/doctor.md) final step.
+**Fires when:** `/kingdom:self-care` completes its prerequisite-check sweep.
+**Used by:** [`commands/self-care.md`](../../../commands/self-care.md) final step.
 
 ## Template
 
@@ -26,7 +26,7 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 > │  ✓ no orphan audit artifacts                            │
 > │  ✓ git state across ${N_PROJECTS} projects              │
 > │                                                         │
-> │  Ready to run /kingdom:day <project>.                   │
+> │  Ready to run /kingdom:work <project>.                  │
 > ╰────────────────────────────────────────────────────────╯
 > ```
 ```
@@ -44,7 +44,7 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 > │  Patched:                                               │
 > │    ${PATCHED_LIST}                                      │
 > │                                                         │
-> │  All checks now passing. Run /kingdom:day to start.     │
+> │  All checks now passing. Run /kingdom:work to start.    │
 > ╰────────────────────────────────────────────────────────╯
 > ```
 ```
@@ -62,7 +62,7 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 > │  Action required:                                       │
 > │    ${ACTION_LIST}                                       │
 > │                                                         │
-> │  Re-run /kingdom:doctor after fixing.                   │
+> │  Re-run /kingdom:self-care after fixing.                │
 > ╰────────────────────────────────────────────────────────╯
 > ```
 ```
@@ -87,5 +87,5 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 
 ## Notes
 
-- 10 standard checks (per [`commands/doctor.md`](../../../commands/doctor.md)). Card shows all 10 in `${CHECK_RESULTS_LIST}` regardless of variant.
+- 10 standard checks (per [`commands/self-care.md`](../../../commands/self-care.md)). Card shows all 10 in `${CHECK_RESULTS_LIST}` regardless of variant.
 - Auto-patch happens only for `.claude/settings.json` permission entries; binary installs require user action (the card lists the exact `brew install` or download URL).

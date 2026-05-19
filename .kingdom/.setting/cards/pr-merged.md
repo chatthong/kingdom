@@ -1,7 +1,7 @@
 # pr-merged
 
 **Fires when:** `gh pr view <N> --json state -q .state` flips to `MERGED`; triggers [rules.md R26](../rules.md#r26-after-every-pr-merge-king-resyncs-kingdom-from-base--tier-2-v0190).
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 5 (King polls); [`watchmans.md`](../watchmans.md) `/loop` (watchman detects).
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5 (King polls); [`watchmans.md`](../watchmans.md) `/loop` (watchman detects).
 
 ## Template
 

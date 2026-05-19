@@ -1,7 +1,7 @@
 # dispatch-plan
 
-**Fires when:** `/kingdom:day` kickoff, fourth card.
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 3.
+**Fires when:** `/kingdom:work` kickoff, fourth card.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 3.
 
 ## Template
 

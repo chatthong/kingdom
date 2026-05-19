@@ -1,7 +1,7 @@
 # welcome
 
-**Fires when:** `/kingdom:day` kickoff, first card printed.
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 3.
+**Fires when:** `/kingdom:work` kickoff, first card printed.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 3.
 
 ## Template
 

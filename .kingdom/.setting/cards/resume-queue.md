@@ -1,7 +1,7 @@
 # resume-queue
 
-**Fires when:** `/kingdom:day` Step 0.6 scan finds in-flight task files (per [rules.md R33](../rules.md#r33-king-must-read-existing-task-state-before-dispatching-new-tasks--tier-1-v0250)).
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 0.6 — renders BEFORE `suggested-task`.
+**Fires when:** `/kingdom:work` Step 0.6 scan finds in-flight task files (per [rules.md R33](../rules.md#r33-king-must-read-existing-task-state-before-dispatching-new-tasks--tier-1-v0250)).
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 0.6 — renders BEFORE `suggested-task`.
 
 ## Template
 
@@ -65,7 +65,7 @@ If only one queue has items, drop the empty section + its heading. E.g., if `${N
 | `resume <lane>` or pick a number | King resumes only that lane's in-flight task; other lanes continue from queue. |
 | `unblock <task-id>` | User provides the missing info; King writes it into the task file as a `## Progress notes` entry, then dispatches `[RESUME]`. |
 | `cancel <task-id>` | User explicitly cancels; King flips the task file Status to `cancelled` + appends a sentinel; lane is freed for new dispatch. |
-| `go` or `skip` | Ignore resume queue this cycle; proceed to new dispatch (treats in-flight tasks as paused; King re-surfaces them on next `/kingdom:day`). |
+| `go` or `skip` | Ignore resume queue this cycle; proceed to new dispatch (treats in-flight tasks as paused; King re-surfaces them on next `/kingdom:work`). |
 
 ## Why this card matters
 

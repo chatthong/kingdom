@@ -1,7 +1,7 @@
 # spawn-complete
 
-**Fires when:** `/kingdom:start <project>` finishes spawning lanes (whether fresh-spawn or resume).
-**Used by:** [`commands/start.md`](../../../commands/start.md); also as a sub-step of [`commands/day.md`](../../../commands/day.md) Step 2.
+**Fires when:** `/kingdom:work <project>` finishes spawning lanes (whether fresh-spawn or resume).
+**Used by:** [`commands/work.md`](../../../commands/work.md); also as a sub-step of [`commands/work.md`](../../../commands/work.md) Step 2.
 
 ## Template
 
@@ -47,5 +47,5 @@ When primary cmux.app mode is unavailable, swap the "cmux.app sidebar" header fo
 
 ## Notes
 
-- Card replaces the previous "kingdom ready" stdout block in `commands/start.md`.
+- Card replaces the previous "kingdom ready" stdout block in `commands/work.md`.
 - If lanes had to be created (not resumed), `${MODE_NOTE}` says `Fresh spawn (created ${N} worktrees).` This signals the user that the first dispatch may take longer (no warm caches).

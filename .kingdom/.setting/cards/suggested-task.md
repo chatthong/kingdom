@@ -1,7 +1,7 @@
 # suggested-task
 
-**Fires when:** `/kingdom:day` kickoff, third card.
-**Used by:** [`commands/day.md`](../../../commands/day.md) Step 3.
+**Fires when:** `/kingdom:work` kickoff, third card.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 3.
 
 ## Template
 

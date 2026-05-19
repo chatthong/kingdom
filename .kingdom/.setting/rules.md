@@ -119,7 +119,7 @@ Sentinel exists + no matching test report exists → King auto-fires the gate wi
 
 **Incident that motivated this rule (2026-05-19):** a King session spent ~1m48s "Crunched" drafting a 9-batch execution plan for `FE-P0-FOUND.5` in chat — files to touch, scope decisions (admin in/out), AC flip targets, verification steps — instead of dispatching to worker-1. Zero tasks completed in the session. Cause: King was acting as worker. Fix: this rule, plus R31 (verify lanes exist before dispatch) and R32 (workers don't "wait").
 
-**Hard time budget:** from `/kingdom:day` Step 4 reaching auto-dispatch, **no more than 60 seconds** elapses before the first `cmux send` fires to a worker. If King exceeds 60s of "planning in chat" between audit-done and first dispatch, that's a violation — re-read this rule and dispatch with whatever plan exists.
+**Hard time budget:** from `/kingdom:work` Step 4 reaching auto-dispatch, **no more than 60 seconds** elapses before the first `cmux send` fires to a worker. If King exceeds 60s of "planning in chat" between audit-done and first dispatch, that's a violation — re-read this rule and dispatch with whatever plan exists.
 
 ### R31. Lane infrastructure MUST be spawned + verified BEFORE any dispatch — Tier 1 (v0.24.0+, expanded v0.25.0)
 
@@ -159,7 +159,7 @@ Per-role idle behaviour:
 
 | Role | Idle behaviour |
 |---|---|
-| 👷 **Worker** | **Auto-claim** from queue per `kings.md` § Lane utilisation. If queue empty, lane shows `🐾 Idle` but King keeps polling for new pending tasks (Step 5c of `/kingdom:day` poll loop). Worker NEVER sits "awaiting your dictation". |
+| 👷 **Worker** | **Auto-claim** from queue per `kings.md` § Lane utilisation. If queue empty, lane shows `🐾 Idle` but King keeps polling for new pending tasks (Step 5c of `/kingdom:work` poll loop). Worker NEVER sits "awaiting your dictation". |
 | 🧑‍💼 **Co-worker** | **Dormant by default.** Activates only when user says `pair on co-worker-N`. Shows `💤 staged · awaiting pair-on signal`. This is the ONLY role where "waiting for user input" is correct. |
 | 🕵️ **Watchman** | **Always runs `/loop`.** Never idle, never waiting. Dynamic-pacing (5-15 min) means it's "asleep until next tick" — that's different from "waiting on user." |
 
@@ -169,7 +169,7 @@ Per-role idle behaviour:
 
 ### R33. King MUST read existing task state BEFORE dispatching new tasks — Tier 1 (v0.25.0+)
 
-At session start (per R14) and at every `/kingdom:day` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**:
+At session start (per R14) and at every `/kingdom:work` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**:
 
 1. **`ls -t .kingdom/<project>/tasks/*.md`** — newest first.
 2. For each task file: read `## Status` checkboxes. Classify:
@@ -198,7 +198,7 @@ At session start (per R14) and at every `/kingdom:day` Step 4 dispatch round, Ki
 |---|---|---|
 | `feedback_kingdom_cmux_dispatch_fallback.md`: "if cmux send fails, pivot to Agent()" | R31: spawn cmux workspaces BEFORE dispatch (any mode) | **Spawn cmux workspaces.** The memory note covers a *dispatch-time* fallback after spawn succeeded but `cmux send` failed — NOT a session-start excuse to skip spawning entirely. |
 | `feedback_no_performative_apology.md`: "never say 'you're absolutely right'" | R30: King acknowledges its own violations | **Acknowledge the violation factually.** Memory note bans performative apology, not factual self-correction. ("I violated R31 by not spawning. Repairing now.") |
-| `feedback_solo_vs_tmux.md`: "work solo by default" | R31: spawn lane workspaces on `/kingdom:day` | **Spawn the workspaces.** `/kingdom:day` is the explicit multi-lane ritual; the memory note covers default chat behaviour, not the dispatch flow. |
+| `feedback_solo_vs_tmux.md`: "work solo by default" | R31: spawn lane workspaces on `/kingdom:work` | **Spawn the workspaces.** `/kingdom:work` is the explicit multi-lane ritual; the memory note covers default chat behaviour, not the dispatch flow. |
 
 **Anti-pattern caught 2026-05-19:** King read `feedback_kingdom_cmux_dispatch_fallback.md` at session start (per R14) and interpreted it as "skip cmux spawn this session." That conflated a `cmux send` failure mode with a `cmux new-workspace` failure mode. R31 says spawn-then-dispatch; the memory's pivot is dispatch-time, not spawn-time. King self-acknowledged after user WTF'd: "I read that as 'skip cmux spawn this session too.' That was wrong."
 
@@ -240,7 +240,7 @@ Per R34, performative apology is still banned. Acknowledgement is factual + repa
 
 ### R36. Visible workspace progress BEFORE any processing — Tier 1 (v0.28.0+)
 
-On `/kingdom:day` or `/kingdom:start` invocation, the sequence MUST be (in this order, no exceptions):
+On `/kingdom:work` invocation, the sequence MUST be (in this order, no exceptions):
 
 1. **Within ~1 second of command receipt:** King renames its OWN workspace to `👑 King · ${PROJECT}` (amber, pinned) and sets its description to `Starting ${PROJECT}…`. The user must see immediate visual feedback that the kingdom is responding to the command. No "Crunched for 30s while you wait staring at unchanged sidebar."
 2. **Within ~5-10 seconds:** all lane workspaces from `kingdom.json.shape` are spawned in parallel — every `worker-N`, `co-worker-N`, `watchman-N` appears in the cmux sidebar BEFORE any audit/dispatch processing begins. Sidebar shows the kingdom shape immediately so the user knows the lanes are alive and ready.
@@ -253,7 +253,7 @@ On `/kingdom:day` or `/kingdom:start` invocation, the sequence MUST be (in this 
 
 ### R37. Heavy processing runs IN lane workspaces, not in King's session — Tier 1 (v0.28.0+)
 
-Audit fan-outs (the 4 specialists from `/kingdom:update`), pattern-grep scans (R8 Layer-1 Discovery), doc-digest fan-outs, and any other parallelisable work must dispatch to lane workspaces via `cmux send --workspace worker-N -- "..."`. King's main session never runs the work itself.
+Audit fan-outs (the 4 specialists from `/kingdom:work` audit phase), pattern-grep scans (R8 Layer-1 Discovery), doc-digest fan-outs, and any other parallelisable work must dispatch to lane workspaces via `cmux send --workspace worker-N -- "..."`. King's main session never runs the work itself.
 
 **Rationale:** every lane already has its own Claude session running. Using them as parallel compute (instead of spinning new in-process Agent() calls) gives:
 
@@ -324,7 +324,7 @@ Even on `blocked` / `cancelled` / `errored` exit, the worker writes:
 
 **No silent exits. No "I didn't finish so I won't write."** King relies on the sentinel to detect completion; if it's absent, King thinks the task is still in-flight forever. Status of the work (`done` / `blocked` / `errored`) goes in the task file's `## Status` checkbox + the curated digest's `## TL;DR.Status` field. Closer artifacts ARE the source of truth for "this work is done."
 
-> NOTE: this is Tier 1 because skipping the closer breaks the kingdom's audit trail — King + watchman + `/kingdom:update` all rely on sentinel files for "is this task done" detection.
+> NOTE: this is Tier 1 because skipping the closer breaks the kingdom's audit trail — King + watchman + `/kingdom:work` audit phase all rely on sentinel files for "is this task done" detection.
 
 ### R23. Task file (Step 0) MUST exist BEFORE any sub-agent dispatch or code edit — Tier 1
 
@@ -574,7 +574,7 @@ King=Amber · Worker=Purple · Co-worker=Blue · Watchman=Rose. Configurable in 
 
 ### R20. Slash command names
 
-`/kingdom:doctor` · `/kingdom:init` · `/kingdom:start` · `/kingdom:update` · `/kingdom:exit` · `/kingdom:day`. Plugin namespace `kingdom`.
+`/kingdom:init` · `/kingdom:self-care` · `/kingdom:work` · `/kingdom:save`. Plugin namespace `kingdom`.
 
 ### R21. Branch namespace (reserved)
 

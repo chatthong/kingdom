@@ -1,7 +1,7 @@
 # end-of-day
 
-**Fires when:** `/kingdom:exit` runs, OR `cap=N` hit + no in-flight gates pending, OR all lanes idle + no pending work + no in-flight PRs.
-**Used by:** [`commands/exit.md`](../../../commands/exit.md); [`commands/day.md`](../../../commands/day.md) Step 5 stopping conditions.
+**Fires when:** `/kingdom:save` runs, OR `cap=N` hit + no in-flight gates pending, OR all lanes idle + no pending work + no in-flight PRs.
+**Used by:** [`commands/save.md`](../../../commands/save.md); [`commands/work.md`](../../../commands/work.md) Step 5 stopping conditions.
 
 ## Template
 
@@ -44,10 +44,10 @@
 | `${WEEK_TARGET}` | weekly band from parse_target | `30-50/week` |
 | `${WEEK_PCT}` | `${WEEK_DONE} / mid(${WEEK_TARGET}) * 100` rounded | `60%` |
 | `${PACE_STATUS}` | `on pace` / `behind` / `ahead` based on day-of-week vs % | `on pace` |
-| `${EXIT_HINT}` | `Run /kingdom:exit to close lanes gracefully.` (when not invoked by exit) OR `Lanes closed. Conversation kept alive.` (when invoked by exit) | `Run /kingdom:exit to close lanes gracefully.` |
+| `${EXIT_HINT}` | `Run /kingdom:save to close lanes gracefully.` (when not invoked by save) OR `Lanes closed. Conversation kept alive.` (when invoked by save) | `Run /kingdom:save to close lanes gracefully.` |
 
 ## Notes
 
-- When invoked by `/kingdom:exit`, the `${EXIT_HINT}` says "Lanes closed. Conversation kept alive." (or "King workspace closed too" if `--include-king`).
-- When invoked by `cap=N` hit, `${EXIT_HINT}` says "Cap reached. Reply 'cap=10' (or any number) to raise; or run /kingdom:exit."
-- When invoked by all-idle, `${EXIT_HINT}` says "No pending work. Run /kingdom:exit when done, or queue more tasks."
+- When invoked by `/kingdom:save`, the `${EXIT_HINT}` says "Lanes closed. Conversation kept alive." (or "King workspace closed too" if `--include-king`).
+- When invoked by `cap=N` hit, `${EXIT_HINT}` says "Cap reached. Reply 'cap=10' (or any number) to raise; or run /kingdom:save."
+- When invoked by all-idle, `${EXIT_HINT}` says "No pending work. Run /kingdom:save when done, or queue more tasks."
