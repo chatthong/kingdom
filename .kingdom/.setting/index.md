@@ -12,7 +12,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`rules.md`](rules.md) | **Priority-tiered rules (v0.19.0+)** — Tier 1 IRON-CLAD (R1-R7, R22-R23), Tier 2 STRONG DEFAULTS (R8-R16, R24-R28), Tier 3 CONVENTIONS (R17-R21). King reads this **FIRST** at session start per R14, before any other role doc. |
 | [`kings.md`](kings.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`workers.md`](workers.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
-| [`co-workers.md`](co-workers.md) | Co-worker (Ter-paired) interactive protocol |
+| [`co-workers.md`](co-workers.md) | Co-worker (user-paired) interactive protocol |
 | [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, lifecycle, dual-view layout |
 | [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, PR conventions |
 | [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
@@ -28,7 +28,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 |---|---|---|---|---|---|---|
 | 👑 King | claims, test reports, push log lines, own task files (for planning sessions) | everything | sub-agents (any model), lane masters via `claude-teams` | ✅ sole pusher | ❌ never | ✅ for own planning sessions |
 | 👷 Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
-| 🧑‍💼 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (Ter often dictates the brief) |
+| 🧑‍💼 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (the user often dictates the brief) |
 | 🕵️ Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchmans.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
 | 🐱 Sub-agent | own raw + curated + log + flag (4-step closer) | logs, tasks (for context from parent lane master) | none (one-shot leaf) | ❌ | ✅ via Edit/Write tools when assigned | ❌ executes against the task file its parent wrote |
 
@@ -163,14 +163,14 @@ At session start, master decides mode first:
 - **Kingdom mode — PRIMARY (cmux.app + `cmux claude-teams`):** entered when ALL of these hold:
   - `cmux.app` (manaflow) is installed (`/Applications/cmux.app/` or `which cmux` resolves under it)
   - `$CMUX_CLAUDE_PID` is set (we're inside a cmux.app-hosted Claude session)
-  - Ter says "start the kingdom" / "spawn worker-N" / "King" / names a sub-task
+  - the user says "start the kingdom" / "spawn worker-N" / "King" / names a sub-task
 
   Master takes the King role. Spawns via `cmux claude-teams`; per-lane worktrees via `git worktree add`; dispatch via `cmux send`; lanes signal via `<LOGS>/done/*.flag` + optional `cmux notify`.
 
 - **Kingdom mode — FALLBACK (raw tmux):** entered when:
   - NOT inside cmux.app (no `$CMUX_CLAUDE_PID`)
   - tmux is available
-  - Ter wants the watch-panes UX
+  - the user wants the watch-panes UX
 
   Spawns a tmux session named `kingdom`. Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol. See [`kings.md`](kings.md) → Spawning the kingdom (fallback).
 
@@ -197,7 +197,7 @@ Model selection in the kingdom is a two-tier decision:
 |---|---|---|
 | King | Opus | Orchestrator; plans, reviews, gates. |
 | Worker | Opus | Autonomous task work; quality over speed. |
-| Co-worker | Opus | Ter-paired interactive work; same quality bar. |
+| Co-worker | Opus | user-paired interactive work; same quality bar. |
 | Watchman | Sonnet | Passive monitor only; lighter model is fine. |
 
 **Tier 2 — Sub-agents** (spawned by a lane master or by the King for planning) pick their model at spawn time from the P1/P2/P3 chain below. This is what `Agent(model=…)` calls use.
@@ -210,7 +210,7 @@ Model selection in the kingdom is a two-tier decision:
 
 **Picking N (parallel count):** spawn as many sub-agents as the WORK STRUCTURE needs — not 1:1 with files. Sometimes 1-2 agents handling 12 files with shared context gives better coherence than 12 isolated agents. All three models support unbounded parallel spawn; coherence > raw parallelism when work has cross-file dependencies. See [`workers.md`](workers.md) → Spawn rights for examples.
 
-**Picking P3 (Opus as worker):** default answer is "no, use Sonnet." Reach for Opus only when the file is (a) production secrets/credentials, (b) authentication / authorization / cryptography boundary, or (c) Ter explicitly flags as sensitive.
+**Picking P3 (Opus as worker):** default answer is "no, use Sonnet." Reach for Opus only when the file is (a) production secrets/credentials, (b) authentication / authorization / cryptography boundary, or (c) the user explicitly flags as sensitive.
 
 **Multi-layer planning:** Lane masters plan BEFORE executing. A typical task has 2-4 layers in its task file — Discovery (read files via Haiku fan-out), Strategy (synthesise findings, decide approach), Execution (parallel Sonnet edits), Verification (typecheck + self-review). Each layer is a fan-out + synthesise step. Depth >4 is usually a sign of unclear scope. Full pattern in [`workers.md`](workers.md) → "Multi-layer planning."
 
@@ -227,7 +227,7 @@ graph TB
     K -->|"dispatches via cmux send / tmux send-keys / claude -p"| W1[👷 worker-1\nautonomous task work]
     K --> W2[👷 worker-2\nautonomous task work]
     K --> W3[👷 worker-3\nautonomous task work]
-    K --> CW[🧑‍💼 co-worker-1\nTer-paired · interactive]
+    K --> CW[🧑‍💼 co-worker-1\nuser-paired · interactive]
     K --> WM[🕵️ watchman-1\npassive /loop monitor]
 
     W1 & W2 & W3 & CW & WM --> LOGS[(<WS>/.kingdom/&lt;project&gt;/logs/)]
@@ -247,7 +247,7 @@ graph TB
 
 - **King** runs in the project's primary checkout on branch `kingdom` (a local-only integration view that merges develop + all lane tips). King never edits files; orchestrates only. See [`kings.md`](kings.md).
 - **Workers** run autonomous task work picked from the project's task source (CSV / GH issues / TODO doc — declared in `kingdom.json.taskSource` once Tier 4 is enabled). See [`workers.md`](workers.md).
-- **Co-workers** are Ter-paired interactive lanes. Dormant until Ter signals. See [`co-workers.md`](co-workers.md).
+- **Co-workers** are user-paired interactive lanes. Dormant until the user signals. See [`co-workers.md`](co-workers.md).
 - **Watchmen** are `/loop` agents that continuously track `origin/develop` + babysit open PRs. See [`watchmans.md`](watchmans.md).
 - **Branches & PRs** — lane branches are local-only; only `feature/<topic>` is pushed. King is the sole pusher. See [`git.md`](git.md).
 
@@ -287,8 +287,8 @@ Workspace project registry. Keep current — agents read it to know which projec
 
 | Role | Tool / spawn mechanism | What it does | Detail |
 |---|---|---|---|
-| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds Ter's conversation; runs pre-commit gate; SOLE PUSHER. | [`kings.md`](kings.md) |
+| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds the user's conversation; runs pre-commit gate; SOLE PUSHER. | [`kings.md`](kings.md) |
 | **Worker (Opus)** | Long-lived Claude teammate in `.worktrees/worker-N/`, spawned via `cmux claude-teams` (primary) or raw tmux (fallback); worktree created via `git worktree add`. | Autonomous task work; 4-step closer per task; spawns own sub-agents (no eco cap). | [`workers.md`](workers.md) |
-| **Co-worker (Opus)** | Same spawn as worker, in `.worktrees/co-worker-N/`; worktree created via `git worktree add`. | Ter-paired interactive work; dormant by default. | [`co-workers.md`](co-workers.md) |
+| **Co-worker (Opus)** | Same spawn as worker, in `.worktrees/co-worker-N/`; worktree created via `git worktree add`. | user-paired interactive work; dormant by default. | [`co-workers.md`](co-workers.md) |
 | **Watchman (Sonnet)** | Long-lived Claude session in `.worktrees/watchman-N/`, worktree via `git worktree add`; runs `/loop` continuously. | Passive monitor — smoke + PR babysitting; writes WATCH_*.md; no edits, no push. | [`watchmans.md`](watchmans.md) |
 | **Sub-agent (Sonnet/Haiku/Opus)** | `Agent(model="...")` invoked by King or a lane master. | One-shot work per call; 4-step closer; slug `<sub>-<lane-name>.<tag>`. | [`workers.md`](workers.md) → Slug convention |

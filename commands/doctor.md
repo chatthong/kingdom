@@ -65,8 +65,8 @@ which tmux
 Behaviour depends on Check 1 result:
 
 - If cmux.app was found (PRIMARY or ⚠️ above):
-  - ✅ if tmux is present — informational: "tmux available (cmux.app's tmux-compat layer handles tmux-protocol calls)"
-  - ⚠️ if tmux is absent — informational: "tmux not found, but cmux.app's tmux-compat layer covers the primary path. Install if needed: brew install tmux"
+  - ✅ if tmux is present, print informational: "tmux available (cmux.app's tmux-compat layer handles tmux-protocol calls)"
+  - ⚠️ if tmux is absent, print informational: "tmux not found, but cmux.app's tmux-compat layer covers the primary path. Install if needed: brew install tmux"
 - If cmux.app was NOT found (FALLBACK path):
   - ✅ if tmux is present — print exactly:
     ```
@@ -150,9 +150,9 @@ done
 ```
 
 - ✅ if all projects print `OK` (directory exists or was created successfully).
-- ⚠️ if any project prints `FAIL` — filesystem permissions prevent creation. Report the affected project path and stop; do not auto-fix.
+- ⚠️ if any project prints `FAIL`: filesystem permissions prevent creation. Report the affected project path and stop; do not auto-fix.
 
-Note: this is an informational check — the `tasks/` directory is auto-created by `/kingdom:init <project>` and `/kingdom:start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
+Note: this is an informational check. The `tasks/` directory is auto-created by `/kingdom:init <project>` and `/kingdom:start`. This check exists so the doctor can flag permission issues early, before lanes try to write task files.
 
 If no `.kingdom/*/kingdom.json` files exist yet (kingdom not yet initialised), print:
 
@@ -230,7 +230,7 @@ If `~/.claude/settings.json` does not exist, create it with `{}` as the base bef
 
 ## Check 8 — Orphan audit artifacts (informational)
 
-For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest — a sign that a lane closer was interrupted or that `/kingdom:update` is due.
+For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest: a sign that a lane closer was interrupted or that `/kingdom:update` is due.
 
 ID extraction strips known shard suffixes (`__kimi-p<N>`, `__shard-<N>`, `__pane<N>`) and falls back to `<UTC>` prefix match when the full ID doesn't resolve. This avoids the over-count when many lane-shard raws are covered by a single parent digest at the same UTC + base slug.
 
@@ -276,7 +276,7 @@ If no `.kingdom/*/kingdom.json` files exist yet, mark this check ✅ (not applic
 
 ## Check 9 — Git state across projects (informational)
 
-For each project with a `.kingdom/<project>/kingdom.json`, report the worktree state — dirty / branch / up-to-date with origin. Informational only; doesn't block. `/kingdom:update` runs this same check with prompts.
+For each project with a `.kingdom/<project>/kingdom.json`, report the worktree state (dirty / branch / up-to-date with origin). Informational only; doesn't block. `/kingdom:update` runs this same check with prompts.
 
 ```bash
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
@@ -314,7 +314,7 @@ Mark ✅ (not applicable) if no `.kingdom/*/kingdom.json` files exist yet.
 
 Background sub-agents (spawned by `/kingdom:update`'s Lead + specialists, by Workers' fan-outs, etc.) need an explicit `permissions.allow` list in the **workspace-scoped** `.claude/settings.json` (NOT user-global). Without it, every Bash / Edit / Agent call from a background agent prompts indefinitely and fan-outs stall silently.
 
-Real failure mode you'd see: `/kingdom:update` dispatches specialists, then nothing ever completes — sentinels never appear because each sub-agent is stuck on a permission prompt that no one sees.
+Real failure mode you'd see: `/kingdom:update` dispatches specialists, then nothing ever completes. Sentinels never appear because each sub-agent is stuck on a permission prompt that no one sees.
 
 ```bash
 WS_SETTINGS="$PWD/.claude/settings.json"
@@ -396,9 +396,9 @@ fi
     "$WS_SETTINGS" > "$tmp" && mv "$tmp" "$WS_SETTINGS"
   ```
 
-  Then report ✅ applied. On `N`: ⚠️ skipped — warn the user that `/kingdom:update` and `/kingdom:start` will stall on background sub-agent prompts.
+  Then report ✅ applied. On `N`: ⚠️ skipped. Warn the user that `/kingdom:update` and `/kingdom:start` will stall on background sub-agent prompts.
 
-**Important scope:** this is the **workspace-local** `.claude/settings.json` (`$PWD/.claude/settings.json`), NOT the user-global `~/.claude/settings.json` (which Check 6 handles). The two are independent — both must be correct.
+**Important scope:** this is the **workspace-local** `.claude/settings.json` (`$PWD/.claude/settings.json`), NOT the user-global `~/.claude/settings.json` (which Check 6 handles). The two are independent; both must be correct.
 
 ---
 
@@ -465,6 +465,6 @@ After the card, always print the detected mode line:
 
 - **Idempotent.** Re-running reports ✅ for everything already satisfied. No side effects unless the user confirms a patch.
 - **Never auto-install.** Do NOT run `brew install`, `curl | sh`, or any package manager command automatically. Print the command for the user to copy-paste.
-- **DO auto-patch `~/.claude/settings.json`** — but only after per-field user confirmation.
+- **DO auto-patch `~/.claude/settings.json`**, but only after per-field user confirmation.
 - Use plain `bash` + `jq` + `which` / `command -v` for all checks. No external tooling beyond what is being checked.
 - Ask each settings.json field confirmation separately so the user can apply one and skip the other.

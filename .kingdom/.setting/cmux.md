@@ -366,7 +366,7 @@ Don't fire `cmux notify` for low-value events:
 - ❌ Periodic heartbeats from watchman — write to log only, no notify
 - ❌ Mid-task progress per Layer — the closer event is the only checkpoint that notifies
 
-Reserve notifications for events that change what Ter or the King would do next.
+Reserve notifications for events that change what the user or the King would do next.
 
 ---
 
@@ -549,7 +549,7 @@ cmux's auto-state may still say "Running" but YOUR three signals tell the truth.
 | 🕵️ Watchman develop RED | `mark-unread` (King's workspace) | (watchman's own description: `⚠ develop RED`) | yes (King's workspace) |
 | 🕵️ Watchman PR mergeable | `mark-unread` (King's workspace) | (no King-workspace description change) | yes (King's workspace) |
 
-When the attention state RESOLVES (Ter approved push, lane unblocked, develop green again), the role responsible **clears the marker**:
+When the attention state RESOLVES (the user approved push, lane unblocked, develop green again), the role responsible **clears the marker**:
 
 ```bash
 cmux workspace-action --action mark-read --workspace "$LANE_WS"
@@ -618,7 +618,7 @@ cmux workspace-action --action set-description --workspace "$LANE_WS" --descript
 | 👷 Worker | Layer transition | `▶ <sub-task-id> · ▰▰▰▱ L<N> <name>` |
 | 👷 Worker | Closer Step 4 (sentinel written) | `✅ <sub-task-id> done · sentinel written` |
 | 👷 Worker | Next claim or 5-min idle | `🐾 Awaiting dispatch` |
-| 🧑‍💼 Co-worker | Activated by Ter | `▶ <sub-task-id> · Ter paired` |
+| 🧑‍💼 Co-worker | Activated by the user | `▶ <sub-task-id> · user paired` |
 | 🧑‍💼 Co-worker | Deactivated | `🐾 Dormant · activate with "pair on co-worker-1"` |
 | 🕵️ Watchman | Every `/loop` tick | `▶|⚠|✅ develop <state> · <N> PRs · last tick <UTC>` |
 | Watchman (when scanning a blocked lane) | Sees blocked-lane pattern | Sets the *target lane's* description to `⚠ Blocked · permission prompt` |

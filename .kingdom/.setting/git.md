@@ -9,9 +9,9 @@ Git workflow for the kingdom. See [`index.md`](index.md) for the entry-point ove
 | Branch | Lives in | Role |
 |---|---|---|
 | `worker-1..N` / `co-worker-1..M` / `watchman-1..K` | `.worktrees/<role>-<n>/` | 🏠 **LOCAL-ONLY** lane work surfaces. Never pushed. Persistent identities (e.g., `worker-1` always = worker-1; reset between PR batches). |
-| `kingdom` | primary checkout | 🏠 **LOCAL-ONLY** King-maintained integration view (merge of `develop` + all `worker-N` / `co-worker-N` tips). Never pushed. Advisory only — Ter can `git checkout kingdom` for combined state. Does NOT participate in PRs. Watchman branches NOT merged in (they just track develop). |
+| `kingdom` | primary checkout | 🏠 **LOCAL-ONLY** King-maintained integration view (merge of `develop` + all `worker-N` / `co-worker-N` tips). Never pushed. Advisory only — the user can `git checkout kingdom` for combined state. Does NOT participate in PRs. Watchman branches NOT merged in (they just track develop). |
 | `feature/<topic>` | (ref only, no worktree) | ⬆ **PUSHED.** PR branch — carved fresh from the relevant lane branch tip at PR-open time. Pushed to origin, PR opened, branch deleted after merge. One-shot. |
-| `main` / `develop` | tracked from origin | ⬇ pulled-from-origin only. Ter never pushes. Lead controls. |
+| `main` / `develop` | tracked from origin | ⬇ pulled-from-origin only. the user never pushes. Lead controls. |
 
 **The PR surface is decoupled from the work surface.** Lanes always work on `<role>-<n>` (local, persistent identities, configurable count). PRs always live on `feature/<topic>` (remote, descriptive, one-shot). Separation means lane local history is never polluted by remote-branch hygiene, and `feature/*` names can be chosen per-PR for clarity without disturbing the lane.
 
@@ -141,7 +141,7 @@ graph TB
 ### Key invariants
 
 - Five 🏠 branches never leave the laptop (in the default 3-1-1 shape): `kingdom` + `worker-1..3` + `co-worker-1` + `watchman-1`. With other shapes, more.
-- Three branches participate in the local↔remote boundary: `main` (read-only for Ter), `develop` (pulled, never pushed by Ter), `feature/*` (push-on-PR-open, delete-after-merge).
+- Three branches participate in the local↔remote boundary: `main` (read-only for the user), `develop` (pulled, never pushed by the user), `feature/*` (push-on-PR-open, delete-after-merge).
 - Lane numbers are slot identities — local-only branches have no historical meaning across PR batches; they reset after every merge.
 - `kingdom` is a snapshot view, not a history. Its merge graph rebuilds on every refresh; nothing depends on `kingdom`'s history surviving.
 
@@ -155,7 +155,7 @@ graph TB
 4. King runs the **pre-commit gate** inside the lane's worktree — typecheck + tests + dry-merge vs `origin/develop` + cross-lane file-overlap. See [`kings.md`](kings.md) → Pre-commit gate. Commands come from `kingdom.json.gate.*`.
 5. King writes a `KING_<UTC>__<lane-name>__<sub-task-id>.md` test report to `<project>/docs/test-reports/`.
 6. King reports to chat: "Lane ready. Test report at … Proposed PR title: … Proposed PR branch: feature/<topic>. Push?"
-7. Ter says **push** (or holds with reasoning).
+7. The user says **push** (or holds with reasoning).
 8. King runs **FINAL conflict check** — `git merge-tree --write-tree --no-messages origin/develop <role>-<n>`. If clean → continue; if conflicts → dispatch rebase to lane, re-run gate, re-request approval.
 9. King carves + pushes (from the primary checkout, **not** the lane worktree):
    ```bash
@@ -180,7 +180,7 @@ graph TB
 
 ## Push approval gate (King-only)
 
-**Push authority lives with the King alone. Lane masters NEVER push.** Lane masters do their work, run the 4-step closer, drop the sentinel flag — that's it. No `git push`, no `feature/*` branch creation, no `gh pr create`. All remote-touching git operations are King-only, gated by Ter's explicit approval and the King's FINAL conflict check.
+**Push authority lives with the King alone. Lane masters NEVER push.** Lane masters do their work, run the 4-step closer, drop the sentinel flag — that's it. No `git push`, no `feature/*` branch creation, no `gh pr create`. All remote-touching git operations are King-only, gated by the user's explicit approval and the King's FINAL conflict check.
 
 Full sequence in [`kings.md`](kings.md) → Push approval gate.
 
@@ -190,7 +190,7 @@ Full sequence in [`kings.md`](kings.md) → Push approval gate.
 
 ## FINAL conflict check (King-only)
 
-Runs AFTER Ter's approval, BEFORE actual push. Catches `origin/develop` drift during the approval window.
+Runs AFTER the user's approval, BEFORE actual push. Catches `origin/develop` drift during the approval window.
 
 ```bash
 cd <project>                                          # King's cwd = primary checkout
@@ -210,7 +210,7 @@ fi
 
 ## Refreshing the `kingdom` integration branch (advisory only)
 
-King keeps `kingdom` (in the primary checkout) merged-up so Ter can `git checkout kingdom` and see all lanes' combined state at any time:
+King keeps `kingdom` (in the primary checkout) merged-up so the user can `git checkout kingdom` and see all lanes' combined state at any time:
 
 ```bash
 cd <project>
@@ -224,7 +224,7 @@ done
 # NEVER push kingdom.
 ```
 
-**Refresh cadence:** after every lane completion, on Ter's request, or whenever the merge graph might be stale.
+**Refresh cadence:** after every lane completion, on the user's request, or whenever the merge graph might be stale.
 
 **`kingdom` does NOT participate in PRs.** PRs are carved from `<role>-<n>` directly into `feature/<topic>`. The integration view is purely advisory; if it gets tangled, delete it (`git branch -D kingdom`) and recreate by re-running the loop above. Nothing depends on `kingdom`'s history surviving — lane history lives on the lane branches.
 

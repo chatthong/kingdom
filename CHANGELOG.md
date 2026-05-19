@@ -4,6 +4,33 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.28.1] — 2026-05-19
+
+10-agent Haiku audit + 8-agent Sonnet fix-up. Aggregated cleanups across the repo: public-plugin hygiene (`Ter` → `the user` across role docs), CLAUDE.md sync to v0.28.0, helper consolidation per R37, em-dash density reduction in command docs.
+
+### Changed
+
+- **`Ter` → `the user`** across `.kingdom/.setting/` role docs (kings.md ~45 replacements, co-workers.md ~40, workers.md 8, watchmans.md 4, git.md 7, cmux.md 3, _primitives.md 2, rules.md, index.md 4, plus docs/*.md). Remaining `Ter` occurrences are all inside fenced code/mermaid blocks (untouched per safety rules).
+- **`CLAUDE.md` synced to v0.28.0** — version footer, directory layout, plus 5 new rows in version-history table (v0.24-v0.28) and 9 new architectural-decision entries for R30-R38. Now 22 total architectural decisions (was 13).
+- **Helper consolidation per R37**: `make_artifact_id`, `raw_path`, `curated_path` moved from inline `workers.md` definitions to canonical home in `_primitives.md § Artifact path helpers`. `workers.md` now references `_primitives.md` instead of inlining.
+- **Em-dash density reduction** in 4 command docs: `commands/day.md` 49 → 33, `commands/update.md` 44 → 33, `commands/doctor.md` 44 → 34, `commands/start.md` 39 → 29. Targeted prose appositives + list-separators only; headings, code blocks, structural definition lists untouched.
+- `plugin.json`, `marketplace.json`, README badge — version → `0.28.1`.
+
+### Audit verification (10 parallel Haiku scans, post-fix)
+
+- ✅ All 38 rules unique IDs, no contradictions, tier classifications consistent
+- ✅ CHANGELOG 51 versions monotonically descending, all dates valid
+- ✅ No AI-slop wording detected across repo (no `linchpin`/`robustly`/`leverages`/`comprehensive solution`/etc)
+- ✅ Step numbering in `commands/day.md` clean (0.0 → 0.6, 1 → 6)
+- ✅ Skill-routing table: prefixed/unprefixed duplicates pre-cleaned (no `frontend-design` + `frontend-design:frontend-design` overlap)
+- ✅ `cards/dispatch-brief.md` Variables table includes `${STORY_HEADING}`
+
+### Known remaining (deferred to next release)
+
+- 13 broken cross-link anchors verified by audit — Agent 5 (anchor-fix sub-agent) hit a transient API ConnectionRefused error; verified rules.md anchors are clean but cmux.md / watchmans.md anchor verification deferred. Most use GitHub-correct format already (manual spot-check passed); a comprehensive sweep can land in a future patch.
+
+---
+
 ## [0.28.0] — 2026-05-19
 
 **Visible-first execution model + interactive no-args mode.** Three Tier-1 rules that make the kingdom feel responsive AND keep all work observable in cmux, plus a new interactive `/kingdom:day` (no args) that asks the user "what do you want to work on?" and parses natural-language replies.

@@ -9,7 +9,7 @@ Parse `$ARGUMENTS`: first positional token = `<project>` (required). Must match 
 
 If `<project>` is missing, stop and ask: "Which project? (subdirectory name under $PWD)".
 
-**Shape is read from `kingdom.json` — no override args.** To change worker/co-worker/watchman counts, either edit `.kingdom/<project>/kingdom.json` directly or re-run `/kingdom:init <project> workers=N co-workers=M watchman=K` (which preserves your `gate.*` customisations? — actually it asks before overwriting).
+**Shape is read from `kingdom.json`; no override args.** To change worker/co-worker/watchman counts, either edit `.kingdom/<project>/kingdom.json` directly or re-run `/kingdom:init <project> workers=N co-workers=M watchman=K` (which preserves your `gate.*` customisations, or asks before overwriting).
 
 ---
 
@@ -280,7 +280,7 @@ done
 } > "$LOGS/workspace-refs.env"
 ```
 
-The `workspace-refs.env` file lets the King + watchman dispatch via stable refs across the session (and on resume — `/kingdom:start` re-reads it instead of re-spawning).
+The `workspace-refs.env` file lets the King + watchman dispatch via stable refs across the session (and on resume: `/kingdom:start` re-reads it instead of re-spawning).
 
 ### MODE=fallback (raw tmux)
 
@@ -330,7 +330,7 @@ The artifact protocol (4-step closer, sentinel flag, log writes) is identical ac
 
 ### MODE=primary (manaflow/cmux)
 
-No pinning step needed — `cmux new-workspace --name --cwd --command` in Phase 5 already labels, sets cwd, and launches Claude in one call.
+No pinning step needed: `cmux new-workspace --name --cwd --command` in Phase 5 already labels, sets cwd, and launches Claude in one call.
 
 Verify the resulting layout:
 
@@ -368,7 +368,7 @@ cmux identify --json
 
 ### MODE=fallback (raw tmux)
 
-Panes are already pinned by cwd from the `tmux split-window -c` calls in Phase 5. Pane titles are set in Phase 5 too. No further setup needed — each pane's cwd is its worktree.
+Panes are already pinned by cwd from the `tmux split-window -c` calls in Phase 5. Pane titles are set in Phase 5 too. No further setup needed; each pane's cwd is its worktree.
 
 ### MODE=headless
 
@@ -391,7 +391,7 @@ tmux select-pane -t "$SESSION:$WIN.1" -T "👑 King"
 #   tmux select-pane -t "$SESSION:$WIN.<idx>" -T "🕵️ watchman-1"
 ```
 
-No further pinning needed — each pane's cwd is its worktree. Emoji prefixes follow `.kingdom/.setting/index.md` → "Role emoji convention".
+No further pinning needed; each pane's cwd is its worktree. Emoji prefixes follow `.kingdom/.setting/index.md` → "Role emoji convention".
 
 ### MODE=headless
 
@@ -450,7 +450,7 @@ Repeat per lane name as needed. The `--force` flag handles unclean working trees
 - **Config is authoritative.** `kingdom.json` owns the shape; CLI args are overrides only. Never hard-code lane counts.
 - **Tier read discipline.** King reads only Tier 1 (`master_agent.log`) by default; Tier 2 (`<ID>.md`, limit=15) on demand; Tier 3 (`raw/*`) is banned.
 - **Reference docs.** For any detail not directly covered here, read:
-  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/kings.md` — King role, dispatching (MODE-branched cmux/tmux/headless), pre-commit gate, push approval gate
-  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/workers.md` — 4-step closer artifact protocol
-  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md` — branch model
-  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/index.md` — entry-point overview + session-start detection logic
+  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/kings.md`: King role, dispatching (MODE-branched cmux/tmux/headless), pre-commit gate, push approval gate
+  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/workers.md`: 4-step closer artifact protocol
+  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md`: branch model
+  - `${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/index.md`: entry-point overview + session-start detection logic

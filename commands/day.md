@@ -58,16 +58,16 @@ If the parse is ambiguous (multiple project matches, task hint doesn't match any
    Proceed? Or correct the parse.
 ```
 
-If the user types something unparseable (e.g. only `"hi"`, or a question), King replies in chat WITHOUT starting the kingdom — treat as conversational, not a `/kingdom:day` invocation. The user can re-run `/kingdom:day` explicitly when ready.
+If the user types something unparseable (e.g. only `"hi"`, or a question), King replies in chat WITHOUT starting the kingdom. Treat it as conversational, not a `/kingdom:day` invocation. The user can re-run `/kingdom:day` explicitly when ready.
 
 **Why this mode exists:** lowers the friction for "I have a vague idea what I want to do today, just figure it out." King reads project state + open work + the user's hint and proposes a concrete dispatch plan. User confirms with one word (`go` / `yes`) and the kingdom starts.
 
 **Resolved args from Step 0 or Step 0.0:**
 
 - `project` — explicit positional OR fuzzy-matched from interactive reply. Verify `.kingdom/${project}/` exists; if missing, tell the user to run `/kingdom:init ${project}` first and stop.
-- `target=N-M/<period>` — soft dispatch budget; auto-split in Step 0.1.
-- `cap=N` — hard daily ceiling.
-- `task_hint` (interactive-mode only) — natural-language scope from the user's reply; King uses it as a strong prior in Step 0.6 resume-scan and `suggested-task` card synthesis.
+- `target=N-M/<period>`: soft dispatch budget; auto-split in Step 0.1.
+- `cap=N`: hard daily ceiling.
+- `task_hint` (interactive-mode only): natural-language scope from the user's reply; King uses it as a strong prior in Step 0.6 resume-scan and `suggested-task` card synthesis.
 
 ### Step 0.1 — Auto-split `target` across timeframes
 
@@ -318,13 +318,13 @@ if [ -n "$RESUME_QUEUE" ] || [ -n "$DECISION_QUEUE" ]; then
 fi
 ```
 
-**Resume queue takes priority over new dispatch.** In Step 4, lanes already in-flight get re-briefed with `[RESUME]` flag pointing at the same task ID + the last `## Progress notes` line. NEVER open a fresh task file for a lane that already has an in-flight one — that orphans the old file and confuses the audit trail.
+**Resume queue takes priority over new dispatch.** In Step 4, lanes already in-flight get re-briefed with `[RESUME]` flag pointing at the same task ID + the last `## Progress notes` line. NEVER open a fresh task file for a lane that already has an in-flight one: that orphans the old file and confuses the audit trail.
 
 **Decision queue items** surface in the [`suggested-task`](../.kingdom/.setting/cards/suggested-task.md) card as `→ Unblock <task-id>` candidates so the user resolves blockers before new work loads.
 
 ## Step 1 — Audit (always — runs IN LANE WORKSPACES per R37) (v0.28.0+ R37-compliant)
 
-The audit's 4 specialists (Lead + A/B/C/D) dispatch to lane workspaces via `cmux send` — not to in-process Agent() calls. Per R37, parallelisable work runs in lanes that the user can SEE.
+The audit's 4 specialists (Lead + A/B/C/D) dispatch to lane workspaces via `cmux send`, not to in-process Agent() calls. Per R37, parallelisable work runs in lanes that the user can SEE.
 
 ```bash
 echo "👑 Step 1/5 · Dispatching audit specialists to lanes (R37)…"
@@ -356,7 +356,7 @@ done
 poll_for_sentinels "audit-*" 180  # 3-min timeout total
 ```
 
-The audit is **always run** at the start of `/kingdom:day`. There is no "skip if recent" gate; the audit is cheap (parallel across N lanes, ~1-3 min) compared to acting on stale information. If you need to skip the audit deliberately (rare — King session crashed mid-day and you only want to resume the poll loop), invoke `/kingdom:start` directly + drop into Step 5 of this file manually.
+The audit is **always run** at the start of `/kingdom:day`. There is no "skip if recent" gate; the audit is cheap (parallel across N lanes, ~1-3 min) compared to acting on stale information. If you need to skip the audit deliberately (rare: King session crashed mid-day and you only want to resume the poll loop), invoke `/kingdom:start` directly + drop into Step 5 of this file manually.
 
 **Banned (R38 violation):** `Agent(subagent_type="general-purpose", prompt="audit specialist...")` in-process inside King. That hides the work behind the "1 local agent · ctrl+t to hide tasks" indicator. Always dispatch to a lane or spawn a visible tab.
 
@@ -399,10 +399,10 @@ EOF
 
 Each card's full template + variable list + variants lives in [`.kingdom/.setting/cards/`](../.kingdom/.setting/cards/):
 
-- [`cards/welcome.md`](../.kingdom/.setting/cards/welcome.md) — 4 time-of-day variants (morning/afternoon/evening/late) + weather slot
-- [`cards/daily-status.md`](../.kingdom/.setting/cards/daily-status.md) — project + counting unit + target + watchman + PR queue
-- [`cards/suggested-task.md`](../.kingdom/.setting/cards/suggested-task.md) — 1-3 candidates with reasoning
-- [`cards/dispatch-plan.md`](../.kingdom/.setting/cards/dispatch-plan.md) — lane assignments for today
+- [`cards/welcome.md`](../.kingdom/.setting/cards/welcome.md): 4 time-of-day variants (morning/afternoon/evening/late) + weather slot
+- [`cards/daily-status.md`](../.kingdom/.setting/cards/daily-status.md): project + counting unit + target + watchman + PR queue
+- [`cards/suggested-task.md`](../.kingdom/.setting/cards/suggested-task.md): 1-3 candidates with reasoning
+- [`cards/dispatch-plan.md`](../.kingdom/.setting/cards/dispatch-plan.md): lane assignments for today
 
 **Card formatting summary:**
 
@@ -424,17 +424,17 @@ Other cards fired by `/kingdom:day` later in the cycle (Step 5 poll loop / Step 
 See [`cards/README.md`](../.kingdom/.setting/cards/README.md) for the full index + alert-flavour mapping.
 
 The **Suggested next task** synthesis draws from (in priority order):
-1. **Unfinished prior-session work** — task files in `.kingdom/${project}/tasks/` with Status ∈ `planning|executing|verifying` and no matching sentinel in `logs/done/`.
-2. **Lead-requested follow-ups** — open PRs with unresolved review comments.
+1. **Unfinished prior-session work**: task files in `.kingdom/${project}/tasks/` with Status ∈ `planning|executing|verifying` and no matching sentinel in `logs/done/`.
+2. **Lead-requested follow-ups**: open PRs with unresolved review comments.
 3. **Unflipped acceptance criteria** in the project task-ledger (`TODO_*.md`, `TODO_Master.csv`, `STEP.md`) that match an idle lane's domain.
 4. **Watchman gap findings** in `WATCH_DOCS_AUDIT.md`.
-5. **New work** — first unstarted heading in the task-ledger that has no dependency-blocking.
+5. **New work**: first unstarted heading in the task-ledger that has no dependency-blocking.
 
 King picks 1-3 candidates and presents them as a numbered choice; the user can pick one or say "go" to accept the first.
 
 ## Step 4 — Auto-dispatch (within cap/target) — HARD 60s TIME BUDGET (R30)
 
-**R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching — STOP and dispatch with the brief as-is. Layer-2 Strategy happens INSIDE the lane after dispatch, not in chat before dispatch.
+**R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching: STOP and dispatch with the brief as-is. Layer-2 Strategy happens INSIDE the lane after dispatch, not in chat before dispatch.
 
 ```bash
 DISPATCH_START=$(date +%s)
@@ -479,7 +479,7 @@ fi
 
 Workers begin work in parallel (per rules.md R28 parallel-by-default).
 
-**Anti-pattern (R30 violation):** drafting "Worker-N plan (final)" multi-batch tables in CHAT before dispatching. That table belongs in the lane's task file as `## Plan` (Layer-2 Strategy), written BY the lane AFTER it receives the brief. King's brief lists the task ID + AC + skills + dependencies — not a 9-batch execution plan.
+**Anti-pattern (R30 violation):** drafting "Worker-N plan (final)" multi-batch tables in CHAT before dispatching. That table belongs in the lane's task file as `## Plan` (Layer-2 Strategy), written BY the lane AFTER it receives the brief. King's brief lists the task ID + AC + skills + dependencies, not a 9-batch execution plan.
 
 **Anti-pattern (R32 violation):** printing `worker-1 staged · awaiting your dictation`. Workers don't wait. If worker-1 has no claimable task, mark it `🐾 idle (no claimable task)` and continue to the next lane. Only co-workers wait, and only for the explicit `pair on co-worker-N` signal.
 

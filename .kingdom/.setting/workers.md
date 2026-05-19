@@ -48,7 +48,7 @@ The dispatch brief can explicitly request a non-default mode. Master honours the
 ```text
 worker-1 task BE-AUTH-3:
   Brief: refactor auth middleware...
-  Spawn mode: tab          # Ter wants to watch the Sonnet sub-agents work
+  Spawn mode: tab          # the user wants to watch the Sonnet sub-agents work
 ```
 
 Common reasons to override:
@@ -56,7 +56,7 @@ Common reasons to override:
 | Override | When |
 |---|---|
 | `spawn_mode: tab` (force visible) | Long-running Sonnet work, debugging, "show me what worker-1 is doing" |
-| `spawn_mode: background` (force headless) | Ter wants speed, doesn't care to watch; cost-sensitive fan-out of >5 sub-agents |
+| `spawn_mode: background` (force headless) | the user wants speed, doesn't care to watch; cost-sensitive fan-out of >5 sub-agents |
 | `spawn_mode: split` (rare) | Pair-style "do A and B side-by-side" |
 
 ### Auto-close still applies (Tab-spawned)
@@ -120,7 +120,7 @@ When each sub-agent finishes (writes sentinel + Step 5 self-close):
     └── 📑 worker-1   ← master synthesises the 3 outputs, continues Layer 4
 ```
 
-Ter SEES the parallelism happen. Tabs appear, do work, disappear cleanly.
+The user SEES the parallelism happen. Tabs appear, do work, disappear cleanly.
 
 ---
 
@@ -291,7 +291,7 @@ Description updates are **optional but recommended** — failures are silent and
 - **Finalised** when status → done or blocked: lane writes the "Final summary" section, then runs the 4-step closer.
 - **Never deleted, never reused.** New task = new task file.
 
-**Read access:** anyone (King, sub-agents, Watchman for context, Ter). **Write access:** lane master only. Sub-agents report progress via their own 4-step closer; lane master ingests their curated output and reflects it in the task file's progress notes / checkboxes.
+**Read access:** anyone (King, sub-agents, Watchman for context, the user). **Write access:** lane master only. Sub-agents report progress via their own 4-step closer; lane master ingests their curated output and reflects it in the task file's progress notes / checkboxes.
 
 ---
 
@@ -328,7 +328,7 @@ Lane masters **plan before executing.** Planning produces 2-4 layers in the task
 
 Each layer's sub-agents follow the 4-step closer themselves (raw + curated + log + flag). Lane master polls THEIR flags, reads their curated TL;DRs, synthesises, then ticks the layer's checkboxes in the task file before moving to the next layer.
 
-Depth >4 is usually a sign of unclear scope — surface to King/Ter rather than spiral deeper.
+Depth >4 is usually a sign of unclear scope — surface to King/the user rather than spiral deeper.
 
 **Spawn rules within a layer are unchanged** — see "Spawn rights" above. N is chosen for best result, not 1:1 with files. Coherence > raw parallelism when work has cross-file dependencies.
 
@@ -514,28 +514,7 @@ flag     <LOGS>/done/<ID>__<sub>-<lane-name>.flag    ← sentinel
 
 ## Path / ID helpers (master generates IDs; worker uses paths in its prompt)
 
-```bash
-# Workspace + project anchors — set once per session.
-WS=/Users/ter/Desktop/Bonfire                       # workspace root
-PROJ_NAME=<project>                                  # project directory basename
-LOGS="$WS/.kingdom/$PROJ_NAME/logs"                 # this project's logs dir under .kingdom/
-
-# Generate the shared ID for a task. Master calls this once per task.
-make_artifact_id() {     # usage: make_artifact_id <task-type> <sub-agent> <slug>
-  printf '%s__%s__%s__%s' \
-    "$(date -u +%Y-%m-%dT%H%MZ)" "$1" "$2" "$3"
-}
-
-# Compute a worker's raw path (no I/O — just the path string).
-raw_path() {             # usage: raw_path <logs_dir> <ID> <sub-agent> <worker-slug>
-  printf '%s/raw/%s__%s-%s.md' "$1" "$2" "$3" "$4"
-}
-
-# Compute the curated path (shared across all workers in a task).
-curated_path() {         # usage: curated_path <logs_dir> <ID>
-  printf '%s/%s.md' "$1" "$2"
-}
-```
+> Helper definitions: see [`_primitives.md` § make_artifact_id / raw_path / curated_path](../.kingdom/.setting/_primitives.md). Usage examples below.
 
 There is no `log_master` helper — master writes nothing. The worker prompt embeds its own `echo … >> master_agent.log` line as step 3 of the closer.
 
@@ -623,7 +602,7 @@ curated   <WS>/.kingdom/<project>/logs/<ID>.md
 flag      <WS>/.kingdom/<project>/logs/done/<ID>__opus-worker-1.flag
 ```
 
-After the flag appears, the King decides: `cmux merge` (if commits to keep + Ter approves push) → carve `feature/<topic>` → push. See [`git.md`](git.md) → Commit flow.
+After the flag appears, the King decides: `cmux merge` (if commits to keep + the user approves push) → carve `feature/<topic>` → push. See [`git.md`](git.md) → Commit flow.
 
 ---
 
@@ -693,8 +672,8 @@ If a worker runs and produces any reasoning / analysis / file content, **all fou
 |---|---|
 | `git push` | King runs all pushes — see [`kings.md`](kings.md) → Push approval gate |
 | `feature/*` branch creation | King carves `feature/<topic>` from lane branch tip |
-| `gh pr create` | King opens PRs after Ter's "push" OK + FINAL conflict check |
-| FINAL conflict check against `origin/develop` | King runs `git merge-tree` after Ter approves |
+| `gh pr create` | King opens PRs after the user's "push" OK + FINAL conflict check |
+| FINAL conflict check against `origin/develop` | King runs `git merge-tree` after the user approves |
 | Authoritative pre-commit gate | King runs the gate; workers may run fast feedback tests internally but those are hygiene, not gating |
 | Reuse task files across tasks | New task = new task file. Task files are never reused or overwritten for a subsequent task. |
 

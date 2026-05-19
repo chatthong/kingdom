@@ -10,7 +10,7 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.23.0 (2026-05-19)
+## Current state — v0.28.0 (2026-05-19)
 
 The plugin is on `main` at commit `cbb677e`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
 
@@ -18,6 +18,11 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 | Version | Theme | What landed |
 |---|---|---|
+| **0.28.0** | Visible-first execution + interactive no-args mode | R36/R37/R38 (Tier 1): King renames workspace + spawns all lanes visibly within ~10s of `/kingdom:day`; heavy processing routes to lane sessions via `cmux send`; Agent() in King's session banned; new interactive Step 0.0 + `what-to-work-on` card (21st card) |
+| 0.27.0 | Multi-window cmux.app support | `kingdom.json.cmux.spawnWindow` config (`"current"` / `"new"` / `"<uuid>"`); `spawn_master_workspace` updated; documented: default-to-caller's-window is multi-window-compatible; `cmux.md` § Multi-window added |
+| 0.26.0 | R34/R35 + self-detect protocol | R34 (Tier 1): Tier-1 rules override memory/feedback notes; R35 (Tier 1): King never `cp`s uncommitted changes between worktrees; self-detect protocol added (STOP → factual ack → repair → log → no dependent work without repair) |
+| 0.25.0 | Resume queue + R33 task-state scan | R33 (Tier 1): King reads `.kingdom/<project>/tasks/` BEFORE dispatch every session; R31 expanded to AGENT-mode worktree check; `cards/resume-queue.md` (20th card); `/kingdom:day` Step 0.6 resume scan |
+| 0.24.0 | R30/R31/R32 + King-is-dispatcher hardening | R30 (Tier 1) 60s dispatch budget; R31 (Tier 1) lane-readiness gate before dispatch; R32 (Tier 2) co-worker-only staged/waiting; `/kingdom:day` Step 0.5 lane gate; `CLAUDE.md` added to repo |
 | **0.23.0** | Per-task skill routing | `skill-routing.md` (~40 keyword→skill mappings), `pick_skills_for_task` helper, `${SUGGESTED_SKILLS}` in dispatch-brief, user-override `skill=name1,name2` / `skill=none` |
 | 0.22.0 | 19-card display library | All 6 slash commands wired to cards; welcome card with weather; `task-complete` random pool (20 lines); `${USER_NAME}` instead of hardcoded `Ter`; `fetch_weather_line` / `random_task_done_line` / `render_card` helpers |
 | 0.21.0 | README slim + docs/ split | README 739→210 lines; 8 docs files; cmux sidebar ASCII→mermaid |
@@ -31,7 +36,7 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 ```
 .claude-plugin/
-  plugin.json              # name=kingdom, version=0.23.0
+  plugin.json              # name=kingdom, version=0.28.0
   marketplace.json         # registry entry
 
 commands/                  # 6 slash commands
@@ -44,10 +49,10 @@ commands/                  # 6 slash commands
 
 .kingdom/.setting/         # role docs + helpers + cards + routing (canonical source — copied into workspace by /kingdom:init)
   index.md                 # entry-point router
-  rules.md                 # 29 enforceable rules (R1-R29), Tier 1/2/3
+  rules.md                 # 37 enforceable rules (R1-R38), Tier 1/2/3
   _primitives.md           # shared bash helpers (cmux_*, kingdom_*, render_card, pick_skills_for_task, etc)
   kings.md / workers.md / co-workers.md / watchmans.md / git.md / cmux.md   # role specs
-  cards/                   # 19 display templates (welcome, daily-status, task-complete, etc) + README
+  cards/                   # 21 display templates (welcome, daily-status, task-complete, resume-queue, what-to-work-on, etc) + README
   skill-routing.md         # keyword → skill mapping (v0.23.0+)
 
 docs/                      # 8 long-form topic docs (split from README in v0.21.0)
@@ -58,7 +63,7 @@ README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions (don't re-debate without reading the rationale)
+## Key architectural decisions — 22 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -85,6 +90,24 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 12. **Cards over inline templates** (v0.22.0). All user-facing output is `render_card "name"` against `.kingdom/.setting/cards/*.md`. Each card wraps a box-drawn body in a GitHub alert (`[!NOTE]`/`[!TIP]`/`[!IMPORTANT]`/`[!WARNING]`/`[!CAUTION]`) for coloured rendering in Claude Code chat.
 
 13. **Per-task skill routing** (v0.23.0). King runs `pick_skills_for_task` per dispatch, picks up to 3 from `.kingdom/.setting/skill-routing.md` keyword table, embeds in dispatch-brief. Skills are NOT lane-permanent; each task re-picks.
+
+14. **King is orchestrator-only — never executes task work** (R30, v0.24.0). Allowed verbs: plan, dispatch, gate-fire, overlay, request push approval, read audits. BANNED: write code, draft multi-batch execution tables in chat, run gates manually for a lane. Hard 60s budget from Step 4 reaching auto-dispatch to first `cmux send`.
+
+15. **Lane-readiness gate before every dispatch** (R31, v0.24.0). `workspace-refs.env` must list every lane; `cmux tree --all` must show them alive. Universal "lanes exist" signal is `.worktrees/<lane>/` directories (mode-agnostic). If worktrees exist but cmux refs are missing, fall to AGENT mode rather than re-spawning. No dispatch fires until lanes confirmed.
+
+16. **Co-worker-only "staged/waiting" state** (R32, v0.24.0). Workers auto-claim from queue; idle workers show `Idle (no claimable task)` + King keeps polling. Only co-workers wait, and only for explicit `pair on co-worker-N`. Watchmen always run `/loop`.
+
+17. **King reads existing task state BEFORE dispatching new tasks** (R33, v0.25.0). At session start AND every Step 4 dispatch round, King scans `.kingdom/<project>/tasks/*.md` newest-first, builds resume queue (in-flight, no sentinel) and decision queue (blocked). Resume takes priority. NEVER open a fresh task file for a lane with an in-flight one.
+
+18. **Tier-1 rules override memory/feedback notes** (R34, v0.26.0). `MEMORY.md` and `feedback_*.md` are advisory context, NOT authoritative protocol. When a memory note conflicts with a Tier-1 rule, the rule wins. Self-detect protocol: STOP → factual acknowledgment in chat → repair → log `RULE_VIOLATION R<N>` to `master_agent.log` → no dependent work before repair.
+
+19. **King never copies uncommitted changes between worktrees** (R35, v0.26.0). Each `.worktrees/<lane>/` is the exclusive work surface for that lane. Banned: `cp .worktrees/worker-1/file .worktrees/worker-2/file` + commit on worker-2. Cross-worktree read for context is allowed; `git diff <lane> | git apply` onto kingdom overlay only.
+
+20. **Visible workspace progress within ~10s of `/kingdom:day`** (R36, v0.28.0). King renames its own workspace to `👑 King · <project>` within ~1s; ALL lane workspaces from `kingdom.json.shape` spawn in parallel before any audit/dispatch starts; `spawn-complete` card renders before processing. No "crunched for 30s while sidebar looks dead."
+
+21. **Heavy processing runs IN lane workspaces, not King's session** (R37, v0.28.0). Audit fan-outs, pattern-grep scans, doc-digest fan-outs dispatch to lanes via `cmux send`. King's main session: read state, render cards, make dispatch decisions only. Lanes are parallel compute; use them.
+
+22. **Sub-agent spawns are tabs or lane dispatch — never in-process Agent()** (R38, v0.28.0). Allowed: `cmux tab-action --action new-terminal-right` (visible tab, auto-closes on sentinel) OR `cmux send --workspace worker-N`. Banned: `Agent(subagent_type="general-purpose", ...)` in King's main session. The cmux "1 local agent · ctrl+t to hide tasks" bottom-pane indicator is an R38 violation signal.
 
 ## Working conventions for THIS repo
 
@@ -148,9 +171,9 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 - **Branch model + lifecycle:** `docs/branch-model.md`.
 - **Card library structure:** `.kingdom/.setting/cards/README.md`.
 - **Skill routing table:** `.kingdom/.setting/skill-routing.md`.
-- **The 29 rules:** `.kingdom/.setting/rules.md`. Tier 1 = iron-clad; Tier 2 = strong defaults; Tier 3 = conventions.
+- **The 37 rules:** `.kingdom/.setting/rules.md`. Tier 1 = iron-clad (16); Tier 2 = strong defaults (16); Tier 3 = conventions (5).
 - **Helper bash:** `.kingdom/.setting/_primitives.md`. Every role doc points here for shared functions.
 
 ---
 
-*Last updated: 2026-05-19 after v0.23.0 ship. Update this file when shipping a release that changes architectural decisions (1-13 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-19 after v0.28.0 ship. Update this file when shipping a release that changes architectural decisions (1-13 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

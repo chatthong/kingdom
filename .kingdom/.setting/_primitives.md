@@ -373,7 +373,7 @@ EOF
 }
 ```
 
-Override via dispatch brief `PR body: manual` — King skips auto-generation and asks Ter to paste a body. Default: auto-generate. Used by `kings.md` § Auto-generated PR body.
+Override via dispatch brief `PR body: manual` — King skips auto-generation and asks the user to paste a body. Default: auto-generate. Used by `kings.md` § Auto-generated PR body.
 
 ---
 
@@ -434,7 +434,33 @@ find_ungated_sentinels () {
 }
 ```
 
-Used by `kings.md` § Auto-gate on completion. King runs this at session resume + pre-Ter-interaction + post-dispatch polling + on watchman done-notify. Un-gated → auto-fire Tier-1 gate without asking.
+Used by `kings.md` § Auto-gate on completion. King runs this at session resume + pre-user-interaction + post-dispatch polling + on watchman done-notify. Un-gated → auto-fire Tier-1 gate without asking.
+
+---
+
+## Artifact path helpers
+
+### `make_artifact_id` / `raw_path` / `curated_path` — artifact path helpers
+
+```bash
+# Generate the shared ID for a task. Master calls this once per task.
+make_artifact_id() {     # usage: make_artifact_id <task-type> <sub-agent> <slug>
+  printf '%s__%s__%s__%s' \
+    "$(date -u +%Y-%m-%dT%H%MZ)" "$1" "$2" "$3"
+}
+
+# Compute a worker's raw path (no I/O — just the path string).
+raw_path() {             # usage: raw_path <logs_dir> <ID> <sub-agent> <worker-slug>
+  printf '%s/raw/%s__%s-%s.md' "$1" "$2" "$3" "$4"
+}
+
+# Compute the curated path (shared across all workers in a task).
+curated_path() {         # usage: curated_path <logs_dir> <ID>
+  printf '%s/%s.md' "$1" "$2"
+}
+```
+
+Used by `workers.md` § Path / ID helpers. Master calls `make_artifact_id` once per task to generate the shared `<ID>`; workers compute their artifact paths via `raw_path` and `curated_path` using that ID.
 
 ---
 

@@ -5,7 +5,7 @@ argument-hint: [project=<name>] [--force]
 
 > **Most users want [`/kingdom:day`](day.md) instead.** `/kingdom:day` always runs this audit as Step 1 + then spawns lanes + enters the auto-gate-poll loop. Use `/kingdom:update` standalone only for mid-day re-audits when watchman flags fresh findings, or to refresh the audit-trail without entering the poll loop.
 
-You are running a forced audit pass on the kingdom's audit-trail artifacts for ONE project. The goal: bring `.kingdom/<project>/{logs,tasks}/` into a self-consistent state AND surface gaps between the project's actual state and what the kingdom has recorded. Idempotent — safe to run any time.
+You are running a forced audit pass on the kingdom's audit-trail artifacts for ONE project. The goal: bring `.kingdom/<project>/{logs,tasks}/` into a self-consistent state AND surface gaps between the project's actual state and what the kingdom has recorded. Idempotent; safe to run any time.
 
 ## Step 0 — Resolve project + flags
 
@@ -20,7 +20,7 @@ If `PROJECT_MISSING`, tell the user `/kingdom:init ${project}` must be run first
 
 ## Step 0.5 — Git state precheck (auto-switch to kingdom)
 
-The audit runs cleanest when the project worktree is on the `kingdom` integration branch (an always-local view that mirrors `origin/<base>` plus any in-flight lanes). Switch to it automatically — never prompt. Switching to kingdom has zero side effects on the user's work: uncommitted changes follow the checkout (git refuses only on direct conflicts), and kingdom is local-only so no remote state changes.
+The audit runs cleanest when the project worktree is on the `kingdom` integration branch (an always-local view that mirrors `origin/<base>` plus any in-flight lanes). Switch to it automatically; never prompt. Switching to kingdom has zero side effects on the user's work: uncommitted changes follow the checkout (git refuses only on direct conflicts), and kingdom is local-only so no remote state changes.
 
 ```bash
 cd "$PWD/${project}"
@@ -73,11 +73,11 @@ fi
 **Why auto-switch is safe:**
 
 - `kingdom` is a **local-only integration branch**. It is never pushed; nothing outside your machine sees it.
-- A checkout doesn't lose uncommitted changes — git either carries them over (no conflict) or refuses the switch (conflict) without modifying them.
+- A checkout doesn't lose uncommitted changes: git either carries them over (no conflict) or refuses the switch (conflict) without modifying them.
 - The merge from `origin/<base>` is idempotent: if `kingdom` is already up-to-date, the merge is a no-op.
 - Audit results are more accurate on `kingdom` because `git log` reflects the latest `origin/<base>` plus integrated lane tips.
 
-The `--force` flag still exists for one purpose only: skip the conflict-stop behaviour and continue auditing on whatever branch you ended up on (typically used when investigating a stuck merge — rare).
+The `--force` flag still exists for one purpose only: skip the conflict-stop behaviour and continue auditing on whatever branch you ended up on (typically used when investigating a stuck merge; rare).
 
 ## Step 1 — Inventory (no edits yet)
 
@@ -101,9 +101,9 @@ Report the inventory + project doc count to the user before continuing.
 
 ## Step 2 — Dispatch the Audit Lead (Sonnet, background)
 
-Spawn ONE Sonnet sub-agent via the Agent tool, `run_in_background=true`. This is the **Lead** — it **fans out 4 specialist sub-agents in parallel** (each owns a coherent slice of Steps 3.0-3.6), waits for all 4 sentinels, then synthesizes Step 3.7 gaps and writes the closer itself.
+Spawn ONE Sonnet sub-agent via the Agent tool, `run_in_background=true`. This is the **Lead**: it **fans out 4 specialist sub-agents in parallel** (each owns a coherent slice of Steps 3.0-3.6), waits for all 4 sentinels, then synthesizes Step 3.7 gaps and writes the closer itself.
 
-**Why fan out:** sequential Lead-does-everything was the bottleneck. Steps 3.0-3.6 have disjoint write sets and (mostly) independent reads — running them in parallel cuts wall-clock from ~5min sequential to ~90s (longest specialist gates the rest).
+**Why fan out:** sequential Lead-does-everything was the bottleneck. Steps 3.0-3.6 have disjoint write sets and (mostly) independent reads; running them in parallel cuts wall-clock from ~5min sequential to ~90s (longest specialist gates the rest).
 
 Lead brief (substitute `<PROJECT>` + `<PWD>` + `<UTC>` where shown):
 
@@ -184,7 +184,7 @@ Lead brief (substitute `<PROJECT>` + `<PWD>` + `<UTC>` where shown):
 >
 > ```markdown
 > ## Gap A — Project says done, kingdom has no record
-> - <file>:<line> claims "<completion text>" (<date if found>) — no master_agent.log entry matching <topic keyword> near <date>
+> - <file>:<line> claims "<completion text>" (<date if found>); no master_agent.log entry matching <topic keyword> near <date>
 >
 > ## Gap B — Kingdom logged it, project docs don't reflect it
 > - master_agent.log:<line> shipped <topic> on <UTC> — <project-doc-path> still lists it as <pending text at file:line>
@@ -201,7 +201,7 @@ Lead brief (substitute `<PROJECT>` + `<PWD>` + `<UTC>` where shown):
 > - **Master log line:** append to `master_agent.log` summarising the aggregate
 > - **Final sentinel:** `logs/done/<UTC>__sonnet-kingdom-update.flag`
 >
-> The 4 specialist digests stay in `logs/` as referenceable sub-reports — King can drill into any of them.
+> The 4 specialist digests stay in `logs/` as referenceable sub-reports; King can drill into any of them.
 
 ## Step 3 — Poll + report
 
@@ -230,7 +230,7 @@ export PROJECT="$project" N_SPECIALISTS=4 DURATION \
 render_card "audit-summary"
 ```
 
-Then `cat` the report for the user to scroll. Highlight any `⚠️ flagged` entries, the `## Digest re-understanding candidates`, and the new `## Gap A` / `## Gap B` sections — those need King's attention.
+Then `cat` the report for the user to scroll. Highlight any `⚠️ flagged` entries, the `## Digest re-understanding candidates`, and the new `## Gap A` / `## Gap B` sections: those need King's attention.
 
 ## Step 4 — King's follow-up (advisory)
 
@@ -251,7 +251,7 @@ Stop. King drives next steps from the report.
 - **Idempotent.** Re-running re-fixes nothing already fixed. Safe to invoke daily / weekly / pre-release.
 - **Current project only.** This command never touches sibling projects under `.kingdom/`.
 - **Parallel by default.** Lead spawns 4 specialists (A/B/C/D) in one Agent batch + Specialist A spawns up to 10 Haiku scanners. Peak concurrency: ~10-15 agents. Wall-clock target: under 2 minutes on a typical mid-size project.
-- **Disjoint write sets.** B writes only `tasks/*.md`; C writes only new `logs/<ID>.md` + appends `master_agent.log`; D writes only footnotes (additive). No two specialists touch the same line — safe to run in parallel without locks.
-- **Sonnet specialists, Haiku scanners.** Lead and the 4 specialists are Sonnet. Project scanner's fan-out children are Haiku (P2 chain — cheap parallel reads). Escalate to Opus only when Specialist C's `## Digest re-understanding candidates` warrant follow-up rewrites (King-dispatched, separate run).
+- **Disjoint write sets.** B writes only `tasks/*.md`; C writes only new `logs/<ID>.md` + appends `master_agent.log`; D writes only footnotes (additive). No two specialists touch the same line; safe to run in parallel without locks.
+- **Sonnet specialists, Haiku scanners.** Lead and the 4 specialists are Sonnet. Project scanner's fan-out children are Haiku (P2 chain: cheap parallel reads). Escalate to Opus only when Specialist C's `## Digest re-understanding candidates` warrant follow-up rewrites (King-dispatched, separate run).
 - **Transitive read = 1 hop.** A Haiku scanner reads a referenced file when the current file flags it as load-bearing for completion status — but does NOT recurse from there. Prevents fan-out blow-up.
 - **Watchman overlap.** Watchman runs continuous low-risk audit (including the same project-scan pattern, flag-only) during idle `/loop` time — see `.kingdom/.setting/watchmans.md` → "Docs audit duty". `/kingdom:update` is the explicit one-shot version.

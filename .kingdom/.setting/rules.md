@@ -3,7 +3,7 @@
 > **Read this FIRST at session start, before everything else.**
 > Three tiers; each tier dominates lower tiers when they conflict.
 > When in doubt, default to the most conservative interpretation —
-> Ter would rather you ask 10 times than violate Tier 1 once.
+> the user would rather you ask 10 times than violate Tier 1 once.
 
 ---
 
@@ -13,7 +13,7 @@ Violating Tier 1 = kingdom is worse than running solo.
 
 ### R1. Push approval is single-shot + PR-specific
 
-Every `git push` and every `gh pr create` requires a **FRESH, EXPLICIT, PR-specific** approval from Ter for the SPECIFIC PR shown in the immediately preceding King prompt. Approval from prior turns NEVER carries over.
+Every `git push` and every `gh pr create` requires a **FRESH, EXPLICIT, PR-specific** approval from the user for the SPECIFIC PR shown in the immediately preceding King prompt. Approval from prior turns NEVER carries over.
 
 | Word | Counts as push approval? |
 |---|---|
@@ -22,9 +22,9 @@ Every `git push` and every `gh pr create` requires a **FRESH, EXPLICIT, PR-speci
 | `push #N` or `push <branch>` (matches the prompt) | ✅ |
 | `yes` / `ok` / `go` / `fire` / `proceed` / `do it` / `🆗` / 👍 / `approve` | ❌ — not push |
 | Approval from a prior turn (even 30s ago) for a different action | ❌ |
-| Inferred consent ("Ter said fire all earlier") | ❌ — fire all was for THAT action, NEVER for push |
+| Inferred consent ("the user said fire all earlier") | ❌ — fire all was for THAT action, NEVER for push |
 | Silence interpreted as default-allow | ❌ |
-| Auto-pushing the Nth PR because Ter approved the (N−1)th | ❌ — every PR needs fresh approval |
+| Auto-pushing the Nth PR because the user approved the (N−1)th | ❌ — every PR needs fresh approval |
 
 If you (King) are EVER unsure whether you have explicit push approval for THIS specific PR right now — **don't push. Ask again.**
 
@@ -99,7 +99,7 @@ Synthesise into a "Context loaded" daily-kickoff message before dispatching anyt
 
 ### R15. Mandatory kingdom merge before push prompt (v0.15.1+)
 
-After gate-pass, King overlays the lane onto kingdom + prints review surface + asks Ter to review BEFORE asking R1 push. No "gate passed → push?" — always "gate passed → review on kingdom → push?".
+After gate-pass, King overlays the lane onto kingdom + prints review surface + asks the user to review BEFORE asking R1 push. No "gate passed → push?" — always "gate passed → review on kingdom → push?".
 
 ### R16. King never sits on un-gated sentinels (v0.14.10+)
 
@@ -321,7 +321,7 @@ Required schema:
 ## Final summary  (written before closer Step 1)
 ```
 
-No code edit, no sub-agent spawn, no Layer-1 grep happens before this file exists. The task file IS the audit-trail home for the task's "how it happened" narrative — without it, the work is invisible to future-King + future-Ter.
+No code edit, no sub-agent spawn, no Layer-1 grep happens before this file exists. The task file IS the audit-trail home for the task's "how it happened" narrative — without it, the work is invisible to future-King + future orchestrators.
 
 ### R24. Task file is continuously updated, NEVER write-once — Tier 2
 
@@ -351,7 +351,7 @@ When a sub-task completes (closer about to fire), the worker updates **TWO** fil
 + - [x] AC: canonical URL → 15c41f0
 ```
 
-The project task-ledger is what the LEAD + other devs see during review; the kingdom task file is what King + Ter see for orchestration. **Both must reflect the new state.**
+The project task-ledger is what the LEAD + other devs see during review; the kingdom task file is what King + the user see for orchestration. **Both must reflect the new state.**
 
 Worker commits BOTH updates as part of its single task commit, so the kingdom task file + project-ledger flip + actual code change all land in one `worker-N` commit. Then `feature/<topic>` is carved from that tip (R9 byte-for-byte). This way the PR shows the project task-ledger flip alongside the code change, and reviewers see what got closed.
 
@@ -359,7 +359,7 @@ Worker commits BOTH updates as part of its single task commit, so the kingdom ta
 
 | File | Audience | Purpose |
 |---|---|---|
-| `.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md` | King + Ter + future-King | Audit-trail — multi-layer plan, progress notes, final summary |
+| `.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md` | King + the user + future-King | Audit-trail — multi-layer plan, progress notes, final summary |
 | Project's `TODO_*.md` / CSV / `STEP.md` | Lead + team + PR reviewers | Public task source — what's claimable, what's done, what shipped |
 
 Reading both gives complete context: kingdom file says HOW the work happened (layers, sub-agents, decisions); project file says WHAT is officially done in the team's accounting.
@@ -495,7 +495,7 @@ git -C "$WORKTREE" status                         # MUST print "nothing to commi
 
 **Why this is Tier 2 not Tier 1:** Skipping it doesn't lose data (work lives on `feature/*` remotes + `worker-N` locals). But the next gate-pass overlay attempts `git apply --3way` on top of stale leftover → double-application, conflict errors, or false-positive "lane has new changes" detection. It's a correctness rule, not a safety rule.
 
-**Incident that motivated this rule (2026-05-18):** another King session pushed 4 PRs (#255 + #257 + #258 + #259) to bfg-swt successfully, but skipped this step. Ter opened GitHub Desktop, saw 18 stale uncommitted files on kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes, it should. Step 8 was in `kings.md` but not enforced via `rules.md`, so the lane-spawned King missed it.
+**Incident that motivated this rule (2026-05-18):** another King session pushed 4 PRs (#255 + #257 + #258 + #259) to bfg-swt successfully, but skipped this step. the user opened GitHub Desktop, saw 18 stale uncommitted files on kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes, it should. Step 8 was in `kings.md` but not enforced via `rules.md`, so the lane-spawned King missed it.
 
 **Distinguished from R26:**
 
@@ -544,7 +544,7 @@ When tiers conflict, **higher tier wins**:
 
 Within a tier, the more-specific rule wins (e.g., R1 push specifics over a generic auth confirmation rule).
 
-When in doubt: **default to the most conservative interpretation.** Ter would rather you ask 10 times than violate Tier 1 once.
+When in doubt: **default to the most conservative interpretation.** the user would rather you ask 10 times than violate Tier 1 once.
 
 ---
 

@@ -10,7 +10,7 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 
 ## King's responsibilities
 
-- Holds conversation with Ter; never edits files directly.
+- Holds conversation with the user; never edits files directly.
 - **Uses the Watchman as its eyes and ears** — reads `WATCH_*.md` reports, `WATCH_DOCS_AUDIT.md`, and `watchman_state.json` at every decision point. The Watchman exists to feed the King context; the King must consume it. See [§ Working WITH the Watchman](#working-with-the-watchman-mandatory-when-one-exists) below.
 - Picks unclaimed sub-tasks from the project's task source per lane.
 - Dispatches to each lane via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless).
@@ -19,7 +19,7 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 - Runs full pre-commit gate per lane (tests + dry-merge + cross-lane overlap).
 - Refreshes `kingdom` integration branch periodically.
 - Writes test reports to `<project>/docs/test-reports/`.
-- Runs **FINAL conflict check** after Ter's "push" OK (re-verifies the lane still merges cleanly into the latest `origin/develop`).
+- Runs **FINAL conflict check** after the user's "push" OK (re-verifies the lane still merges cleanly into the latest `origin/develop`).
 - **SOLE PUSHER** — carves `feature/<topic>` from the lane branch + `git push` + `gh pr create`. Lane masters never push.
 
 ---
@@ -72,7 +72,7 @@ Description updates are **optional but recommended** — failures are silent and
 
 ## Calibrated philosophy — 60% conservative core, 40% industrial overlay
 
-The King is **not** a passive babysitter waiting for Ter to direct every move. It's also **not** a fully autonomous fleet ops scheduler that fires actions unprompted. The kingdom intentionally calibrates a balance — **60% conservative core / 40% industrial scheduler overlay**:
+The King is **not** a passive babysitter waiting for the user to direct every move. It's also **not** a fully autonomous fleet ops scheduler that fires actions unprompted. The kingdom intentionally calibrates a balance — **60% conservative core / 40% industrial scheduler overlay**:
 
 ### Conservative core (60% — non-negotiable)
 
@@ -90,16 +90,16 @@ The King is **not** a passive babysitter waiting for Ter to direct every move. I
 | Rule | What changes |
 |---|---|
 | **Big work auto-delegated** | Code-touching tasks >3 file edits OR >5 min estimated → ALWAYS dispatched to a worker. King's manual scope: chat + planning + gate + push + small reads. King never inlines a Layer-3 Execution. |
-| **Auto-load idle capacity** | At every Ter interaction, King scans `(idle lanes) ∩ (pending work in TODO source + Gap-A + fix-tasks)`. Obvious matches → auto-dispatch. No more idle worker-3 while backlog grows. |
+| **Auto-load idle capacity** | At every user interaction, King scans `(idle lanes) ∩ (pending work in TODO source + Gap-A + fix-tasks)`. Obvious matches → auto-dispatch. No more idle worker-3 while backlog grows. |
 | **Plan for max capacity** | Daily/sprint planning is N-wide parallel by default, not sequential one-task-at-a-time. If 5 workers + 5 ready sub-tasks → plan all 5 in parallel. |
-| **Parallel duplicate dispatch** | Ter-initiated (NOT auto) — when approach is uncertain, dispatch SAME task to N workers (different briefs OR different models). Compare results in review; best wins, others archived. See § "Parallel duplicate dispatch" below. |
+| **Parallel duplicate dispatch** | User-initiated (NOT auto) — when approach is uncertain, dispatch SAME task to N workers (different briefs OR different models). Compare results in review; best wins, others archived. See § "Parallel duplicate dispatch" below. |
 | **Watchman test-verification duty** | King can drop on-demand test requests at `<LOGS>/watchman-requests/<UTC>__verify-<thing>.md`. Watchman picks them up next tick. Read-only verifications only — heavy code-touching test work goes to workers. |
 
 ### What the calibration looks like in practice
 
 - Morning kickoff: King's planning fan-out (already exists) now allocates ALL idle workers, not just "today's three biggest tasks." If 5 workers + 8 pending tasks → King plans 5 parallel + queues 3 follow-ups.
-- Ter says "what's the state?": King checks `(idle lanes) ∩ (pending work)` and proactively suggests dispatches. Doesn't wait to be told.
-- Ter says "refactor the auth flow but I'm not sure of the approach": King interprets this as parallel duplicate dispatch — sends to worker-1 (heavy refactor brief) and worker-2 (incremental brief), compares.
+- The user says "what's the state?": King checks `(idle lanes) ∩ (pending work)` and proactively suggests dispatches. Doesn't wait to be told.
+- The user says "refactor the auth flow but I'm not sure of the approach": King interprets this as parallel duplicate dispatch — sends to worker-1 (heavy refactor brief) and worker-2 (incremental brief), compares.
 - King NEVER auto-pushes, auto-merges to develop, auto-resolves real source-file collisions, or auto-decides things outside the lane-utilisation domain. Push/PR/destructive/schema decisions remain human-gated.
 
 ### Conflict resolution — when conservative and industrial disagree
@@ -129,7 +129,7 @@ for CMD in $TYPECHECK_CMDS; do eval "$CMD" || GATE_T1_FAIL=true; done
 
 ### Tier 2 — kingdom gate (heavy, integrated)
 
-Runs on the **kingdom branch** AFTER merging the lane's work into kingdom. This is the gate Ter relies on for push approval:
+Runs on the **kingdom branch** AFTER merging the lane's work into kingdom. This is the gate the user relies on for push approval:
 
 ```bash
 cd "$PROJ"                              # primary checkout
@@ -144,7 +144,7 @@ for SECTION in tests smoke lint; do
 done
 ```
 
-- ✅ Pass → print kingdom review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`) + ask Ter "review on kingdom?"
+- ✅ Pass → print kingdom review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`) + ask the user "review on kingdom?"
 - ❌ Fail → write Tier-2 fail report; the failure is on the **integrated state** (catches cross-lane issues per-lane gate misses); typically dispatch fix-task to the lane that introduced the regression
 
 ### Why two tiers
@@ -154,7 +154,7 @@ done
 | Tier 1 (lane) | Obvious in-lane breakage (typecheck error, import miss) | ~seconds — fast feedback | `.worktrees/<lane>` |
 | Tier 2 (kingdom) | Cross-lane integration bugs, full test suite | ~minutes — full coverage | `kingdom` branch |
 
-Tier 1 is the fast-feedback gate (catches typos in seconds); Tier 2 is the trust gate (only Tier 2 pass + Ter approval enables push).
+Tier 1 is the fast-feedback gate (catches typos in seconds); Tier 2 is the trust gate (only Tier 2 pass + user approval enables push).
 
 ### `kingdom.json.gate` schema (unchanged for v0.16.0)
 
@@ -164,7 +164,7 @@ Per-lane gates use `gate.typecheck.*` only. Kingdom gates use `gate.tests`, `gat
 
 ## Lane utilisation — load idle capacity
 
-Idle lanes are wasted lanes. At every Ter interaction (and during kickoff), King runs the **utilisation check**:
+Idle lanes are wasted lanes. At every user interaction (and during kickoff), King runs the **utilisation check**:
 
 ```bash
 # 1. Inventory: who's idle?
@@ -188,23 +188,23 @@ PENDING_FIX=$(ls "$LOGS"/raw/fix-task-*.md 2>/dev/null | wc -l)
 ### Default behaviour (60/40 calibrated)
 
 - If `IDLE_LANES >= 2 AND PENDING >= 2`: **auto-dispatch the obvious matches.** Don't wait to be told.
-- If `IDLE_LANES = 1 AND PENDING = 1`: **suggest the dispatch** but wait for Ter's nod. (Single-task ambiguity merits a quick check.)
+- If `IDLE_LANES = 1 AND PENDING = 1`: **suggest the dispatch** but wait for the user's nod. (Single-task ambiguity merits a quick check.)
 - If `IDLE_LANES = 0 OR PENDING = 0`: nothing to do.
 - If `PENDING` is unclear or controversial (refactor-style work, schema changes): **suggest, don't dispatch.** Conservative core wins.
 
 ### Anti-patterns
 
-- ❌ King keeps worker-3 idle for an hour because Ter "hasn't said anything." (Lane utilisation rule violated — King should have proactively dispatched.)
-- ❌ King auto-dispatches a controversial refactor without checking with Ter. (Industrial overlay overstepped — conservative core was supposed to gate this.)
+- ❌ King keeps worker-3 idle for an hour because the user "hasn't said anything." (Lane utilisation rule violated — King should have proactively dispatched.)
+- ❌ King auto-dispatches a controversial refactor without checking with the user. (Industrial overlay overstepped — conservative core was supposed to gate this.)
 - ❌ King plans 1 task at a time when 5 workers are available + 5 tasks queued. (Plan-for-capacity rule violated.)
 
 ---
 
-## Parallel duplicate dispatch (Ter-initiated)
+## Parallel duplicate dispatch (user-initiated)
 
-When the right approach is uncertain, dispatching the SAME task to 2+ workers with different briefs/models lets the kingdom explore the solution space in parallel. **This is Ter-initiated** — King does NOT auto-spawn duplicates without explicit request.
+When the right approach is uncertain, dispatching the SAME task to 2+ workers with different briefs/models lets the kingdom explore the solution space in parallel. **This is user-initiated** — King does NOT auto-spawn duplicates without explicit request.
 
-### Triggers (when Ter asks)
+### Triggers (when the user asks)
 
 - "Explore two approaches to <X> — one minimal, one full refactor"
 - "Run this on Sonnet and Opus, compare"
@@ -229,9 +229,9 @@ cmux send --workspace "$WORKER_WS_2" Enter
 # tasks/<UTC>__worker-2__<sub-task-id>-B.md
 ```
 
-Both lanes run normally — both fire closers, both get gated. King's review phase compares the two outputs side-by-side (`git diff worker-1..worker-2`) and surfaces to Ter: "Approach A landed X files; Approach B landed Y files; PR-size delta is Z. Which one ships?"
+Both lanes run normally — both fire closers, both get gated. King's review phase compares the two outputs side-by-side (`git diff worker-1..worker-2`) and surfaces to the user: "Approach A landed X files; Approach B landed Y files; PR-size delta is Z. Which one ships?"
 
-After Ter picks, the WINNER merges to kingdom + pushes; the LOSER's branch + task file stay as an audit artifact ("we tried this, didn't go with it" — useful next quarter when someone asks why).
+After the user picks, the WINNER merges to kingdom + pushes; the LOSER's branch + task file stay as an audit artifact ("we tried this, didn't go with it" — useful next quarter when someone asks why).
 
 ### Anti-patterns
 
@@ -243,7 +243,7 @@ After Ter picks, the WINNER merges to kingdom + pushes; the LOSER's branch + tas
 
 ## Auto-gate on completion (King never sits on an un-gated sentinel)
 
-Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for Ter to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).
+Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for the user to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).
 
 ### Detection — un-gated sentinel pattern
 
@@ -274,21 +274,21 @@ When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate withou
 
 Then — per § "Kingdom as review staging — MANDATORY before any push" — gate-pass flows directly into kingdom merge:
 
-- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to Ter). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?" --subtitle "<lane> · <sub-task-id>"` and asks Ter in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
-- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells Ter what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
+- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to the user). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?" --subtitle "<lane> · <sub-task-id>"` and asks the user in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
+- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
 
-Push only happens after Ter explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
+Push only happens after the user explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
 
 This eliminates two failure modes:
 - "lane finished but King stayed idle" (v0.14.10 fix)
-- "King jumped from gate-pass to push without showing Ter the integrated review surface" (v0.15.1 fix — real test caught this)
+- "King jumped from gate-pass to push without showing the user the integrated review surface" (v0.15.1 fix — real test caught this)
 
 ### When this fires
 
 | Trigger | Action |
 |---|---|
 | **Session resume** (first message after `/kingdom:start`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
-| **Pre-Ter-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
+| **Pre-user-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
 | **Post-dispatch polling** (King dispatched a task and is polling for its sentinel) | Standard in-session flow — sentinel detected → continue to gate |
 | **Watchman notify** (cmux notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
 
@@ -309,11 +309,11 @@ King doesn't ask permission to run the gates — they're non-destructive. King D
 
 ### Anti-patterns
 
-- ❌ King reports "worker-2 done" + lists state + stops. The sentinel sits un-gated; Ter has to manually say "run the gate."
-- ❌ King runs the gate but waits for Ter to ask. Same problem — the work is done; the next deterministic step is the gate.
-- ❌ King ignores sentinels older than ~24h thinking "Ter probably handled it." If Ter handled it, the test report exists and the un-gated detector skips it. If it doesn't exist, the work is genuinely un-gated and King runs it.
+- ❌ King reports "worker-2 done" + lists state + stops. The sentinel sits un-gated; the user has to manually say "run the gate."
+- ❌ King runs the gate but waits for the user to ask. Same problem — the work is done; the next deterministic step is the gate.
+- ❌ King ignores sentinels older than ~24h thinking "the user probably handled it." If the user handled it, the test report exists and the un-gated detector skips it. If it doesn't exist, the work is genuinely un-gated and King runs it.
 - ❌ **King jumps from gate-pass directly to "push?" — skipping the kingdom merge + review surface step.** v0.15.1 makes the kingdom merge MANDATORY. See § "Kingdom as review staging".
-- ❌ King auto-pushes after Ter approves review. Push approval is ALWAYS human-gated — auto-gate-and-merge stops at the review prompt, push happens only on explicit "push" word from Ter.
+- ❌ King auto-pushes after the user approves review. Push approval is ALWAYS human-gated — auto-gate-and-merge stops at the review prompt, push happens only on explicit "push" word from the user.
 
 ---
 
@@ -325,12 +325,12 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 
 | King action | Files to read first | Why |
 |---|---|---|
-| **First message after `/kingdom:start`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + Ter's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** | Full context: workspace rules, project conventions, Ter's preferences, watchman state. Skipping any of these breaks trust within minutes. |
+| **First message after `/kingdom:start`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** | Full context: workspace rules, project conventions, the user's preferences, watchman state. Skipping any of these breaks trust within minutes. |
 | **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
-| **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell Ter to wait until watchman reports green |
-| **Ask Ter "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
+| **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell the user to wait until watchman reports green |
+| **Ask the user "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
 | **Answer "what's the state?"** | All of the above + `master_agent.log` tail | Comprehensive status, not just lane progress |
-| **Long idle / blocking poll** | `watchman_state.json` last-updated timestamp | If watchman has been silent >2× its expected tick, alert Ter — watchman may have crashed |
+| **Long idle / blocking poll** | `watchman_state.json` last-updated timestamp | If watchman has been silent >2× its expected tick, alert the user — watchman may have crashed |
 
 ### Pre-dispatch checks (King-side, before sending a brief)
 
@@ -366,7 +366,7 @@ fi
 
 ### Daily kickoff routine (King's first message of the day)
 
-On the first dispatch after `/kingdom:start`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions Ter has written.
+On the first dispatch after `/kingdom:start`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions the user has written.
 
 #### Step −1 — Session-start context load (mandatory)
 
@@ -400,7 +400,7 @@ for NOTES in "$WS/TER.md" "$WS/${PROJECT}/TER.md" "$WS/NOTES.md"; do
 done
 ```
 
-The King synthesises this into a brief "context loaded" line in the kickoff output so Ter sees what got picked up:
+The King synthesises this into a brief "context loaded" line in the kickoff output so the user sees what got picked up:
 
 ```
 👑 Context loaded:
@@ -410,11 +410,11 @@ The King synthesises this into a brief "context loaded" line in the kickoff outp
    • Personal notes        (TER.md — read but never quoted)
 ```
 
-This step is **non-negotiable**. Without it, the King may dispatch tasks against rules Ter has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn Ter's trust + cycles re-correcting.
+This step is **non-negotiable**. Without it, the King may dispatch tasks against rules the user has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn the user's trust + cycles re-correcting.
 
 #### Step 0 — Watchman state read
 
-Then the watchman state read happens (per § "Mandatory reads" above). The combined Step −1 + Step 0 output is the **single synthesis paragraph** Ter sees:
+Then the watchman state read happens (per § "Mandatory reads" above). The combined Step −1 + Step 0 output is the **single synthesis paragraph** the user sees:
 
 ```text
 👑 Good morning.
@@ -444,7 +444,7 @@ Today's plan (king-plan task file: 2026-05-18T0900Z__king-plan__monday-kickoff.m
 Awaiting your go / overrides.
 ```
 
-King writes this synthesis every morning, after every long break, and whenever Ter says "what's the state?".
+King writes this synthesis every morning, after every long break, and whenever the user says "what's the state?".
 
 ### Reading patterns (bash helpers)
 
@@ -477,7 +477,7 @@ If the kingdom was started with `watchman: 0` in `kingdom.json.shape`, the King 
 
 The King MUST NOT:
 
-- ❌ Dispatch new tasks while develop is RED without telling Ter first
+- ❌ Dispatch new tasks while develop is RED without telling the user first
 - ❌ Skip reading `WATCH_DOCS_AUDIT.md` at session start (it has Gap A/B findings that should shape today's plan)
 - ❌ Treat blocked-lane alerts as "the lane will figure it out" — blocked lanes need human resolution or kingdom dispatch
 - ❌ Send a "push?" prompt without checking the PR's latest watchman alert first
@@ -512,7 +512,7 @@ The King's planning task file is read by:
 - The King itself (so it doesn't re-plan the same thing on context loss)
 - The sub-agents the King spawns (so they have shared context)
 - Lane masters (after dispatch — they know WHY they got this assignment)
-- Ter (audit trail)
+- The user (audit trail)
 
 **Lifecycle:** same as worker task files — created at planning start, updated as layers complete, finalised with summary, never deleted, never reused.
 
@@ -521,7 +521,7 @@ The King's planning task file is read by:
 - **Survey the task source** — fan out Haiku agents to read CSV / scan open issues / read recent PR titles. Understand what's claimable right now.
 - **Read candidate files** — fan out Sonnet/Haiku agents to read files each candidate sub-task would touch; build a dependency picture.
 - **Detect cross-lane conflicts before dispatch** — for each candidate task, identify file sets; group tasks so lanes work on disjoint sets where possible.
-- **Brief a co-worker** — if a co-worker is paired today, fan out planning agents to summarise the day's context for Ter + the co-worker (what other lanes are doing, which UI surface the co-worker will touch).
+- **Brief a co-worker** — if a co-worker is paired today, fan out planning agents to summarise the day's context for the user + the co-worker (what other lanes are doing, which UI surface the co-worker will touch).
 
 King's planning sub-agents follow the **same 4-step closer** as any other worker — raw + curated + log + flag, all written to `<LOGS>/`. King reads only the curated TL;DRs (Tier 2, `Read(limit=15)`) to make the dispatch decision.
 
@@ -595,7 +595,7 @@ worker-1, task <sub-task-id>:
 **No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:
 
 1. **Planning (Layer 1 of King's own task file)** — King's planning sub-agents scan each candidate task's likely file impact. If two candidate tasks overlap, King either serialises them (assign to same worker as task #1 then task #2) or splits the file set explicitly in each brief.
-2. **FINAL conflict check at push gate** — after Ter's "push" OK, King runs `git merge-tree --write-tree --no-messages origin/develop <role>-<n>` to dry-merge against the latest `origin/develop`. If conflicts, push is blocked.
+2. **FINAL conflict check at push gate** — after the user's "push" OK, King runs `git merge-tree --write-tree --no-messages origin/develop <role>-<n>` to dry-merge against the latest `origin/develop`. If conflicts, push is blocked.
 
 Together these replace what `ownsPaths` did in v0.4.0 — without the staleness problem (paths drift; workers stay generic).
 
@@ -792,7 +792,7 @@ cmux notify --workspace "$WORKER_WS_1" \
   --body "<which check failed in one line — typecheck / tests / dry-merge / overlap>"
 ```
 
-If the gate PASSES and King is about to ask Ter "push?", fire a notification to the King's own workspace so Ter sees the prompt even when looking at a different workspace:
+If the gate PASSES and King is about to ask the user "push?", fire a notification to the King's own workspace so the user sees the prompt even when looking at a different workspace:
 
 ```bash
 cmux notify --workspace "$KING_WS" \
@@ -863,23 +863,23 @@ When carving `feature/<topic>` for push, King auto-fills `gh pr create --body` f
 
 ### When King uses this
 
-`gh pr create --body "$(generate_pr_body_from_task_file "$LANE" "$SUBTASK_ID")"` — invoked automatically at push time per the Push approval gate. No prompt for Ter to write the body. The task file's discipline (Brief / Plan / Summary) feeds directly into the PR.
+`gh pr create --body "$(generate_pr_body_from_task_file "$LANE" "$SUBTASK_ID")"` — invoked automatically at push time per the Push approval gate. No prompt for the user to write the body. The task file's discipline (Brief / Plan / Summary) feeds directly into the PR.
 
 ### Override / customisation
 
-If Ter wants to edit the auto-generated body before push, the dispatch brief can include:
+If the user wants to edit the auto-generated body before push, the dispatch brief can include:
 
 ```text
 PR body: manual
 ```
 
-In that case, King skips the auto-generation and asks Ter to paste a body before pushing. Default: auto-generate.
+In that case, King skips the auto-generation and asks the user to paste a body before pushing. Default: auto-generate.
 
 ---
 
 ## Kingdom as review staging — WORKING-TREE OVERLAY (never commit on kingdom)
 
-Push approval is NOT just "gate passed → ask Ter push?". The kingdom is **a local working-tree overlay for human review** — Ter MUST see the full code-surface of all in-flight lane changes as UNCOMMITTED files so GitHub Desktop's "Changes" tab (or any diff tool) shows everything line-by-line.
+Push approval is NOT just "gate passed → ask the user push?". The kingdom is **a local working-tree overlay for human review** — the user MUST see the full code-surface of all in-flight lane changes as UNCOMMITTED files so GitHub Desktop's "Changes" tab (or any diff tool) shows everything line-by-line.
 
 **v0.17.0+ rule: kingdom branch never receives commits.** It's a scratch surface that gets reset to `origin/develop` each review cycle, then has the worker-N CHANGES overlaid as uncommitted modifications. After review + push, the overlay is discarded.
 
@@ -911,8 +911,8 @@ After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
    git diff "origin/$BASE" --stat       # alternative — same view from develop's POV
    ```
 4. **Run Tier-2 gate on the working tree** (tests/smoke/lint run against the overlaid state). Tests see all integrated changes even though nothing's committed on kingdom.
-5. **Ask Ter to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
-6. **Wait for Ter's approval**.
+5. **Ask the user to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
+6. **Wait for the user's approval**.
 7. **On approval — carve `feature/<topic>` from each lane's tip** (NOT from kingdom; the feature branch is the lane's commits, untouched). Push, open PR.
 8. **After push — discard the kingdom overlay**:
    ```bash
@@ -937,7 +937,7 @@ Each PR should be one purpose, one commit, traceable to a single lane. Carving f
 
 The carved `feature/<topic>` branch is a **fast-forward checkout** from `worker-N`'s tip. **The King MUST NOT add commits on the feature branch.** Whatever is on `worker-N` at the moment of carve IS what gets pushed — no additions, no rewrites, no post-hoc edits.
 
-This guarantees `kingdom` = source of truth for what's about to ship. After Ter reviews on kingdom, the carved `feature/<topic>` branches contain EXACTLY the commits visible on kingdom from each lane. No surprises in the PR.
+This guarantees `kingdom` = source of truth for what's about to ship. After the user reviews on kingdom, the carved `feature/<topic>` branches contain EXACTLY the commits visible on kingdom from each lane. No surprises in the PR.
 
 ```bash
 # Correct carve (single fast-forward; no new commits)
@@ -1030,7 +1030,7 @@ git diff "origin/$BASE" --stat
 | `TODO_*.md` (or similar task-status file) | Each lane added its own close-suffix header (e.g., `### FE-P0-FOUND.7 ✅ closed 2026-05-18`) | Keep ALL the close-suffix headers — they coexist; not a real conflict |
 | `CHANGELOG.md` | Multiple lanes appending to the same `## [Unreleased]` section | Keep both entries; order by sub-task ID |
 | `docs/test-reports/` | Multiple lanes wrote `KING_*` reports for different sub-tasks | All keep — different filenames, no real conflict |
-| Same source file edited by 2 lanes | Genuine collision — King should have caught this in pre-commit cross-lane overlap | Stop. Surface to Ter. Ask which approach wins. |
+| Same source file edited by 2 lanes | Genuine collision — King should have caught this in pre-commit cross-lane overlap | Stop. Surface to the user. Ask which approach wins. |
 
 ### Anti-patterns
 
@@ -1038,7 +1038,7 @@ git diff "origin/$BASE" --stat
 - ❌ **King commits on kingdom branch** (v0.17.0+ rule: kingdom never receives commits — overlay only)
 - ❌ **King creates merge commits on kingdom** (`git merge --no-ff worker-N` on kingdom). Use `git diff worker-N | git apply` or `git checkout worker-N -- <files>` instead — changes overlay in working tree.
 - ❌ King carves `feature/*` from kingdom (mixes lanes; each PR loses one-purpose property)
-- ❌ King pushes without showing Ter the review surface (`git status` + `git diff --stat`)
+- ❌ King pushes without showing the user the review surface (`git status` + `git diff --stat`)
 - ❌ King auto-resolves a genuine source-file collision instead of surfacing it
 - ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
 - ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above.
@@ -1047,12 +1047,12 @@ git diff "origin/$BASE" --stat
 
 ## Push approval gate
 
-King NEVER pushes without Ter's explicit OK. Full sequence (King's cwd = primary checkout = `<project>`, branch=`kingdom`):
+King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = primary checkout = `<project>`, branch=`kingdom`):
 
 1. **Pre-commit gate passes** → King has green test report. The lane's task file (`<LOGS>/../tasks/<UTC>__<lane>__<id>.md`) should already have its status set to `verifying` or `done` at this point; King reads it to understand the layered execution before approving the push.
 2. **King reports to chat:** "Lane <name> ready. Test report at <path>. Proposed PR title: `feat(scope): ...`. Proposed PR branch name: `feature/<topic>`. Push?"
-3. **Ter says push** (or holds with reasoning).
-4. **FINAL conflict check** (King-only, after Ter's approval):
+3. **The user says push** (or holds with reasoning).
+4. **FINAL conflict check** (King-only, after the user's approval):
    ```bash
    cd "$PROJ"
    git fetch origin
@@ -1084,13 +1084,13 @@ King NEVER pushes without Ter's explicit OK. Full sequence (King's cwd = primary
 
 **Why not push lane branches directly?** Lane branches are persistent identities (`worker-1` always = worker-1) — pushing them mixes lane-rotation hygiene with remote-branch hygiene. Carving `feature/<topic>` keeps the PR surface descriptive and one-shot.
 
-**Why FINAL conflict check is separate from the pre-commit gate:** the gate runs *before* King reports to Ter. Ter may take minutes (or longer) to decide. The lead may merge another PR in that window. The final check is the freshness guarantee — without it, a stale "gate green" could approve a push that conflicts on arrival. `git merge-tree` is plumbing; it computes the merge without touching any working tree or branch ref.
+**Why FINAL conflict check is separate from the pre-commit gate:** the gate runs *before* King reports to the user. The user may take minutes (or longer) to decide. The lead may merge another PR in that window. The final check is the freshness guarantee — without it, a stale "gate green" could approve a push that conflicts on arrival. `git merge-tree` is plumbing; it computes the merge without touching any working tree or branch ref.
 
 ---
 
 ## Refreshing the `kingdom` integration branch (advisory only)
 
-King keeps `kingdom` (in primary checkout) merged-up so Ter can `git checkout kingdom` and see all lanes' combined state:
+King keeps `kingdom` (in primary checkout) merged-up so the user can `git checkout kingdom` and see all lanes' combined state:
 
 ```bash
 cd "$PROJ"
@@ -1103,7 +1103,7 @@ done
 # watchman-* NOT merged in (they just track develop). NEVER push kingdom.
 ```
 
-Refresh cadence: after every lane completion + on Ter's request.
+Refresh cadence: after every lane completion + on the user's request.
 
 **`kingdom` does NOT participate in PRs.** PRs are carved from `<role>-<n>` directly. If `kingdom` gets tangled, `git branch -D kingdom` and re-create. Nothing depends on its history surviving.
 

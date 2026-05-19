@@ -18,7 +18,7 @@ See [`index.md`](index.md) for the entry-point overview, [`kings.md`](kings.md) 
 - Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet.
 - Reads `kingdom.json.gate.smoke` + `gate.tests` for the smoke command list to run on each develop advance.
 - Writes `WATCH_*.md` reports to `<project>/docs/test-reports/` (separate prefix from King's `KING_*.md` gate reports).
-- Posts `cmux notify` when something needs the King's or Ter's attention.
+- Posts `cmux notify` when something needs the King's or the user's attention.
 
 ---
 
@@ -272,7 +272,7 @@ Watchman writes; King reads (for alert context); no human edit. Cleared/reset wh
 ## Why Watchman doesn't replace King's per-lane pre-commit gate
 
 - **Gate is lane-specific + blocking:** runs against `<role>-<n>` (which has the lane's commits not yet in develop), runs once, blocks the push decision. Watchman only knows about develop tip + open PRs — no view of in-flight lane work.
-- **Gate is fresh at push time:** runs after Ter's "push" approval (via `git merge-tree` for the FINAL conflict check). Watchman runs at `/loop` ticks; by push time, the last Watchman result could be 15 minutes stale.
+- **Gate is fresh at push time:** runs after the user's "push" approval (via `git merge-tree` for the FINAL conflict check). Watchman runs at `/loop` ticks; by push time, the last Watchman result could be 15 minutes stale.
 - **Watchman is develop-wide + non-blocking:** catches drift, CI failures on open PRs, lead-review transitions — none of which the King's per-lane gate sees.
 
 The two complement: **King keeps push-time freshness; Watchman keeps develop-wide visibility.**
@@ -284,8 +284,8 @@ The two complement: **King keeps push-time freshness; Watchman keeps develop-wid
 | Action | Trigger | How |
 |---|---|---|
 | **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `cmux send --pane <self> "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
-| **Pause** | Ter says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux send --pane <self> "/loop cancel"` |
-| **Resume** | Ter says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
+| **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux send --pane <self> "/loop cancel"` |
+| **Resume** | The user says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
 | **Teardown** | Kingdom close | `cmux send --pane <self> "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
 
 The watchman's worktree + branch + state file persist across pauses; only the `/loop` schedule is suspended.
@@ -652,7 +652,7 @@ Watchman runs the docs audit at most once per `/loop` tick, only when ALL other 
 - Run smoke / typecheck / test commands from `kingdom.json.gate.*`.
 - Query `gh pr list` / `gh pr view` / `gh pr checks`.
 - Write `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md`.
-- Call `cmux notify` to alert King / Ter.
+- Call `cmux notify` to alert King / the user.
 - Update `cmux set-status` for sidebar visibility.
 - Maintain `<LOGS>/watchman_state.json`.
 - Read task files (`<workspace>/.kingdom/<project>/tasks/`) for situational awareness when issuing alerts.
