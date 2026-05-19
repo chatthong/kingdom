@@ -188,6 +188,56 @@ At session start (per R14) and at every `/kingdom:day` Step 4 dispatch round, Ki
 
 **Incident that motivated this rule (2026-05-19):** King session greeted user with "Suggested next tasks:" candidates pulled from the project ledger, while `.kingdom/bfg-swt/tasks/` had a worker-1 task file from the morning with Status=discovery-complete waiting on 2 user-decision blockers. The right behaviour: open with "Resume worker-1 FE-P0-FOUND.5? Two blockers need your call: A=<X> B=<Y>" — that's both decision-queue item + resume candidate in one prompt. King missed it entirely because R14 read-order didn't enforce reading task state, only meta-state (memory, watchman state, README).
 
+### R34. Tier-1 rules override memory notes — Tier 1 (v0.26.0+)
+
+`MEMORY.md` entries and `feedback_*.md` files in the user's auto-memory are **advisory context**, NOT authoritative protocol. They describe past preferences / observations. When a memory note suggests behaviour that contradicts a Tier-1 rule (R1-R7, R22, R23, R30, R31, R33, this rule, R35), **the rule wins**.
+
+**Examples of contradiction that the rule must win:**
+
+| Memory note says | Tier-1 rule says | Correct action |
+|---|---|---|
+| `feedback_kingdom_cmux_dispatch_fallback.md`: "if cmux send fails, pivot to Agent()" | R31: spawn cmux workspaces BEFORE dispatch (any mode) | **Spawn cmux workspaces.** The memory note covers a *dispatch-time* fallback after spawn succeeded but `cmux send` failed — NOT a session-start excuse to skip spawning entirely. |
+| `feedback_no_performative_apology.md`: "never say 'you're absolutely right'" | R30: King acknowledges its own violations | **Acknowledge the violation factually.** Memory note bans performative apology, not factual self-correction. ("I violated R31 by not spawning. Repairing now.") |
+| `feedback_solo_vs_tmux.md`: "work solo by default" | R31: spawn lane workspaces on `/kingdom:day` | **Spawn the workspaces.** `/kingdom:day` is the explicit multi-lane ritual; the memory note covers default chat behaviour, not the dispatch flow. |
+
+**Anti-pattern caught 2026-05-19:** King read `feedback_kingdom_cmux_dispatch_fallback.md` at session start (per R14) and interpreted it as "skip cmux spawn this session." That conflated a `cmux send` failure mode with a `cmux new-workspace` failure mode. R31 says spawn-then-dispatch; the memory's pivot is dispatch-time, not spawn-time. King self-acknowledged after user WTF'd: "I read that as 'skip cmux spawn this session too.' That was wrong."
+
+**Why Tier 1:** memory drift over time + Tier-1 rules being the spec's safety bedrock means memory cannot be allowed to silently shadow rules. If a memory note actually contradicts a rule going forward, **update the rule or update the memory** — don't let one quietly override the other in practice.
+
+### R35. King never copies uncommitted changes between worktrees — Tier 1 (v0.26.0+)
+
+Each lane's `.worktrees/<lane>/` is **its own work surface**. King's allowed cross-worktree operations are:
+
+✅ **Read** any worktree (`cat .worktrees/<lane>/path/to/file`) for audit/dispatch context.
+
+✅ **`git diff origin/<base>..<lane> | git apply --3way -`** onto kingdom's working tree (R4 overlay for review; never commits on kingdom).
+
+❌ **BANNED:** `cp .worktrees/worker-1/some-file .worktrees/worker-2/some-file` (or any other file-move/copy between lane worktrees).
+
+❌ **BANNED:** committing into a lane's branch any content that wasn't authored by that lane (whether by King's own hand, or copied from another lane, or pulled from an external scratch dir).
+
+**Why:** R30 says King is orchestrator-only. Copying uncommitted content from worker-1 → worker-2 + committing on worker-2's branch makes King the author of worker-2's commit. That's worker work. The audit trail says "worker-2 did this work" but the actual editor was King. Future blame / debugging / review goes to the wrong agent.
+
+**Correct alternative:** dispatch a brief to worker-2 explaining what the change should be. Let worker-2 author the change in its own worktree from its own context. If the change is "literally copy this Dockerfile from worker-1," the brief says so explicitly — but worker-2 does the copy + commit.
+
+**Edge case — shared infrastructure files (Dockerfile, ci.yaml, package.json) that multiple lanes need:** the change goes to ONE lane (whichever owns the file per the task), gets reviewed, gets merged to develop, then other lanes rebase. Don't cross-pollinate uncommitted shared files between lanes via King.
+
+**Anti-pattern caught 2026-05-19:** King authored Dockerfile changes (3 ENV lines + 4-line comment for `@workspace/db` build-env placeholders) on worker-1's worktree, then `cp`'d the modified Dockerfile to `.worktrees/worker-2/` and included it in worker-2's commit as "part of the @workspace/db enabling slice." King defended: "the modification was already in your worker-1 worktree when I scanned" — but that's not exculpatory; King STILL did the cross-worktree copy + commit on the wrong lane. The proper move would have been: leave the Dockerfile change on worker-1 OR dispatch worker-2 to make the change in its own worktree.
+
+**Why Tier 1:** breaks the per-lane authorship invariant that the entire audit trail (master_agent.log, sentinel-to-commit mapping, blame) depends on. Once King is a hidden author on lane branches, "who did this" stops being a clean question.
+
+### Self-detect: when King catches its own violation
+
+If King realises it has violated R30 / R31 / R33 / R35 (or any other Tier-1 rule) mid-session:
+
+1. **STOP immediately.** Don't continue down the violating path.
+2. **Acknowledge in chat factually.** ("I violated R31 — I didn't spawn cmux workspaces despite worktrees existing in AGENT-mode-mistaken state. Repairing now.")
+3. **Repair.** Re-run the violated step correctly (spawn cmux now, dispatch the missing brief, revert the cross-worktree commit, etc).
+4. **Log to master_agent.log:** one line `[UTC] RULE_VIOLATION R<N> · <one-line description> · repaired by <action>`.
+5. **NEVER continue dependent work without repair.** If R31 was violated by skipping spawn, do NOT proceed to Step 4 dispatch until spawn is corrected.
+
+Per R34, performative apology is still banned. Acknowledgement is factual + repair-focused.
+
 ### R22. The closer (4-step or 5-step) MUST fire on EVERY task completion — Tier 1
 
 Even on `blocked` / `cancelled` / `errored` exit, the worker writes:

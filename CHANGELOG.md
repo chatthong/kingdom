@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.26.0] — 2026-05-19
+
+**Two more gaps caught by another incident.** Same afternoon (2026-05-19), a King session: (a) read `feedback_kingdom_cmux_dispatch_fallback.md` from auto-memory and interpreted it as "skip cmux spawn this session entirely" — conflating a dispatch-time pivot with a spawn-time exemption; (b) authored Dockerfile changes on worker-1's worktree, `cp`'d the file to `.worktrees/worker-2/`, and committed it on worker-2's branch as "part of the slice." Two more Tier-1 rules added.
+
+### Added
+
+- **R34 (Tier 1) Tier-1 rules override memory notes.** `MEMORY.md` and `feedback_*.md` files are advisory context, NOT authoritative protocol. When a memory note suggests behaviour that contradicts a Tier-1 rule, the rule wins. Includes a contradiction table covering the cmux-fallback memory vs R31 spawn rule, performative-apology memory vs R30 self-acknowledgement, solo-by-default memory vs R31 multi-lane ritual.
+- **R35 (Tier 1) King never copies uncommitted changes between worktrees.** Each lane's `.worktrees/<lane>/` is its own work surface. Allowed cross-worktree ops: read for context; `git diff <lane> | git apply` onto kingdom (overlay only, never commits). BANNED: `cp .worktrees/worker-1/file .worktrees/worker-2/file` followed by `git commit` on worker-2. Reason: King committing into a lane's branch breaks the per-lane authorship invariant that the entire audit trail depends on. Correct alternative: dispatch a brief to worker-2 so worker-2 authors the change in its own worktree.
+- **"Self-detect" protocol** (paragraph at end of rules.md, applies to all Tier-1 violations). When King catches its own Tier-1 violation mid-session: STOP, acknowledge factually in chat, repair (re-run the violated step correctly), log `[UTC] RULE_VIOLATION R<N> · <description> · repaired by <action>` to `master_agent.log`, never continue dependent work without repair.
+
+### Incident summary (2026-05-19 afternoon, second incident)
+
+Same bfg-swt King session, after the morning's "0 jobs" issue was supposedly addressed:
+
+1. **WTF 1 — cmux workspaces never spawned.** King read `feedback_kingdom_cmux_dispatch_fallback.md` at session start and skipped `/kingdom:start`'s cmux spawn step. The memory note covers a dispatch-time fallback (cmux send fails → pivot to Agent()), NOT a session-start excuse to skip spawning. King self-acknowledged: "I read that as 'skip cmux spawn this session too.' That was wrong." R34 closes this by ranking Tier-1 rules above memory notes.
+
+2. **WTF 2 — Dockerfile cross-worktree commit.** King authored 3 build-env placeholder ENV lines + 4-line comment on worker-1's Dockerfile, then `cp`'d the file to `.worktrees/worker-2/` and committed it on worker-2's branch as part of "the @workspace/db enabling slice." King's defence: "the modification was already in your worker-1 worktree when I scanned." Still a violation — King did the cross-worktree copy + commit. R35 closes this; correct move is dispatch a brief to worker-2 so it authors the change in its own worktree.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.26.0`.
+
+### Apply on consumer side
+
+Re-run `/kingdom:init` (workspace-only) to sync `rules.md` (R34 + R35 + self-detect protocol added) into the workspace copy. Then next `/kingdom:day` invocation pre-loads the new rules at R14 session-start read.
+
+### Cumulative rules count
+
+| Tier | Count | IDs |
+|---|---|---|
+| Tier 1 (IRON-CLAD) | 13 | R1-R7, R22, R23, R30, R31, R33, R34, R35 |
+| Tier 2 (STRONG DEFAULTS) | 16 | R8-R16, R24-R29, R32 |
+| Tier 3 (CONVENTIONS) | 5 | R17-R21 |
+
+---
+
 ## [0.25.0] — 2026-05-19
 
 **Critical fix: King now actually seeks existing job state at session start.** v0.24.0 added R31 to verify lanes are spawned before dispatch, but the check was cmux-centric and missed two cases: (a) AGENT-mode fallback where `.worktrees/` is the real "lanes exist" signal, and (b) **King not reading `.kingdom/<project>/tasks/` at all before deciding what to dispatch** — leading to fresh task files opened on top of in-flight ones.
