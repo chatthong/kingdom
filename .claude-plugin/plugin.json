@@ -1,6 +1,6 @@
 {
   "name": "kingdom",
-  "version": "0.29.3",
+  "version": "0.29.4",
   "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees and native cmux.app. /kingdom:day runs the full daily cycle in one command. Pre-warmed sub-agent pool makes Layer-3 fan-outs effectively instant. Auto-generated PR bodies from task files. A King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own cmux.app workspace. Calibrated philosophy: 60% conservative core + 40% industrial overlay. Mandatory exhaustive pattern grep before any implementation. Kingdom branch is a WORKING-TREE OVERLAY for review (never commit on kingdom). PRs carve from worker-N tip byte-for-byte. Two-tier gate. Domain-agnostic. Bootstrap with /kingdom:init; run the day with /kingdom:day; audit with /kingdom:update; close with /kingdom:exit. Won't touch your project files, develop/main branches, shell config, or git config.",
   "author": {
     "name": "kingdom contributors"

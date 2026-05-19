@@ -124,19 +124,21 @@ TYPECHECK_CMDS=$(jq -r '.gate.typecheck[]' "$KJSON")
 for CMD in $TYPECHECK_CMDS; do eval "$CMD" || GATE_T1_FAIL=true; done
 ```
 
-- ✅ Pass → proceed to kingdom merge + Tier 2 gate
+- ✅ Pass → proceed to kingdom overlay + Tier 2 gate
 - ❌ Fail → write Tier-1 fail report; dispatch fix-task back to lane; DO NOT merge to kingdom yet
 
 ### Tier 2 — kingdom gate (heavy, integrated)
 
-Runs on the **kingdom branch** AFTER merging the lane's work into kingdom. This is the gate the user relies on for push approval:
+Runs on the **kingdom branch working tree** AFTER overlaying the lane's changes (v0.17.0+ — working-tree overlay only, NO merge commits on kingdom per R4). This is the gate the user relies on for push approval:
 
 ```bash
 cd "$PROJ"                              # primary checkout
 git checkout kingdom
-git merge --no-ff "worker-N"            # merge with conflict resolution per v0.15.1
+git fetch origin
+git reset --hard "origin/$BASE"         # clean slate per v0.17.0
+git diff "origin/$BASE..worker-N" | git apply --3way -  # overlay (no commit)
 
-# Heavy — full gate on the integrated state
+# Heavy — full gate on the overlaid working tree
 for SECTION in tests smoke lint; do
   for CMD in $(jq -r ".gate.${SECTION}[]" "$KJSON"); do
     eval "$CMD" || GATE_T2_FAIL=true
@@ -144,7 +146,7 @@ for SECTION in tests smoke lint; do
 done
 ```
 
-- ✅ Pass → print kingdom review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`) + ask the user "review on kingdom?"
+- ✅ Pass → print kingdom review surface (`git status --short` + `git diff origin/$BASE --stat`) + ask the user "review on kingdom?"
 - ❌ Fail → write Tier-2 fail report; the failure is on the **integrated state** (catches cross-lane issues per-lane gate misses); typically dispatch fix-task to the lane that introduced the regression
 
 ### Why two tiers
@@ -366,6 +368,8 @@ fi
 
 ### Daily kickoff routine (King's first message of the day)
 
+> **R36 (Tier 1):** Workspace rename + lane spawn happen FIRST (work.md Step 0.4), before context load or processing. User must see immediate sidebar feedback before any of the steps below fire.
+
 On the first dispatch after `/kingdom:work`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions the user has written.
 
 #### Step −1 — Session-start context load (mandatory)
@@ -412,6 +416,8 @@ The King synthesises this into a brief "context loaded" line in the kickoff outp
 
 This step is **non-negotiable**. Without it, the King may dispatch tasks against rules the user has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn the user's trust + cycles re-correcting.
 
+**R41 (Tier 1):** After loading context, King resolves its own process-skill set (`pick_skills_for_task` against `skill-routing.md`) before deciding today's plan — see work.md Step 0.3.5 for the full resolution procedure.
+
 #### Step 0 — Watchman state read
 
 Then the watchman state read happens (per § "Mandatory reads" above). The combined Step −1 + Step 0 output is the **single synthesis paragraph** the user sees:
@@ -445,6 +451,8 @@ Awaiting your go / overrides.
 ```
 
 King writes this synthesis every morning, after every long break, and whenever the user says "what's the state?".
+
+**R33 (Tier 1):** Before deciding "Today's plan," King MUST scan `.kingdom/<project>/tasks/*.md` for in-flight task files (status `planning|executing|verifying` with no matching sentinel). Resume queue takes priority over fresh dispatch — the synthesis "Today's plan" section should open with resume candidates before new work. See work.md Step 0.6 for the full scan procedure.
 
 ### Reading patterns (bash helpers)
 
@@ -698,7 +706,7 @@ See [`index.md`](index.md) → Session start for the detection logic that picks 
 
 ### Primary (`cmux send --workspace` via cmux.app)
 
-In PRIMARY mode each master owns its own workspace (see `commands/start.md` Phase 5). Workspace refs are persisted at `$LOGS/workspace-refs.env` (sourced by King at session start):
+In PRIMARY mode each master owns its own workspace (spawned in `commands/work.md` Step 0.4). Workspace refs are persisted at `$LOGS/workspace-refs.env` (sourced by King at session start):
 
 ```bash
 source "$LOGS/workspace-refs.env"     # exposes KING_WS, WORKER_WS_1..N, COWORKER_WS_*, WATCHMAN_WS_*
@@ -711,11 +719,11 @@ When you finish, run the 4-step closer (see workers.md):
   4) touch    $LOGS/done/<ID>__opus-worker-1.flag
      ALSO run: cmux notify --workspace $KING_WS \\
        --title '👑 ' --body 'lane worker-1 done: <ID>'
-Spawn sub-agents via Agent(...) by default (cheaper, no UI). Spawn as a
-tab (cmux tab-action --action new-terminal-right --workspace $WORKER_WS_1)
-ONLY when you want me to see the sub-agent work in real time. Tab-spawned
-sub-agents follow the 5-step closer (Step 5 = close own tab via
-cmux tab-action --action close --surface \$CMUX_SURFACE_ID)."
+Spawn sub-agents as visible tabs by default (R38 — all models default to tab).
+Use: cmux tab-action --action new-terminal-right --workspace $WORKER_WS_1
+Tab-spawned sub-agents follow the 5-step closer (Step 5 = close own tab via
+cmux tab-action --action close --surface \$CMUX_SURFACE_ID).
+Background Agent() spawns are opt-in only (set spawn_mode: background in brief)."
 
 cmux send --workspace "$WORKER_WS_1" -- "$PROMPT"
 cmux send --workspace "$WORKER_WS_1" Enter
@@ -1090,20 +1098,21 @@ King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = pr
 
 ## Refreshing the `kingdom` integration branch (advisory only)
 
-King keeps `kingdom` (in primary checkout) merged-up so the user can `git checkout kingdom` and see all lanes' combined state:
+> **v0.17.0+ NOTE (R4):** kingdom NEVER receives commits or merge commits. The "merged-up" view is now replaced by the working-tree overlay (§ "Kingdom as review staging"). `git merge --no-edit "$LANE"` on kingdom is BANNED. The bash block below is **RETIRED** — kept as historical reference only. See § "Kingdom as review staging — WORKING-TREE OVERLAY" for the current procedure.
+
+King keeps `kingdom` (in primary checkout) reset to `origin/develop` as a clean overlay base. To review combined lane state, use the working-tree overlay procedure, not the merge below.
 
 ```bash
-cd "$PROJ"
-BASE=develop
-git checkout kingdom
-git merge --no-edit "origin/$BASE"
-for LANE in worker-1 worker-2 worker-3 co-worker-1; do
-  git merge --no-edit "$LANE" 2>/dev/null || true
-done
-# watchman-* NOT merged in (they just track develop). NEVER push kingdom.
+# RETIRED (pre-v0.17.0) — DO NOT USE
+# cd "$PROJ"
+# git checkout kingdom
+# git merge --no-edit "origin/$BASE"
+# for LANE in worker-1 worker-2 worker-3 co-worker-1; do
+#   git merge --no-edit "$LANE" 2>/dev/null || true
+# done
 ```
 
-Refresh cadence: after every lane completion + on the user's request.
+Refresh cadence: King resets kingdom to `origin/develop` at the start of each gate-pass overlay cycle. No periodic merge needed.
 
 **`kingdom` does NOT participate in PRs.** PRs are carved from `<role>-<n>` directly. If `kingdom` gets tangled, `git branch -D kingdom` and re-create. Nothing depends on its history surviving.
 
@@ -1274,7 +1283,7 @@ flowchart TB
 
 | Action | When | How |
 |---|---|---|
-| **Spawn** | More independent work appears | cmux.app (primary): split new pane + `git worktree add -b <slug> "$PROJ/.worktrees/<slug>" "origin/$BASE"`. Standalone: another `Agent()` call. Headless: `claude -p` against new worktree. |
+| **Spawn** | More independent work appears | cmux.app (primary): split new pane + `git worktree add -b <slug> "$PROJ/.worktrees/<slug>" "origin/$BASE"`. AGENT mode (no cmux/tmux): `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<slug> && ...")` per R31. Headless: `claude -p` against new worktree. |
 | **Shutdown / close** | Finished + nothing left to do | Tmux/cmux.app: `tmux send-keys -t <pane> "/exit" Enter; sleep 1; tmux kill-pane`. Then `git worktree remove "$PROJ/.worktrees/<slug>" --force; git branch -D <slug> 2>/dev/null || true`. Standalone Agent: already returned. |
 | **Compact / reuse** | Keep pane + worktree, free Claude's context before next task | Inside the lane pane: `cmux send --pane <handle> "/compact"`. Wait for context% to drop, then send next task. **Mandatory between tasks in the same lane** — without it, lane context accumulates and pollutes later work. |
 

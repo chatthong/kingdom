@@ -10,7 +10,7 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.29.0 (2026-05-19)
+## Current state — v0.29.4 (2026-05-20)
 
 The plugin is on `main` at commit `cbb677e`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
 
@@ -18,6 +18,10 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 | Version | Theme | What landed |
 |---|---|---|
+| **0.29.4** | R41 propagation + role-doc step audit (no spec changes) | Version bump only; confirms R41 propagated correctly across role docs and step sequences; no new rules or spec changes |
+| **0.29.3** | Skill-aware execution: R41 + routing table expansion | R41 (Tier 1): 3-step skill resolution before any work (routing table → system-reminder fallback → skip); 15 new skill-routing.md entries (Prisma family ×7, remaining superpowers ×8); auto-discovery fallback section; ASCII wizard mascot removed from README |
+| **0.29.2** | README polish: ASCII wizard mascot + `/kingdom:work` shape examples | ASCII wizard mascot added under README header (inside `[!WARNING]` amber frame); 12 expanded examples in 4 categories; 6-row shape-by-situation guide |
+| **0.29.1** | Stale-reference audit + fix across 22 files | 5 parallel Haiku audits found ~50 stale old-command refs; 4 parallel Sonnet fixers patched rules.md, watchmans.md, all 16 affected cards, docs/branch-model.md, docs/cmux-integration.md, CLAUDE.md (rule counts); README tightened to 4-command arc |
 | **0.29.0** | Hard-break: 4-command surface + autonomous watchman + state.json save protocol | 6 commands collapsed to 4: `/kingdom:work` (replaces `day`+`start`+`update`), `/kingdom:self-care` (replaces `doctor`), `/kingdom:save` (replaces `exit`, state-snapshot-only), `/kingdom:init` (slimmer, no prereq checks); R39 (watchman autonomous); R40 (Haiku cap) |
 | **0.28.0** | Visible-first execution + interactive no-args mode | R36/R37/R38 (Tier 1): King renames workspace + spawns all lanes visibly within ~10s of `/kingdom:work`; heavy processing routes to lane sessions via `cmux send`; Agent() in King's session banned; new interactive Step 0.0 + `what-to-work-on` card (21st card) |
 | 0.27.0 | Multi-window cmux.app support | `kingdom.json.cmux.spawnWindow` config (`"current"` / `"new"` / `"<uuid>"`); `spawn_master_workspace` updated; documented: default-to-caller's-window is multi-window-compatible; `cmux.md` § Multi-window added |
@@ -48,10 +52,10 @@ commands/                  # 4 slash commands
 
 .kingdom/.setting/         # role docs + helpers + cards + routing (canonical source — copied into workspace by /kingdom:init)
   index.md                 # entry-point router
-  rules.md                 # 40 enforceable rules (R1-R40), Tier 1/2/3
+  rules.md                 # 40 enforceable rules (R1-R41, no R42), Tier 1/2/3
   _primitives.md           # shared bash helpers (cmux_*, kingdom_*, render_card, pick_skills_for_task, etc)
   kings.md / workers.md / co-workers.md / watchmans.md / git.md / cmux.md   # role specs
-  cards/                   # 21 display templates (welcome, daily-status, task-complete, resume-queue, what-to-work-on, etc) + README
+  cards/                   # 22 display templates (welcome, daily-status, task-complete, resume-queue, what-to-work-on, etc) + README
   skill-routing.md         # keyword → skill mapping (v0.23.0+)
 
 docs/                      # 8 long-form topic docs (split from README in v0.21.0)
@@ -62,7 +66,7 @@ README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions — 24 total (don't re-debate without reading the rationale)
+## Key architectural decisions — 25 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -111,6 +115,8 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 23. **Watchman is fully autonomous within its duty list** (R39, v0.29.0). Watchman does not pause for King approval on low-risk fixes (stale checkbox ticks, log-line backfills, dead-link repairs). High-risk changes (digest rewrites, task-file merges) are still flagged to King. Autonomous scope defined in `watchmans.md` → "Duty list" and enforced by `/kingdom:work` watchman spawn.
 
 24. **Haiku cap per watchman tick** (R40, v0.29.0). Each watchman tick may spawn at most `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10). Prevents runaway fan-out on large repos with many open PRs. Configurable per project in `kingdom.json`; King may override for a single session by editing `state.json` before the tick fires.
+
+25. **Auto-discover and use the right skill BEFORE any work** (R41, v0.29.3). At task receipt, every actor (King or lane) resolves a skill set via 3-step priority: (1) fast path — run `pick_skills_for_task` against `skill-routing.md` keyword table; (2) fallback — scan the system-reminder skill list and match by description; (3) no-skill is valid — skip rather than load a vaguely-related skill. A 12-row domain→skill quick map covers the main domains (frontend, prisma, supabase, stripe, figma, plugin-dev, file formats, claude api, hugging face, security, code review, git workflow); a separate 10-skill process map covers King-side planning skills (brainstorming, writing-plans, TDD, systematic-debugging, etc). Skills are resolved per-task, not per-lane.
 
 ## Working conventions for THIS repo
 
@@ -179,4 +185,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-19 after v0.29.0 ship. Update this file when shipping a release that changes architectural decisions (1-24 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-20 after v0.29.4 ship. Update this file when shipping a release that changes architectural decisions (1-25 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

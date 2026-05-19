@@ -18,9 +18,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-`v0.29.3: 4 commands, autonomous watchman, state-based save, skill-aware execution.`
+`v0.29.4: 4 commands, autonomous watchman, state-based save, skill-aware execution.`
 
-![Version](https://img.shields.io/badge/version-0.29.3-success)
+![Version](https://img.shields.io/badge/version-0.29.4-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -135,6 +135,7 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 - **Native cmux.app feel** — every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
 - **Full audit trail** — every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
 - **Zero new runtime** — cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text
+- **Skill-aware** — King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
 
 ---
 

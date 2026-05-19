@@ -8,25 +8,25 @@ See [`index.md`](index.md) for entry-point context, [`kings.md`](kings.md) for w
 
 ## Spawning sub-agents — Tab vs Agent decision
 
-A lane master spawns sub-agents in one of three ways. **Default since v0.15.0: model-tiered** — cheap fan-outs go headless (`Agent()`), expensive work goes visible (`tab`).
+A lane master spawns sub-agents in one of three ways. **Default since v0.28.0 (R38): ALL models default to visible tab** — `Agent()` in-process background spawns are opt-in only, not the default. (Pre-v0.28.0 model-tiered "cheap fan-outs headless" behaviour is retired.)
 
 ### Spawn-cost reality
 
 | Mode | Spawn cost | When it's worth it |
 |---|---|---|
-| 🐱 `Agent(run_in_background=true)` | **~2s** (in-process call) | Cheap reads, parallel fan-outs of >3, anything where you don't need to watch the work happen |
-| 📑 `cmux tab-action --action new-terminal-right` + boot Claude | **~10–20s** (full Claude session boot) | Long-running work (>30s) where progress visibility matters; Opus calls that are expensive enough to deserve a window |
+| 📑 `cmux tab-action --action new-terminal-right` + boot Claude | **~10–20s** (full Claude session boot) or **~20ms** with pre-warmed pool (v0.18.0+) | **Default for all sub-agent work** — visible, auditable, auto-closes on sentinel |
+| 🐱 Lane dispatch via `cmux send --workspace worker-N -- "..."` | **~20ms** | Routing work to an already-running lane Claude session (audit specialists, pattern scans) |
 | 🪟 `cmux new-split right` | Same as tab | Side-by-side comparison of ≤2 sub-agents. Rare. |
 
-A 5-Haiku Layer-1 fan-out costs ~10s headless vs ~100s as tabs. Default to headless for cheap models.
+**`Agent(run_in_background=true)` is banned as kingdom default (R38).** Background spawns may be used only when explicitly opted-in via `kingdom.json.cmux.subAgentSpawnByModel` on a per-task basis; they must still run the 4-step closer.
 
-### Model-tiered defaults (kingdom.json.cmux.subAgentSpawnByModel)
+### Model-tiered defaults (kingdom.json.cmux.subAgentSpawnByModel) — v0.28.0+
 
 ```json
 "subAgentSpawnByModel": {
-  "haiku":  "background",   // always cheap → Agent()
-  "sonnet": "background",   // default cheap; override per-task to "tab" for visibility
-  "opus":   "tab"           // expensive + slow → deserves visibility
+  "haiku":  "tab",     // default tab (R38); set "background" to opt-in to headless
+  "sonnet": "tab",     // default tab (R38); set "background" to opt-in to headless
+  "opus":   "tab"      // always tab — expensive + slow → deserves visibility
 }
 ```
 
@@ -55,8 +55,8 @@ Common reasons to override:
 
 | Override | When |
 |---|---|
-| `spawn_mode: tab` (force visible) | Long-running Sonnet work, debugging, "show me what worker-1 is doing" |
-| `spawn_mode: background` (force headless) | the user wants speed, doesn't care to watch; cost-sensitive fan-out of >5 sub-agents |
+| `spawn_mode: tab` (visible — default) | Long-running Sonnet work, debugging, "show me what worker-1 is doing" |
+| `spawn_mode: background` (opt-in headless) | the user wants speed, doesn't care to watch; cost-sensitive fan-out of >5 sub-agents; still requires 4-step closer |
 | `spawn_mode: split` (rare) | Pair-style "do A and B side-by-side" |
 
 ### Auto-close still applies (Tab-spawned)
@@ -106,7 +106,7 @@ Disable via `kingdom.json.cmux.subAgentPool.enabled: false` if you want to skip 
 When worker-1 hits Layer 3 (Execution) and decides to spawn 3 parallel Sonnet sub-agents for separate code chunks:
 
 ```text
-Master worker-1 dispatches Layer 3 fan-out (subAgentSpawnDefault=tab):
+Master worker-1 dispatches Layer 3 fan-out (all tab — R38 default):
 
   cmux.app sidebar (workspace `👷 worker-1`):
     ├── 📑 worker-1 (master Claude session, the long-lived worker)
@@ -289,6 +289,7 @@ Description updates are **optional but recommended** — failures are silent and
 - **Created** in Step 0 of every task. Lane never starts sub-agent dispatch without writing the task file first.
 - **Updated** continuously — check boxes off, append progress notes, refine plan as discovery yields surprises.
 - **Finalised** when status → done or blocked: lane writes the "Final summary" section, then runs the 4-step closer.
+- **R25 — update BOTH files before closing:** when finalising, lane updates the project task-ledger (`TODO_*.md` / `TODO_Master.csv` / `STEP.md` — whichever the project uses) alongside the kingdom task file. Flip acceptance-criteria checkboxes in the ledger, append `— ✅ closed YYYY-MM-DD (PR #pending)` to the heading. Both updates land in the same `worker-N` commit as the code change. See `rules.md § R25` for the full diff pattern.
 - **Never deleted, never reused.** New task = new task file.
 
 **Read access:** anyone (King, sub-agents, Watchman for context, the user). **Write access:** lane master only. Sub-agents report progress via their own 4-step closer; lane master ingests their curated output and reflects it in the task file's progress notes / checkboxes.
@@ -311,7 +312,7 @@ Each lane master is a full Claude Code process and has the **Agent tool availabl
 
 Each layer's spawn pattern is captured in the task file's plan section (see Multi-layer planning below).
 
-The only spawn rules binding a lane master are the P1/P2/P3 model-selection rules (see [`index.md`](index.md) → Sub-agent model priority) and the 4-step closer (below).
+The only spawn rules binding a lane master are the P1/P2/P3 model-selection rules (see [`index.md`](index.md) → Sub-agent model priority), the 4-step closer (below), and R38 (sub-agents spawn as tabs or lane dispatch in kingdom mode — not in-process `Agent()` by default).
 
 ---
 
@@ -342,7 +343,7 @@ Sequence:
 
 0. King sends task brief → lane pane. **Lane master creates the task file** (`<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`) with status, brief, and multi-layer plan filled in. No sub-agent is dispatched until the task file exists.
 1. King sends task brief → lane pane (via `cmux send` / `tmux send-keys` / `claude -p`).
-2. Lane master reads the brief, analyzes the work, plans its sub-agent strategy (recorded in the task file).
+2. Lane master reads the brief, analyzes the work, plans its sub-agent strategy (recorded in the task file). **R41 — skills:** King's dispatch brief includes a `${SUGGESTED_SKILLS}` block (0-3 domain skills from `skill-routing.md`). Lane invokes those skills immediately. If a gap is discovered mid-task (e.g., unexpected Prisma migration, Stripe error), lane may invoke ADDITIONAL skills mid-task and logs each invocation to `## Progress notes` in the task file.
 3. Lane master spawns its sub-agents — parallel where independent, sequential where dependent.
 4. Lane master synthesizes sub-agent outputs, makes edits to the lane's worktree, updates task file progress notes and checkboxes.
 5. Lane master finalises the task file (writes Final summary, flips status → done/blocked), then runs the 4-step closer.
@@ -522,7 +523,7 @@ There is no `log_master` helper — master writes nothing. The worker prompt emb
 
 ## Worker dispatch — Single-worker self-curate (most common)
 
-Master dispatches via the `Agent` tool (standalone) or `cmux send` / `tmux send-keys` (kingdom mode). The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
+Master dispatches via `cmux send` / `tmux send-keys` (kingdom mode — PRIMARY) or the `Agent` tool (standalone mode only — no cmux). In kingdom mode, `Agent()` in-process spawns are banned by R38; use tab or lane dispatch. The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
 
 ```bash
 # Master-side setup (Bash) — generate IDs and paths.
@@ -710,7 +711,7 @@ flowchart TB
 
 For lane master itself (long-lived across tasks): `/compact` between tasks is mandatory. Without it, lane context accumulates and pollutes the next task's reasoning. The King's per-task closing sequence ends with sending `/compact` to the lane pane via `cmux send` (or `tmux send-keys`).
 
-For sub-agents spawned by lane master: each `Agent()` call is one-shot; it returns when done. The lane master collects results, synthesises, then moves to the next dispatch within the same task (or completes the task and runs the 4-step closer).
+For sub-agents spawned by lane master: each sub-agent is one-shot; it returns (via sentinel flag) when done. In kingdom mode (R38), "spawn sub-agent" means tab-spawn or lane dispatch — not in-process `Agent()`. In standalone mode, `Agent()` calls are used directly. The lane master collects results, synthesises, then moves to the next dispatch within the same task (or completes the task and runs the 4-step closer).
 
 **Forbidden:**
 - ❌ Lane master idle / "wait and see" without `/compact` — old context pollutes the next task.

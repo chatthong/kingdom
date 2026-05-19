@@ -105,6 +105,10 @@ The King reads this at spawn-time (invoked by `/kingdom:work`) to:
 
 > **Workers are generic.** No per-worker `focus` or `ownsPaths`. The King assigns scope at dispatch time (any worker can do any task; same worker does backend today, frontend tomorrow). `gate.*` keys are arbitrary, rename for non-dev domains (`validate`/`audit` for finance, `reproduce`/`peer-review` for science).
 
+### Skill routing
+
+**Skill routing.** The workspace copy of [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md) is the canonical keyword → skill mapping table. Add project-specific entries (Vue/Nuxt keywords pointing to your Vue skill, internal DSL keywords pointing to org-specific skills, etc). Matcher reads workspace copy at every dispatch — no King restart needed.
+
 ## Watchman config
 
 Watchman behaviour is controlled by the `watchman` block inside `kingdom.json`:

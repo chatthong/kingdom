@@ -158,6 +158,22 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 
 So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week.
 
+### Step 0.3.5 — Skill check (R41 · MANDATORY)
+
+Before Step 0.4 visible-progress fires, resolve King's own process-skill set + verify the project's skill-routing table is current.
+
+King's process skills (invoke directly, not via dispatch-brief):
+- `superpowers:brainstorming` — if today's session involves designing new behaviour
+- `superpowers:writing-plans` — if multi-step work needs structure
+- `superpowers:systematic-debugging` — if today is mostly bug triage
+- `superpowers:verification-before-completion` — invoked LATE in cycle, before any "done" claim per R22
+
+Lane skills (computed per-dispatch via pick_skills_for_task in Step 4 from skill-routing.md):
+- Domain skills land in dispatch-brief ${SUGGESTED_SKILLS} per R23
+- If routing table returns 0 matches, fallback to system-reminder skill list (R41 auto-discovery)
+
+Per R41, no-skill is a valid result. Don't invoke a vague match just to invoke something.
+
 ## Step 0.4 — Visible workspace progress IMMEDIATELY (R36, MANDATORY)
 
 **Within ~1 second of `/kingdom:work` receipt, before anything else:** rename King's own workspace + set description. User must see the kingdom responding, not stare at an unchanged sidebar.
@@ -427,6 +443,8 @@ Other cards fired later in the cycle:
 - `cards/resume-queue.md` — in-flight tasks from prior session
 
 ## Step 4 — Auto-dispatch (within cap/target) — HARD 60s TIME BUDGET (R30)
+
+**Skill resolution (R41 + R23):** `pick_skills_for_task` consults `skill-routing.md` for each lane before building the dispatch-brief. `${SUGGESTED_SKILLS}` in the brief carries the result. R41 governs discovery (system-reminder fallback when routing table returns 0 matches); R23 governs injection into the brief.
 
 **R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching: STOP and dispatch with the brief as-is.
 

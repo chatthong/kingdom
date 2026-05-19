@@ -8,7 +8,7 @@ See [`workers.md`](workers.md) for the shared 4-step closer / dispatch / spawn-r
 
 ## Co-worker role
 
-- **Dormant by default.** No autonomous task picking. The pane exists in the kingdom layout but stays idle until the user signals.
+- **Dormant by default.** No autonomous task picking. The pane exists in the kingdom layout but stays idle until the user signals. **Co-worker is the ONE role that "waits for user dictation" — this is correct behaviour here (R32). Workers auto-claim and are never dormant; watchman runs `/loop` continuously.**
 - **Activates when the user says** "pair on co-worker-1", "UI work on co-worker", "I'll drive co-worker-1", or similar.
 - **Co-worker master is interactive:** the user drives the editing (typing into the lane pane, selecting which files to touch, making design calls); the Claude session inside the lane assists (suggests, refactors, runs tests, reads context).
 - **Co-worker lane master runs Opus** (same default as autonomous workers). Sub-agents it spawns follow the P1/P2/P3 chain (Sonnet default).
@@ -69,7 +69,7 @@ flowchart TB
 
 ## Task file (same as workers, with user-dictated briefs)
 
-Co-workers follow the same task file convention as autonomous workers (see [`workers.md`](workers.md) → "Task file template"). One file per task; lane master is sole writer; sub-agents read only.
+Co-workers follow the same task file convention as autonomous workers (see [`workers.md`](workers.md) → "Task file template", R22/R23/R24/R25). One file per task; lane master is sole writer; sub-agents read only.
 
 **Path:** `<workspace>/.kingdom/<project>/tasks/<UTC>__co-worker-N__<sub-task-id>.md`
 
@@ -175,6 +175,7 @@ Same as workers (see [`workers.md`](workers.md) → Spawn rights inside a lane):
 - Run the 4-step closer when the task chunk is complete.
 - Use `cmux notify` to ping King/the user when something needs attention.
 - Write the task file (mandatory, Step 0 of any task).
+- **Invoke skills directly (R41).** In a paired session, the co-worker resolves skills via `pick_skills_for_task` (or `skill-routing.md`) at task start, just like workers do. Because the user is present, the co-worker may also invoke additional skills mid-task on user request — log each invocation in the task file's `## Progress notes`.
 
 ## What co-workers DO NOT do
 

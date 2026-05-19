@@ -166,6 +166,8 @@ jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
 
 Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — it also fans out up to `haiku_cap_per_tick` Haiku sub-agents in parallel to perform four new surveillance duties. These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux tab-action --action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All four duties run in parallel at every tick; no duty waits for another.
 
+**R41 — Skill-aware (v0.29.3+):** Watchman Haiku sub-agents may optionally invoke domain skills to strengthen their analysis. Duty 1 (code review) may use `code-review:code-review`; Duty 2 (CVE scan) may use `security-review`. Invocation is optional — skip if the skill adds no material benefit for a shallow diff or trivial audit file. No cap beyond the normal 3-skill-per-brief limit.
+
 ### `haiku_cap_per_tick` enforcement
 
 Read from `kingdom.json.watchman.haikuCapPerTick`. Default: `5`. Maximum: `10`.
@@ -815,7 +817,7 @@ Patterns watched:
 | `allow .* during this session` | The session-scoped permission option |
 | `Press Enter` | Generic "press enter to continue" prompts |
 
-Most of these are pre-empted by the workspace `.claude/settings.json` permissions allow-list (see `commands/doctor.md` Check 10 / `commands/init.md` Step 4.5 — kingdom auto-allows `.kingdom/**` and `.worktrees/**`). The scan catches any that slip through.
+Most of these are pre-empted by the workspace `.claude/settings.json` permissions allow-list (see `commands/init.md` Step 4.5 — kingdom auto-allows `.kingdom/**` and `.worktrees/**`). The scan catches any that slip through.
 
 ---
 

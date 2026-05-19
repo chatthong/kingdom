@@ -35,6 +35,10 @@ End of session: `/kingdom:save my-app` snapshots state and closes lanes graceful
 
 That's the whole routine. **It replaces the daily overhead of "what was I doing", "did anyone push", "is develop green", "is PR #234 reviewed".** The King knows. Watchman knows. Ask the King.
 
+## Skill-aware execution (R41, v0.29.3+)
+
+Before dispatch, King + lanes resolve a skill set via `pick_skills_for_task` against [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md). Domain-routed: Next.js work invokes `nextjs-best-practices`, Prisma work invokes `prisma-cli`/`prisma-client-api`/etc, Supabase work invokes `supabase:supabase`. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) invoke directly when relevant. Per [R41](../.kingdom/.setting/rules.md#r41-auto-discover-and-use-the-right-skill-before-any-work-tier-1-v0293).
+
 ## `target=` and `cap=` argument surface
 
 `target=N-M/<period>` is a soft budget; King paces dispatch to hit the daily band. Auto-splits across timeframes (assumes 5 working days per week, 4 weeks per month):

@@ -4,6 +4,61 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.29.4] — 2026-05-20
+
+R41 propagation across docs + role-doc step audit. Shipped via 7 parallel Sonnet agents. No spec changes (rules unchanged); fixed-in-place corrections found by auditing each role doc against current rules.
+
+### Audit findings (per role doc)
+
+**`kings.md` — 8 findings, all fixed:**
+- **R4 / v0.17.0 violation** — Tier-2 gate code block used `git merge --no-ff "worker-N"` on kingdom (pre-overlay pattern). Fixed: now uses `git reset --hard "origin/$BASE"` + `git diff "origin/$BASE..worker-N" | git apply --3way -` (overlay, no commit) + review via `git status --short`.
+- **R4 violation** — "Refreshing the kingdom integration branch" section had live `git merge --no-edit "$LANE"` on kingdom. Marked RETIRED + added v0.17.0 deprecation note.
+- **R38 violation** — Dispatch prompt template told workers to use `Agent(...)` by default. Fixed: prompt now says "Spawn sub-agents as visible tabs by default (R38)".
+- **R38 / R31 ambiguity** — Sub-agent lifecycle "Spawn" row said "another `Agent()` call" — could be misread. Reworded to explicitly say "AGENT mode (no cmux/tmux): `Agent(subagent_type=general-purpose, ...)` per R31".
+- **Dead ref** — `commands/start.md Phase 5` pointed at a file deleted in v0.29.0. Updated to `commands/work.md Step 0.4`.
+- **R36 missing** — Daily kickoff routine had no workspace-rename + lane-spawn-first callout. Added one-line block.
+- **R41 missing** — Step −1 context-load had no skill resolution mention. Added sentence pointing to work.md Step 0.3.5.
+- **R33 missing** — Kickoff synthesis showed "Today's plan" without note on resume queue check. Added 3-line callout.
+
+**`workers.md` — 3 findings, all fixed:**
+- **R25 missing** — No reference to updating both kingdom task file AND project task-ledger. Added bullet to Lifecycle list.
+- **R38 stale** in 3 places — Section header said "Default: model-tiered — cheap fan-outs headless"; `subAgentSpawnByModel` JSON had `haiku/sonnet: "background"`; fan-out example used inconsistent label. All flipped to v0.28.0 R38 defaults (all-tab, background opt-in only).
+- **R41 missing** — Zero skill references. Added 2-line note to task sequencing step covering King's `${SUGGESTED_SKILLS}` block + lane's authority to invoke additional skills mid-task.
+
+**`co-workers.md` — 3 findings, all fixed:**
+- **R32 contrast missing** — File said co-workers are dormant but didn't explicitly contrast with workers (which are NOT dormant). Added clarification.
+- **Rule cross-ref** — Task file template ref to workers.md didn't name R22/R23/R24/R25. Added.
+- **R41 missing** — No mention of skill invocation in paired sessions. Added bullet.
+
+**`watchmans.md` — 2 findings, all fixed:**
+- **Dead `commands/doctor.md` ref** — File was deleted in v0.29.0. Replaced with `commands/init.md` reference.
+- **R41 missing for Haiku fan-out** — Watchman duties could optionally invoke `code-review:code-review` / `security-review` skills. Added paragraph between section intro and `haiku_cap_per_tick`.
+
+### R41 propagation (4 parallel agents)
+
+- **`CLAUDE.md` synced to v0.29.4** — version footer + 4 new version-history rows (v0.29.1 through v0.29.4) + architectural decision #25 (R41 auto-skill-discovery). Now 25 total architectural decisions.
+- **`README.md`** — added "Skill-aware" bullet to "Why kingdom?" list (after "Zero new runtime"). One bullet, one em-dash, links to `skill-routing.md`.
+- **`docs/work-cycle.md`** — new "Skill-aware execution (R41, v0.29.3+)" section explaining domain routing + process skills.
+- **`docs/configuration.md`** — new "Skill routing" subsection in Configure-your-project, pointing at workspace copy of `skill-routing.md` as the customisation surface.
+- **`docs/faq.md`** — new Q/A "How does the King pick which skills to invoke?" covering 3-step resolution + customisation.
+- **`commands/work.md`** — new Step 0.3.5 (Skill check, R41 mandatory) listing King's 4 process skills + lane skill flow + auto-discovery fallback. Step 4 preamble now mentions R41 explicitly.
+
+### Flagged for future cleanup (not touched this release)
+
+- `kings.md` "Refreshing the kingdom integration branch" section — entirely obsolete after v0.17.0 working-tree overlay; marked RETIRED but full removal deferred.
+- `kings.md` Two-tier gate prose still says "Runs on the kingdom branch" — accurate but unclear that tests run against the overlaid working tree. Low priority.
+- `workers.md` sub-agent lifecycle mermaid diagram still labels nodes "SPAWN more Agent() calls" — accurate in standalone mode but ambiguous in kingdom mode. Cosmetic.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge + tagline — version → `0.29.4`.
+
+### No spec changes
+
+No rules added, no commands renamed, no new cards. This release is pure consistency-and-propagation cleanup after the rule-heavy v0.29.0-v0.29.3 sequence.
+
+---
+
 ## [0.29.3] — 2026-05-19
 
 Skill-aware execution: King + lanes resolve a skill set BEFORE any work. New R41 makes this a Tier-1 obligation. Plus removed the ASCII wizard from README (rendered poorly in dark mode) + 15 new skill rows in routing table (prisma family + remaining superpowers family).

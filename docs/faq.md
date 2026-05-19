@@ -24,6 +24,13 @@ Edit `kingdom.json` → `gate.*` arrays per project. The King runs whatever you 
 </details>
 
 <details>
+<summary><strong>How does the King pick which skills to invoke?</strong></summary>
+
+R41 (v0.29.3+) made skill-aware execution mandatory. Resolution is three steps: (1) the King calls `pick_skills_for_task` against the keyword → skill mapping table in [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md) — domain skills (Next.js, Prisma, Supabase, etc) are matched here; (2) if no routing match, the system-reminder skill list is scanned as a fallback; (3) if still no match, the task proceeds without a skill invocation — that's valid. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) are always evaluated independently of domain matching. To add project-specific keywords, edit `.kingdom/.setting/skill-routing.md` — no restart needed. Full rule: [R41](../.kingdom/.setting/rules.md#r41-auto-discover-and-use-the-right-skill-before-any-work-tier-1-v0293).
+
+</details>
+
+<details>
 <summary><strong>What happened to /kingdom:day?</strong></summary>
 
 Renamed to `/kingdom:work` in v0.29.0 (hard break, no alias). All other commands also renamed: `/kingdom:doctor` → `/kingdom:self-care`, `/kingdom:exit` → `/kingdom:save` (simplified to state snapshot only — no commits or pushes). The building-block commands `/kingdom:start` and `/kingdom:update` were folded into `/kingdom:work` and no longer exist as standalone commands.
