@@ -237,7 +237,7 @@ After the user picks, the WINNER merges to kingdom + pushes; the LOSER's branch 
 
 - ❌ King auto-spawns duplicates on every task (industrial overstepped — duplicates are exploration, not default)
 - ❌ Both A and B push to feature branches (only the winner ships)
-- ❌ Deleting the loser's branch + task file (audit value lost — keep them; archive after 30 days per `/kingdom:update`)
+- ❌ Deleting the loser's branch + task file (audit value lost — keep them; archive after 30 days per `/kingdom:work`)
 
 ---
 
@@ -287,7 +287,7 @@ This eliminates two failure modes:
 
 | Trigger | Action |
 |---|---|
-| **Session resume** (first message after `/kingdom:start`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
+| **Session resume** (first message after `/kingdom:work`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
 | **Pre-user-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
 | **Post-dispatch polling** (King dispatched a task and is polling for its sentinel) | Standard in-session flow — sentinel detected → continue to gate |
 | **Watchman notify** (cmux notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
@@ -325,7 +325,7 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 
 | King action | Files to read first | Why |
 |---|---|---|
-| **First message after `/kingdom:start`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** | Full context: workspace rules, project conventions, the user's preferences, watchman state. Skipping any of these breaks trust within minutes. |
+| **First message after `/kingdom:work`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** | Full context: workspace rules, project conventions, the user's preferences, watchman state. Skipping any of these breaks trust within minutes. |
 | **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
 | **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell the user to wait until watchman reports green |
 | **Ask the user "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
@@ -366,7 +366,7 @@ fi
 
 ### Daily kickoff routine (King's first message of the day)
 
-On the first dispatch after `/kingdom:start`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions the user has written.
+On the first dispatch after `/kingdom:work`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions the user has written.
 
 #### Step −1 — Session-start context load (mandatory)
 
@@ -1147,7 +1147,7 @@ Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, 
 ### When to read it
 
 - At the start of each planning session (alongside `master_agent.log` tail).
-- Before running `/kingdom:update` — the audit file tells you what the sweep will likely touch.
+- Before running `/kingdom:work` — the audit file tells you what the sweep will likely touch.
 - After a watchman alert mentions docs drift.
 
 ```bash
@@ -1170,7 +1170,7 @@ WATCH_AUDIT="$LOGS/WATCH_DOCS_AUDIT.md"
 
 Once King has acted on a finding, **delete that bullet from `WATCH_DOCS_AUDIT.md`** (or have the follow-up sub-agent do it as part of its closer). Watchman re-scans each `/loop` tick and re-flags anything still drifting, so the file naturally stays current.
 
-If `WATCH_DOCS_AUDIT.md` grows past ~50 bullets, run `/kingdom:update` for a full sweep instead of triaging item-by-item.
+If `WATCH_DOCS_AUDIT.md` grows past ~50 bullets, run `/kingdom:work` for a full sweep instead of triaging item-by-item.
 
 ---
 

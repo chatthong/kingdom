@@ -66,7 +66,7 @@ Soft cap: total lanes ≤ `sanityCap` (default `10`). Past 10 the UI gets crampe
 2. **Creates** `.kingdom/<project>/{logs,tasks}/` directories, the audit-trail homes.
 3. **Prints** the resulting JSON for you to review.
 
-**Declare ≠ launch.** `/kingdom:init <project>` only *declares* the shape. Before running `/kingdom:day my-app` (or `/kingdom:start my-app` standalone), open the generated `kingdom.json` and customise:
+**Declare ≠ launch.** `/kingdom:init <project>` only *declares* the shape. Before running `/kingdom:work my-app`, open the generated `kingdom.json` and customise:
 
 - `gate.*` command lists: what King runs before every push. Keys are arbitrary. Dev stacks use `typecheck`/`tests`/`smoke`/`lint`; finance work might use `validate`/`audit`; science work might use `reproduce`/`peer-review`. Rename / add / remove freely.
 - `git.base`: your PR target branch (default `develop`; many repos use `main`).
@@ -77,7 +77,7 @@ That's the entire customisation surface. **Workers are generic capacity**, no pr
 
 ## Configure your project
 
-`/kingdom:init <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom:day`:
+`/kingdom:init <project>` creates `.kingdom/<project>/kingdom.json`. Edit it before running `/kingdom:work`:
 
 ```json
 {
@@ -97,7 +97,7 @@ That's the entire customisation surface. **Workers are generic capacity**, no pr
 }
 ```
 
-The King reads this at `/kingdom:start` (invoked by `/kingdom:day`) to:
+The King reads this at spawn-time (invoked by `/kingdom:work`) to:
 
 - Spawn the right number of lanes (`shape` counts)
 - Pick a model per lane (Opus for masters, Sonnet for watchman, override if you want cheaper)
@@ -105,8 +105,41 @@ The King reads this at `/kingdom:start` (invoked by `/kingdom:day`) to:
 
 > **Workers are generic.** No per-worker `focus` or `ownsPaths`. The King assigns scope at dispatch time (any worker can do any task; same worker does backend today, frontend tomorrow). `gate.*` keys are arbitrary, rename for non-dev domains (`validate`/`audit` for finance, `reproduce`/`peer-review` for science).
 
+## Watchman config
+
+Watchman behaviour is controlled by the `watchman` block inside `kingdom.json`:
+
+```json
+{
+  "watchman": {
+    "haikuCapPerTick": 5,
+    "duties": {
+      "codeReview":    true,
+      "cveScan":       true,
+      "conflictScan":  true,
+      "gitHygiene":    true
+    }
+  }
+}
+```
+
+### `haikuCapPerTick`
+
+Maximum number of Haiku sub-agents a single watchman tick may spawn. Default: `5`. Max: `10`. Prevents runaway fan-out on large repos with many open PRs. Raise it for overnight unattended runs; lower it if you want tighter token spend.
+
+### `duties.*` toggles
+
+Each duty is `true` (enabled) by default. Set to `false` to disable for a project:
+
+| Key | What the watchman does when enabled |
+|---|---|
+| `codeReview` | Babysits open PRs: posts a nudge comment if a PR has been waiting > 24 h with no review activity |
+| `cveScan` | Scans `package.json` / `requirements.txt` / `go.mod` for known CVEs via `npm audit` / `pip-audit` / `govulncheck` |
+| `conflictScan` | Checks whether any in-flight worker branch has diverged enough from `develop` to risk a conflict on merge |
+| `gitHygiene` | Flags stale branches (no commit in > 7 days), orphan worktrees, and missing sentinel flags |
+
 ## See also
 
-- [`daily-ritual.md`](daily-ritual.md): how the shape gets exercised every morning
+- [`work-cycle.md`](work-cycle.md): how the shape gets exercised every morning
 - [`roles.md`](roles.md): what each lane actually does
 - [`branch-model.md`](branch-model.md): how `gate.*` runs in the two-tier model

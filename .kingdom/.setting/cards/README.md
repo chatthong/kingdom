@@ -6,26 +6,28 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 
 | Card | Alert flavour | Fires when |
 |---|---|---|
-| [`welcome.md`](welcome.md) | `[!TIP]` (varies) | `/kingdom:day` kickoff (varies by time of day) |
-| [`daily-status.md`](daily-status.md) | `[!NOTE]` | `/kingdom:day` kickoff after audit |
-| [`suggested-task.md`](suggested-task.md) | `[!NOTE]` | `/kingdom:day` kickoff: 1-3 candidates |
-| [`dispatch-plan.md`](dispatch-plan.md) | `[!NOTE]` | `/kingdom:day` kickoff: lane assignments |
+| [`welcome.md`](welcome.md) | `[!TIP]` (varies) | `/kingdom:work` kickoff (varies by time of day) |
+| [`daily-status.md`](daily-status.md) | `[!NOTE]` | `/kingdom:work` kickoff after audit |
+| [`suggested-task.md`](suggested-task.md) | `[!NOTE]` | `/kingdom:work` kickoff: 1-3 candidates |
+| [`dispatch-plan.md`](dispatch-plan.md) | `[!NOTE]` | `/kingdom:work` kickoff: lane assignments |
 | [`task-complete.md`](task-complete.md) | `[!TIP]` | Tier-2 gate pass (random pool of 20 lines) |
 | [`push-prompt.md`](push-prompt.md) | `[!IMPORTANT]` | Tier-2 pass, asking for "push" word |
 | [`gate-fail.md`](gate-fail.md) | `[!CAUTION]` | Tier-1 or Tier-2 gate fails |
-| [`end-of-day.md`](end-of-day.md) | `[!TIP]` | `/kingdom:exit` or cap/target hit |
+| [`end-of-day.md`](end-of-day.md) | `[!TIP]` | `/kingdom:save` or cap/target hit |
 | [`blocked-lane.md`](blocked-lane.md) | `[!WARNING]` | Watchman detects permission prompt |
 | [`conflict-detected.md`](conflict-detected.md) | `[!WARNING]` | `git merge-tree` finds drift at push time |
 | [`cap-reached.md`](cap-reached.md) | `[!WARNING]` | `cap=N` hit |
 | [`pr-merged.md`](pr-merged.md) | `[!NOTE]` | `gh pr view` flips to `MERGED` (triggers R26) |
 | [`scaffold-success.md`](scaffold-success.md) | `[!IMPORTANT]` | `/kingdom:init` completes |
-| [`spawn-complete.md`](spawn-complete.md) | `[!IMPORTANT]` | `/kingdom:start` completes |
+| [`spawn-complete.md`](spawn-complete.md) | `[!IMPORTANT]` | `/kingdom:work` spawn phase completes |
 | [`watchman-alert.md`](watchman-alert.md) | varies | Watchman `cmux notify` (4 event variants) |
 | [`dispatch-brief.md`](dispatch-brief.md) | (no alert; flow-text) | Internal: King → lane prompt template |
-| [`audit-summary.md`](audit-summary.md) | `[!NOTE]` | `/kingdom:update` audit-pass completion |
-| [`doctor-report.md`](doctor-report.md) | varies (TIP/IMPORTANT/CAUTION) | `/kingdom:doctor` check completion (3 variants) |
-| [`resume-queue.md`](resume-queue.md) | `[!IMPORTANT]` | `/kingdom:day` Step 0.6 — in-flight tasks from prior session(s) (v0.25.0+) |
-| [`what-to-work-on.md`](what-to-work-on.md) | `[!IMPORTANT]` | `/kingdom:day` Step 0.0 — interactive no-args mode, asks user for natural-language intent (v0.28.0+) |
+| [`audit-summary.md`](audit-summary.md) | `[!NOTE]` | `/kingdom:work` audit-pass completion |
+| [`doctor-report.md`](doctor-report.md) | varies (TIP/IMPORTANT/CAUTION) | `/kingdom:self-care` check completion (3 variants) |
+| [`resume-queue.md`](resume-queue.md) | `[!IMPORTANT]` | `/kingdom:work` Step 0.6 — in-flight tasks from prior session(s) (v0.25.0+) |
+| [`what-to-work-on.md`](what-to-work-on.md) | `[!IMPORTANT]` | `/kingdom:work` Step 0.0 — interactive no-args mode, asks user for natural-language intent (v0.28.0+) |
+| [`session-saved.md`](session-saved.md) | `[!TIP]` | `/kingdom:save` completion (v0.29.0+) |
+| [`watchman-tick.md`](watchman-tick.md) | `[!NOTE]` / `[!CAUTION]` | Watchman /loop tick autonomous summary (v0.29.0+) |
 
 ## Alert flavour → colour mapping
 

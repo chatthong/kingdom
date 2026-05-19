@@ -85,7 +85,7 @@ Print the file list with line counts.
 
 ## Step 3 — Workspace scaffold: `.claude/settings.json` permissions
 
-Background sub-agents (the parallel fan-out in `/kingdom:update`, worker dispatches, etc.) need an explicit `permissions.allow` list in the workspace-scoped `.claude/settings.json` or they stall on permission prompts that nobody sees.
+Background sub-agents (the parallel fan-out in `/kingdom:work`'s audit, worker dispatches, etc.) need an explicit `permissions.allow` list in the workspace-scoped `.claude/settings.json` or they stall on permission prompts that nobody sees.
 
 ```bash
 WS_SETTINGS="$PWD/.claude/settings.json"
@@ -131,7 +131,7 @@ jq '.permissions' "$WS_SETTINGS"
 
 On `N`, warn:
 
-> ⚠️ Skipped. `/kingdom:update` and `/kingdom:start` background sub-agents will stall on permission prompts. Re-run `/kingdom:init` or `/kingdom:doctor` to apply later.
+> Skipped. `/kingdom:work` background sub-agents will stall on permission prompts. Re-run `/kingdom:init` or `/kingdom:self-care` to apply later.
 
 ## Step 4 — Project scaffold (only when `project` arg is given)
 
@@ -229,4 +229,6 @@ fi
 
 The card output replaces the prior plain-text "Kingdom ready for `<project>`" block. See [`cards/scaffold-success.md`](../.kingdom/.setting/cards/scaffold-success.md) for the full template + both variants.
 
-If the user opted out of the `.claude/settings.json` patch (Step 3 answered `N`), the card appends a warning line: `⚠ Skipped settings.json patch — sub-agents may stall on permission prompts.`
+If the user opted out of the `.claude/settings.json` patch (Step 3 answered `N`), the card appends a warning line: `Skipped settings.json patch — sub-agents may stall on permission prompts.`
+
+Next: run `/kingdom:self-care` to verify environment, then `/kingdom:work` to start.

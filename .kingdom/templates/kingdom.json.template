@@ -71,5 +71,18 @@
       "topCommand": "claude",
       "bottomCommand": "gh pr list --watch --interval 30"
     }
+  },
+
+  "watchman": {
+    "_comment": "Autonomous watchman config (v0.29.0+, per rules.md R39 + R40). The watchman runs its /loop fully autonomously; King never dispatches to it. Per tick, watchman can spawn up to haikuCapPerTick Haiku sub-agents in parallel for: code review (diff per touched file), CVE scan (npm/pnpm/pip/cargo audit), cross-lane conflict scan, git hygiene scan.",
+    "haikuCapPerTick": 5,
+    "haikuCapMax": 10,
+    "duties": {
+      "_comment": "Each duty can be disabled per-project. Defaults all-on. Disable selectively for projects where the duty isn't valuable.",
+      "codeReview": true,
+      "cveScan": true,
+      "conflictScan": true,
+      "gitHygiene": true
+    }
   }
 }

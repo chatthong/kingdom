@@ -4,6 +4,83 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.29.0] — 2026-05-19
+
+**Hard break: 6 commands collapsed to 4. Autonomous watchman with Haiku x10 fan-out. State.json save protocol.** Major restructure shipped via 8 parallel Sonnet agents.
+
+### Hard-break command rename
+
+Five commands deleted from `commands/`. Three new commands created. One kept and slimmed.
+
+| Old (deleted) | New | Notes |
+|---|---|---|
+| `/kingdom:day` | `/kingdom:work` | folded |
+| `/kingdom:start` | `/kingdom:work` (Step 0.4 spawn phase) | folded |
+| `/kingdom:update` | `/kingdom:work` (Step 1 audit phase) | folded |
+| `/kingdom:exit` | `/kingdom:save` | semantics simplified — see below |
+| `/kingdom:doctor` | `/kingdom:self-care` | renamed |
+| `/kingdom:init` | `/kingdom:init` | kept, slimmer (no prereq checks; moved to self-care) |
+
+**No deprecation aliases** — the old commands are gone. Running them returns "Unknown command" from Claude Code.
+
+### Added
+
+- **`commands/work.md`** (606 lines) — `/kingdom:work [<project>] [target=N-M/<day|week|month>] [cap=N] [worker=N] [co-worker=N] [watchman=N]`. Three invocation shapes: no-args (interactive), `<project>`, `<project> + flags`. Per-session shape overrides via `worker=N` / `co-worker=N` / `watchman=N` (take precedence over `kingdom.json.shape` for THIS session, not persisted).
+- **`commands/save.md`** (278 lines) — `/kingdom:save [<project>]`. State snapshot only. NO commits, NO pushes. Branches are the natural save; state.json is the bookmark.
+  - Captures per lane: branch, HEAD SHA, uncommitted file count, in-flight task file path + Status + Layer + Blockers.
+  - Captures open PRs: number, branch, state.
+  - Computes `ready_for_fresh_work` flag.
+  - Atomic write to `.kingdom/<project>/state.json` (schema_version=1).
+  - Parallel close lane workspaces (`cmux close-workspace &; wait`); keeps King's workspace alive.
+- **`commands/self-care.md`** (332 lines) — `/kingdom:self-care` (no args). 8 prereq checks: cmux/tmux/jq/gh/git/settings.json/tasks-writable/orphan-audit. Renders `doctor-report` card with 3 variants (all-pass / partial-pass / failed). Renamed from `/kingdom:doctor`.
+- **R39 (Tier 1) Watchman runs fully autonomously.** Watchman owns its own `/loop` schedule. King NEVER blocks waiting on watchman, never dispatches work to watchman. Watchman's duties are pull-based. King reads `watchman_state.json` + `WATCH_*.md` at session start (per R14) but never sends watchman briefs via `cmux send`.
+- **R40 (Tier 2) Watchman Haiku fan-out cap per tick.** Default `kingdom.json.watchman.haikuCapPerTick = 5`, max `10` (clamped + log warning if exceeded). Prevents API-usage spikes when multiple kingdoms run simultaneously.
+- **`watchmans.md` autonomous Haiku fan-out section** (+241 lines). Four per-tick fan-out duties: (1) code review per lane with new commits → `WATCH_REVIEW_<UTC>__<lane>.md`, (2) CVE scan per package manager → `WATCH_CVE_<UTC>.md`, (3) cross-lane file-overlap conflict scan → `WATCH_CONFLICTS_<UTC>.md`, (4) git hygiene (stale worktrees, orphan branches, broken sentinels) → `WATCH_GIT_<UTC>.md`. Tick aggregation → `WATCH_TICK_<UTC>.md`.
+- **`kingdom.json.template` watchman config block** — `haikuCapPerTick`, `haikuCapMax`, `duties.{codeReview,cveScan,conflictScan,gitHygiene}` toggles.
+- **`cards/session-saved.md`** (123 lines, `[!TIP]`) — `/kingdom:save` completion card with lane status + open PRs + ready_for_fresh_work indicator.
+- **`cards/watchman-tick.md`** (134 lines, `[!NOTE]` / `[!CAUTION]` variant) — Watchman autonomous tick summary; CAUTION variant when any finding is `urgent` severity.
+- **`_primitives.md § Session state persistence`** (+176 lines, 3 helpers): `save_session_state` (jq-based atomic write), `read_session_state` (with schema_version check + warning), `compute_ready_for_fresh_work` (jq filter).
+- **`docs/work-cycle.md`** — renamed from `docs/daily-ritual.md`. Updated content for 4-command surface + per-session shape overrides + state.json save protocol.
+- **`docs/configuration.md § Watchman config`** — new section documenting `haikuCapPerTick` (default 5, max 10) + `duties.*` toggles.
+- **`docs/faq.md` new Q/A**: "What happened to `/kingdom:day`?" — explains the v0.29.0 hard break and all four renames.
+
+### Changed
+
+- **`commands/init.md`** — slimmer. No prereq checks (moved to self-care). Final step now points to `/kingdom:self-care` then `/kingdom:work`.
+- **Cross-references across role docs** — old command names replaced throughout `.kingdom/.setting/index.md` (1), `kings.md` (6), `workers.md` (3), `cmux.md` (8). Behaviour preserved; only entry-point names changed.
+- **README.md** — Quick start now uses `/kingdom:work`; slash command table updated to 4-row surface; install hint uses `/kingdom:self-care`.
+- **CLAUDE.md** — version → 0.29.0; version-history row added; directory layout updated (4 commands instead of 6); architectural decisions updated to 24 total (was 22, +R39 +R40).
+- `plugin.json`, `marketplace.json`, README badge — version → `0.29.0`.
+- `cards/README.md` index — all old command references updated to new commands.
+
+### Cumulative rules count (post-v0.29.0)
+
+| Tier | Count | IDs |
+|---|---|---|
+| Tier 1 (IRON-CLAD) | 17 | R1-R7, R22, R23, R30, R31, R33, R34, R35, R36, R37, R38, R39 |
+| Tier 2 (STRONG DEFAULTS) | 17 | R8-R16, R24-R29, R32, R40 |
+| Tier 3 (CONVENTIONS) | 5 | R17-R21 |
+
+### Migration guide for existing users
+
+Hard break — old commands gone. After updating the plugin:
+
+1. Run `/plugin update kingdom`.
+2. Re-run `/kingdom:init <project>` to sync new role docs / rules / cards / `skill-routing.md` / template into your workspace copy.
+3. Replace any muscle memory:
+   - `/kingdom:day` → `/kingdom:work`
+   - `/kingdom:start` → `/kingdom:work` (no standalone spawn anymore)
+   - `/kingdom:update` → `/kingdom:work` (audit folded in)
+   - `/kingdom:exit` → `/kingdom:save` (state snapshot; commits/pushes are separate flows)
+   - `/kingdom:doctor` → `/kingdom:self-care`
+4. (Optional) Adjust `kingdom.json.watchman.haikuCapPerTick` if you want to raise/lower the Haiku fan-out cap from the default 5.
+
+### Shipped via 8 parallel Sonnet agents
+
+Per R28 parallel-by-default. Each agent owned a file slice end-to-end (no overlap). 5 deletions + 3 new command files + 2 new rules + 1 watchmans.md rewrite + 1 template update + 2 new cards + 3 new helpers + 7 cross-reference updates + README/docs/CLAUDE.md update. Total: ~28 files touched, ~2000 lines net change.
+
+---
+
 ## [0.28.1] — 2026-05-19
 
 10-agent Haiku audit + 8-agent Sonnet fix-up. Aggregated cleanups across the repo: public-plugin hygiene (`Ter` → `the user` across role docs), CLAUDE.md sync to v0.28.0, helper consolidation per R37, em-dash density reduction in command docs.

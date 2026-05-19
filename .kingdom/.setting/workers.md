@@ -189,12 +189,12 @@ ls -1t "$WS"/.kingdom/<project>/tasks/*__worker-3__*.md | head -1
 - ❌ **Implementing without exhaustive pattern grep first.** "I assume the project doesn't have X" is not allowed without grep evidence proving it. Use sub-agents — capacity is unlimited. The lazy-implementor failure mode caught by v0.17.2: worker added `metadata: Metadata = { canonical: "https://webshop.bonfire.gg/" }` at module top-level (hardcoded literal) when the project's `lib/brand-defaults.ts` had a comment block explicitly documenting "Read by `app/layout.tsx` via `process.env.X ?? BRAND_Y` pattern. Env reads live INSIDE the async RootLayout function so Next.js doesn't inline at build." Worker read the brief but didn't read the convention docs alongside.
 - ❌ **Saying "scripts/foo.sh doesn't seed X" without grepping all of `scripts/`.** Real failure: King said "compose.stateless.yml and 000_superscript.sh don't seed APP_BASE_URL" → user pushed back → King discovered `scripts/026_provision_frontend_env.sh` DOES seed it. **Don't claim absence without exhaustive grep.**
 
-### `/kingdom:update` and other non-lane artifacts
+### `/kingdom:work` and other non-lane artifacts
 
 Some artifacts aren't lane-attached:
 
-- `/kingdom:update` curated digest: `<LOGS>/kingdom-update-<UTC>.md` — no lane (it's King-dispatched, not lane work)
-- `/kingdom:update` specialist sub-digests: `<LOGS>/audit-{A,B,C,D}-<UTC>.md` — no lane
+- `/kingdom:work` curated digest: `<LOGS>/kingdom-update-<UTC>.md` — no lane (it's King-dispatched, not lane work)
+- `/kingdom:work` specialist sub-digests: `<LOGS>/audit-{A,B,C,D}-<UTC>.md` — no lane
 - King planning task files: `<workspace>/.kingdom/<project>/tasks/<UTC>__king-plan__<short-slug>.md` — `king-plan` IS the "lane" slot (constant)
 - Watchman reports: `<project>/docs/test-reports/WATCH_<UTC>__<event-class>.md` — no lane (always watchman-N implicit)
 

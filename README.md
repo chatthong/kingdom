@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-![Version](https://img.shields.io/badge/version-0.28.1-success)
+![Version](https://img.shields.io/badge/version-0.29.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -44,16 +44,16 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /kingdom:init my-app
 
 # 3. Run the day, the ONE command you type every morning
-/kingdom:day my-app
+/kingdom:work my-app
 ```
 
-`/kingdom:day` is the canonical daily ritual. It audits the project, spawns the lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches + auto-gates work until something needs your approval. You stay in one chat with the King.
+`/kingdom:work` is the canonical daily ritual. It audits the project, spawns the lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches + auto-gates work until something needs your approval. You stay in one chat with the King.
 
 ```bash
 # Optional caps + targets
-/kingdom:day my-app cap=5                  # hard stop at 5 task-completions today
-/kingdom:day my-app target=30-50/week      # soft budget; auto-splits to ~6-10/day
-/kingdom:day my-app target=30-50/day       # auto-splits to ~150-250/week
+/kingdom:work my-app cap=5                  # hard stop at 5 task-completions today
+/kingdom:work my-app target=30-50/week      # soft budget; auto-splits to ~6-10/day
+/kingdom:work my-app target=30-50/day       # auto-splits to ~150-250/week
 ```
 
 You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
@@ -115,10 +115,10 @@ A Claude Code plugin that turns one Claude session into a coordinated team: each
 ```bash
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
-/kingdom:doctor
+/kingdom:self-care
 ```
 
-`/kingdom:doctor` tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys) and offers to fix it.
+`/kingdom:self-care` tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys) and offers to fix it.
 
 ---
 
@@ -151,12 +151,10 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
 | Command | What it does |
 |---|---|
-| **`/kingdom:day [project] [target=N-M/<day\|week\|month>] [cap=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling. The one command you type every morning. |
-| `/kingdom:init [<project>] [workers=N] [co-workers=M] [watchman=K]` | Workspace + optional project scaffold. See [`docs/configuration.md`](docs/configuration.md) for shape choices. |
-| `/kingdom:doctor` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
-| `/kingdom:exit [project]` | Graceful teardown. Closes lane workspaces; keeps King's workspace by default. |
-| `/kingdom:start <project>` | *(Building block, `/kingdom:day` invokes this.)* Spawn lanes only. Idempotent. Use standalone for resume-after-crash. |
-| `/kingdom:update [project]` | *(Building block, `/kingdom:day` invokes this.)* Audit-only pass. Use standalone for mid-day re-audit. |
+| **`/kingdom:work [<project>] [target=N-M/<day\|week\|month>] [cap=N] [worker=N] [co-worker=N] [watchman=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling. Per-session shape overrides via `worker=N` / `co-worker=N` / `watchman=N`. The one command you type every morning. |
+| `/kingdom:init [<project>]` | Workspace + optional project scaffold. See [`docs/configuration.md`](docs/configuration.md) for shape choices. |
+| `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
+| `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes — those go through the normal push-approval gate. |
 
 ---
 
@@ -164,7 +162,7 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
 | Topic | Where |
 |---|---|
-| Daily ritual: first-time setup, every-day command, plugin updates | [`docs/daily-ritual.md`](docs/daily-ritual.md) |
+| Work cycle: first-time setup, every-day command, plugin updates | [`docs/work-cycle.md`](docs/work-cycle.md) |
 | Configuration: project shapes, `kingdom.json`, `gate.*` keys | [`docs/configuration.md`](docs/configuration.md) |
 | Roles: King, workers, co-workers, watchmen, sub-agents | [`docs/roles.md`](docs/roles.md) |
 | Branch model: lifecycle, overlay, two-tier gate, three rules | [`docs/branch-model.md`](docs/branch-model.md) |
@@ -187,7 +185,7 @@ Especially welcome:
 - Brew tap formula (`brew install chatthong/tap/kingdom`)
 - Linux dev-container preset
 - Per-stack `kingdom.json` examples (Rust, Go, Python+Django, Next.js+TRPC, etc.)
-- VS Code task definitions that wrap `/kingdom:day`
+- VS Code task definitions that wrap `/kingdom:work`
 
 ---
 

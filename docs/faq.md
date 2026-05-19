@@ -24,6 +24,13 @@ Edit `kingdom.json` → `gate.*` arrays per project. The King runs whatever you 
 </details>
 
 <details>
+<summary><strong>What happened to /kingdom:day?</strong></summary>
+
+Renamed to `/kingdom:work` in v0.29.0 (hard break, no alias). All other commands also renamed: `/kingdom:doctor` → `/kingdom:self-care`, `/kingdom:exit` → `/kingdom:save` (simplified to state snapshot only — no commits or pushes). The building-block commands `/kingdom:start` and `/kingdom:update` were folded into `/kingdom:work` and no longer exist as standalone commands.
+
+</details>
+
+<details>
 <summary><strong>Can I have 7 workers?</strong></summary>
 
 Yes. Set `kingdom.json` → `shape.workers = 7`. Soft cap is 10 lanes total (`sanityCap`); the workspace gets cramped past that. Override `sanityCap` in `kingdom.json` if you really want more.
@@ -54,21 +61,21 @@ Every assignment to a lane creates one at `.kingdom/<project>/tasks/<UTC>__<lane
 <details>
 <summary><strong>What happens if a lane crashes?</strong></summary>
 
-State persists in the worktree filesystem. Re-running `/kingdom:start <project>` detects existing worktrees and `cd`s into them (resume) instead of `git worktree add` (create). The 4-step closer's sentinel flag is the source of truth: if the flag is present, the lane finished; if not, dispatch a fix-task.
+State persists in the worktree filesystem. Re-running `/kingdom:work <project>` detects existing worktrees and `cd`s into them (resume) instead of `git worktree add` (create). The 4-step closer's sentinel flag is the source of truth: if the flag is present, the lane finished; if not, dispatch a fix-task.
 
 </details>
 
 <details>
 <summary><strong>Can I run this without manaflow/cmux?</strong></summary>
 
-Yes. `/kingdom:start` auto-detects what's available. If cmux.app isn't running, it falls back to raw tmux automatically, no config change, no extra tools required.
+Yes. `/kingdom:work` auto-detects what's available. If cmux.app isn't running, it falls back to raw tmux automatically, no config change, no extra tools required.
 
 </details>
 
 <details>
-<summary><strong>What is `/kingdom:update` for?</strong></summary>
+<summary><strong>What did /kingdom:update do?</strong></summary>
 
-A forced audit sweep. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests to rewrite, task files to merge, suspect "claimed-done-but-no-commit" entries) for King review. Idempotent, safe to run any time. Watchman does the same low-risk fixes continuously during idle `/loop` time; `/kingdom:update` is the explicit one-shot version. Note: `/kingdom:day` runs it automatically as Step 1.
+`/kingdom:update` no longer exists as a standalone command (removed in v0.29.0). Its audit sweep is now folded into `/kingdom:work` and runs automatically on every invocation. The watchman also does the same low-risk fixes continuously during its `/loop` time.
 
 </details>
 
@@ -81,6 +88,6 @@ Only audit artifacts under `.kingdom/<project>/{tasks,logs}/`, and only for **lo
 
 ## See also
 
-- [`daily-ritual.md`](daily-ritual.md): how the everyday commands fit together
+- [`work-cycle.md`](work-cycle.md): how the everyday commands fit together
 - [`configuration.md`](configuration.md): pick the right shape
 - [`how-it-works.md`](how-it-works.md): mechanics behind the claims

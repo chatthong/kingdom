@@ -10,7 +10,7 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.28.0 (2026-05-19)
+## Current state — v0.29.0 (2026-05-19)
 
 The plugin is on `main` at commit `cbb677e`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
 
@@ -18,7 +18,8 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 | Version | Theme | What landed |
 |---|---|---|
-| **0.28.0** | Visible-first execution + interactive no-args mode | R36/R37/R38 (Tier 1): King renames workspace + spawns all lanes visibly within ~10s of `/kingdom:day`; heavy processing routes to lane sessions via `cmux send`; Agent() in King's session banned; new interactive Step 0.0 + `what-to-work-on` card (21st card) |
+| **0.29.0** | Hard-break: 4-command surface + autonomous watchman + state.json save protocol | 6 commands collapsed to 4: `/kingdom:work` (replaces `day`+`start`+`update`), `/kingdom:self-care` (replaces `doctor`), `/kingdom:save` (replaces `exit`, state-snapshot-only), `/kingdom:init` (slimmer, no prereq checks); R39 (watchman autonomous); R40 (Haiku cap) |
+| **0.28.0** | Visible-first execution + interactive no-args mode | R36/R37/R38 (Tier 1): King renames workspace + spawns all lanes visibly within ~10s of `/kingdom:work`; heavy processing routes to lane sessions via `cmux send`; Agent() in King's session banned; new interactive Step 0.0 + `what-to-work-on` card (21st card) |
 | 0.27.0 | Multi-window cmux.app support | `kingdom.json.cmux.spawnWindow` config (`"current"` / `"new"` / `"<uuid>"`); `spawn_master_workspace` updated; documented: default-to-caller's-window is multi-window-compatible; `cmux.md` § Multi-window added |
 | 0.26.0 | R34/R35 + self-detect protocol | R34 (Tier 1): Tier-1 rules override memory/feedback notes; R35 (Tier 1): King never `cp`s uncommitted changes between worktrees; self-detect protocol added (STOP → factual ack → repair → log → no dependent work without repair) |
 | 0.25.0 | Resume queue + R33 task-state scan | R33 (Tier 1): King reads `.kingdom/<project>/tasks/` BEFORE dispatch every session; R31 expanded to AGENT-mode worktree check; `cards/resume-queue.md` (20th card); `/kingdom:day` Step 0.6 resume scan |
@@ -36,16 +37,14 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 ```
 .claude-plugin/
-  plugin.json              # name=kingdom, version=0.28.0
+  plugin.json              # name=kingdom, version=0.29.0
   marketplace.json         # registry entry
 
-commands/                  # 6 slash commands
-  day.md                   # THE daily ritual (audit + spawn + kickoff + poll + push gates)
-  start.md                 # building block: spawn lanes only
-  update.md                # building block: audit-only pass
-  exit.md                  # graceful teardown
+commands/                  # 4 slash commands
+  work.md                  # THE daily ritual (audit + spawn + kickoff + poll + push gates)
+  save.md                  # state snapshot (lane + task state → state.json; no commits/pushes)
   init.md                  # workspace + project scaffolding
-  doctor.md                # prereq checker
+  self-care.md             # prereq checker
 
 .kingdom/.setting/         # role docs + helpers + cards + routing (canonical source — copied into workspace by /kingdom:init)
   index.md                 # entry-point router
@@ -56,14 +55,14 @@ commands/                  # 6 slash commands
   skill-routing.md         # keyword → skill mapping (v0.23.0+)
 
 docs/                      # 8 long-form topic docs (split from README in v0.21.0)
-  branch-model.md  cmux-integration.md  configuration.md  daily-ritual.md
+  branch-model.md  cmux-integration.md  configuration.md  work-cycle.md
   faq.md  how-it-works.md  roles.md  why.md
 
 README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions — 22 total (don't re-debate without reading the rationale)
+## Key architectural decisions — 24 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -109,6 +108,10 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 22. **Sub-agent spawns are tabs or lane dispatch — never in-process Agent()** (R38, v0.28.0). Allowed: `cmux tab-action --action new-terminal-right` (visible tab, auto-closes on sentinel) OR `cmux send --workspace worker-N`. Banned: `Agent(subagent_type="general-purpose", ...)` in King's main session. The cmux "1 local agent · ctrl+t to hide tasks" bottom-pane indicator is an R38 violation signal.
 
+23. **Watchman is fully autonomous within its duty list** (R39, v0.29.0). Watchman does not pause for King approval on low-risk fixes (stale checkbox ticks, log-line backfills, dead-link repairs). High-risk changes (digest rewrites, task-file merges) are still flagged to King. Autonomous scope defined in `watchmans.md` → "Duty list" and enforced by `/kingdom:work` watchman spawn.
+
+24. **Haiku cap per watchman tick** (R40, v0.29.0). Each watchman tick may spawn at most `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10). Prevents runaway fan-out on large repos with many open PRs. Configurable per project in `kingdom.json`; King may override for a single session by editing `state.json` before the tick fires.
+
 ## Working conventions for THIS repo
 
 - **English only in chat** (per memory rule `feedback_communication`).
@@ -128,7 +131,7 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ## Open threads (things to pick up next session)
 
-1. **`/kingdom:doctor` should detect workspace-stale files.** v0.22 introduced `cards/`, v0.23 added `skill-routing.md`. Both require `/kingdom:init` re-run to land in the workspace. Doctor doesn't currently flag the gap. Spec: scan `.kingdom/.setting/` for files referenced by current plugin version that don't exist in workspace; render `doctor-report` `partial-pass` variant with auto-fix offer. Mentioned as v0.23.1 candidate.
+1. **`/kingdom:self-care` should detect workspace-stale files.** v0.22 introduced `cards/`, v0.23 added `skill-routing.md`. Both require `/kingdom:init` re-run to land in the workspace. Self-care doesn't currently flag the gap. Spec: scan `.kingdom/.setting/` for files referenced by current plugin version that don't exist in workspace; render `doctor-report` `partial-pass` variant with auto-fix offer. Mentioned as v0.23.1 candidate.
 
 2. **`parallel_edit_fanout` helper** is referenced by R28 but spec-only (body unwritten). Needed for the parallel branch-amend pattern described in R27 (PR-number backfill).
 
@@ -140,7 +143,7 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
    - Forking ghostty was discussed and rejected (ghostty's mission is terminal speed, not agent UX).
    - No decision made yet; user said "what you think." Did NOT fire as a sub-project.
 
-5. **`/kingdom:exit` parallel teardown** (v0.19.0) wasn't actually retested after the fix. The `close-workspace` bug fix is documented in CHANGELOG but a real-world `/kingdom:exit` cycle should be observed to confirm the parallel `&` + `wait` pattern works as written.
+5. **`/kingdom:save` parallel teardown** (v0.19.0, now `/kingdom:save` as of v0.29.0) wasn't actually retested after the fix. The `close-workspace` bug fix is documented in CHANGELOG but a real-world `/kingdom:save` cycle should be observed to confirm the parallel `&` + `wait` pattern works as written.
 
 6. **bfg-swt PRs still open** (as of last work session, 2026-05-18 evening):
    - PR #255 — `chore(roadmap): BE-P1-EMAIL provider = Tencent SES`
@@ -154,7 +157,7 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 1. **Read `rules.md` first** (per R14). Then this CLAUDE.md. Then the role docs for the area you're working in.
 2. Check `git log --oneline -10` to see what landed since you last had context.
 3. Look at the "Open threads" list above for natural next-step candidates.
-4. If user says `/kingdom:day` on this repo: there's no real lane setup for the plugin repo itself; the plugin scaffold is for *consumer* projects. The plugin repo is developed traditionally (single-branch `main`, no lanes, no kingdom overlay).
+4. If user says `/kingdom:work` on this repo: there's no real lane setup for the plugin repo itself; the plugin scaffold is for *consumer* projects. The plugin repo is developed traditionally (single-branch `main`, no lanes, no kingdom overlay).
 
 ## What NOT to do
 
@@ -176,4 +179,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-19 after v0.28.0 ship. Update this file when shipping a release that changes architectural decisions (1-13 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-19 after v0.29.0 ship. Update this file when shipping a release that changes architectural decisions (1-24 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

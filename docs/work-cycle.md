@@ -1,4 +1,4 @@
-# 🔁 Daily ritual
+# 🔁 Work cycle
 
 > Part of the [kingdom](../README.md) docs.
 
@@ -22,16 +22,16 @@ Detail on shape choices: [`configuration.md`](configuration.md).
 ## Every day, your Monday-morning ritual
 
 ```bash
-/kingdom:day my-app                        # the one command, every morning
-/kingdom:day my-app cap=5                  # cap today's task-completions at 5
-/kingdom:day my-app target=30-50/week      # soft weekly budget; auto-splits to daily/monthly
+/kingdom:work my-app                        # the one command, every morning
+/kingdom:work my-app cap=5                  # cap today's task-completions at 5
+/kingdom:work my-app target=30-50/week      # soft weekly budget; auto-splits to daily/monthly
 ```
 
-Monday morning. One command. Kingdom runs `/kingdom:update` (refresh project state), spawns the lanes (idempotent, resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per [rules.md R1](../.kingdom/.setting/rules.md#r1-push-approval-is-single-shot--pr-specific)).
+Monday morning. One command. Kingdom runs an audit (refresh project state), spawns the lanes (idempotent, resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per [rules.md R1](../.kingdom/.setting/rules.md#r1-push-approval-is-single-shot--pr-specific)).
 
 Tuesday morning. Same command. The audit re-runs (cheap, parallel fan-out). The kickoff brief reflects yesterday's progress against your target. Nothing to remember.
 
-End of day: `/kingdom:exit my-app` closes lanes gracefully; your conversation stays alive.
+End of session: `/kingdom:save my-app` snapshots state and closes lanes gracefully; your conversation stays alive.
 
 That's the whole routine. **It replaces the daily overhead of "what was I doing", "did anyone push", "is develop green", "is PR #234 reviewed".** The King knows. Watchman knows. Ask the King.
 
@@ -49,12 +49,27 @@ That's the whole routine. **It replaces the daily overhead of "what was I doing"
 
 Parsing is forgiving and echoed back before the loop fires, so you can correct typos.
 
-## Standalone building-block commands (power users)
+## Per-session shape overrides
 
-Most don't need these. Both are invoked automatically by `/kingdom:day`. Reach for them only when you want the standalone phase:
+`/kingdom:work` accepts per-session lane count overrides without touching `kingdom.json`:
 
-- [`/kingdom:update my-app`](../commands/update.md): audit-only pass; useful mid-day after watchman flags fresh findings.
-- [`/kingdom:start my-app`](../commands/start.md): spawn lanes only, no audit, no poll loop; useful for resume-after-crash.
+```bash
+/kingdom:work my-app worker=2              # run with 2 workers this session (json default stays 3)
+/kingdom:work my-app co-worker=0           # no paired lanes today
+/kingdom:work my-app watchman=2            # spin up a second watchman for heavy monitoring
+```
+
+These are **session-only** overrides. The next `/kingdom:work` reverts to `kingdom.json.shape` values.
+
+## Saving state with `/kingdom:save`
+
+```bash
+/kingdom:save my-app
+```
+
+Writes current lane + task state to `.kingdom/my-app/state.json`, then closes lane workspaces. Does **not** commit or push — those go through the normal push-approval gate (R1). Use this at end-of-day or before a planned context switch.
+
+Full detail: [`commands/save.md`](../commands/save.md).
 
 ## Updating the plugin
 
@@ -62,7 +77,7 @@ Two layers, different routines:
 
 ```bash
 /plugin update kingdom    # 1. pull new plugin code (slash commands + templates)
-/kingdom:doctor           # 2. (optional) check for new env requirements
+/kingdom:self-care        # 2. (optional) check for new env requirements
 /kingdom:init             # 3. (optional) re-sync workspace role docs from new templates
 ```
 

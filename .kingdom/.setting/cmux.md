@@ -58,7 +58,7 @@ Every Claude Code session spawned by cmux has these set automatically:
 |---|---|---|
 | `CMUX_WORKSPACE_ID` | This session's workspace ref (e.g., `workspace:7`) | Default `--workspace` for every `cmux` subcommand |
 | `CMUX_TAB_ID` / `CMUX_SURFACE_ID` | This session's tab/surface ref (e.g., `surface:12`) | Default `--surface`; required for `cmux tab-action --action close` (the auto-close in sub-agent Step 5) |
-| `CMUX_CLAUDE_PID` | Process ID of this Claude session | `/kingdom:doctor` Check 1 (confirms PRIMARY mode) |
+| `CMUX_CLAUDE_PID` | Process ID of this Claude session | `/kingdom:self-care` Check 1 (confirms PRIMARY mode) |
 | `CMUX_SOCKET_PATH` | Optional override for the cmux Unix socket | Rarely needed |
 
 When you need to address THIS session, `$CMUX_WORKSPACE_ID` and `$CMUX_SURFACE_ID` are the canonical refs.
@@ -225,7 +225,7 @@ cmux tab-action --action close --surface "$CMUX_SURFACE_ID"
 
 For Agent-spawned sub-agents (the default — headless), there's no tab to close; `$CMUX_SURFACE_ID` won't be set in the Agent process context. Step 5 becomes a no-op.
 
-To close a workspace entirely (kingdom teardown — `/kingdom:exit`), use the canonical `close-workspace` command — NOT `tab-action --action close` (which targets a single surface, not the workspace):
+To close a workspace entirely (kingdom teardown — `/kingdom:save`), use the canonical `close-workspace` command — NOT `tab-action --action close` (which targets a single surface, not the workspace):
 
 ```bash
 cmux close-workspace --workspace "$STALE_WS"
@@ -267,11 +267,11 @@ Confirmed working in 8-window setups. Key facts:
 
 ## Teardown / close commands
 
-cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom:exit` cycle on cryptic `Unknown tab action` errors — King has trial-and-errored this before. **Canonical mapping:**
+cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom:save` cycle on cryptic `Unknown tab action` errors — King has trial-and-errored this before. **Canonical mapping:**
 
 | Target | Command | When |
 |---|---|---|
-| **Workspace** (lane teardown, `/kingdom:exit`) | `cmux close-workspace --workspace <ref>` | Closing a full lane workspace at kingdom teardown |
+| **Workspace** (lane teardown, `/kingdom:save`) | `cmux close-workspace --workspace <ref>` | Closing a full lane workspace at kingdom teardown |
 | **Surface** (single tab inside a workspace) | `cmux close-surface --surface <ref>` OR `cmux tab-action --action close --surface <ref>` | Sub-agent self-close (5-step closer Step 5) |
 | **Window** (top-level cmux.app window) | `cmux close-window --window <ref>` | Rare — closes an entire native window |
 
@@ -281,7 +281,7 @@ cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom
 - ❌ `cmux tab-action --action close --workspace <ws>` — error: `Unknown tab action` when `--workspace` is passed without `--surface`. tab-action close targets a surface, not a workspace.
 - ❌ `cmux workspace-action --action close ...` — there is no `close` workspace-action; only `rename`, `set-color`, `set-description`, `mark-read`, `mark-unread`, `pin`.
 
-**Parallel teardown (correct pattern for `/kingdom:exit` Step 5):**
+**Parallel teardown (correct pattern for `/kingdom:save` Step 5):**
 
 ```bash
 # Close N lane workspaces IN PARALLEL — each close is independent (rules.md R28)
@@ -335,7 +335,7 @@ cmux notify \
 | 🕵️ Watchman | PR mergeable + green + approved + idle 30m | (skip) | `$KING_WS` | `🕵️ watchman-N` | `Ready to merge · PR #N` |
 | 👑 King | Pre-commit gate FAIL | (skip) | originating master ws | `👑 King · gate FAIL` | `<lane> · <sub-task-id>` |
 | 👑 King | Pre-commit gate PASS, asking "push?" | (skip) | `$KING_WS` | `👑 King · gate pass · push?` | `<lane> · <sub-task-id>` |
-| 👑 King → `/kingdom:exit` | Session ending, 5s heads-up per lane | (skip) | each lane ws | `👑 kingdom:exit` | `Session ending` |
+| 👑 King → `/kingdom:save` | Session ending, 5s heads-up per lane | (skip) | each lane ws | `👑 kingdom:save` | `Session ending` |
 
 The schema keeps notifications scan-able in the bell panel: role emoji always in title, subtitle is the event class, body has the specific context.
 
@@ -396,7 +396,7 @@ cmux list-panes --workspace workspace:7 --json
 cmux list-panes --workspace workspace:7 --json | jq '[.panes[] | {ref, surface_refs, focused}]'
 ```
 
-The kingdom uses `cmux tree --all` in `/kingdom:doctor` and on resume to verify the expected workspaces are still alive.
+The kingdom uses `cmux tree --all` in `/kingdom:self-care` and on resume to verify the expected workspaces are still alive.
 
 ## Read pane contents (blocked-lane detection)
 
@@ -413,7 +413,7 @@ cmux read-screen --workspace "$WORKER_WS_1"
 
 Watchman uses `capture-pane` every `/loop` tick to detect lanes blocked on interactive permission prompts. Pattern match `Do you want to proceed\?`, `Esc to cancel`, `\[y/N\]`, `allow .* during this session`, `Press Enter` → fire `cmux notify` so the user knows which lane needs attention (otherwise the lane silently stalls while cmux.app still reports it as "Running"). Full detail in [`watchmans.md`](watchmans.md) → § "Blocked-lane scan".
 
-For pre-emption (preferred over detection), expand the workspace `.claude/settings.json` `permissions.allow` to include path-scoped entries for `.kingdom/**` and `.worktrees/**` so lanes can read/write within those without prompting. `/kingdom:doctor` Check 10 + `/kingdom:init` Step 4.5 both apply this expansion automatically.
+For pre-emption (preferred over detection), expand the workspace `.claude/settings.json` `permissions.allow` to include path-scoped entries for `.kingdom/**` and `.worktrees/**` so lanes can read/write within those without prompting. `/kingdom:self-care` Check 10 + `/kingdom:init` Step 4.5 both apply this expansion automatically.
 
 ---
 
@@ -655,7 +655,7 @@ Description updates are nice-to-have, not load-bearing. If a role fails to updat
 | Workspace renamed but sidebar still shows old name | Used `tab-action --action rename --workspace <ws>` — that renames the focused **surface** within workspace context, NOT the workspace's sidebar label | Use `workspace-action --action rename --workspace <ws> --title "…"` (the dedicated workspace-level command) |
 | `cmux claude-teams` errors with prompt required | `claude-teams` is a thin pass-through to `claude --print`, which needs input. Kingdom doesn't use it. | Use `cmux new-workspace --command "claude"` per lane instead. |
 | `Tab not found` from `cmux tab-action` | Missing `--surface` or `--tab` flag when `$CMUX_SURFACE_ID` isn't set | Pass `--surface "$CMUX_SURFACE_ID"` explicitly, or use `--workspace <ref>` if targeting a whole workspace |
-| Workspace ref drifts after restart | Workspace refs are NOT stable across cmux.app restarts | Kingdom persists refs to `<LOGS>/workspace-refs.env` and re-reads on `/kingdom:start` resume — but if cmux.app was force-quit, refs may need rebuilding. Doctor Check 1 flags this. |
+| Workspace ref drifts after restart | Workspace refs are NOT stable across cmux.app restarts | Kingdom persists refs to `<LOGS>/workspace-refs.env` and re-reads on `/kingdom:work` resume — but if cmux.app was force-quit, refs may need rebuilding. Self-care Check 1 flags this. |
 | Sub-agent tab doesn't close | The sub-agent's process didn't run Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`) | Verify `$CMUX_SURFACE_ID` was set when the sub-agent launched — if not, the spawn went through `Agent(...)` not `cmux tab-action`, and there's no tab to close |
 | `cmux send` doesn't trigger Enter | You sent the prompt with `--` separator but forgot the second `cmux send … Enter` call | Always two calls: text, then Enter |
 | `new-workspace` ignores `--color` | `cmux new-workspace` does NOT support `--color` — only `--name`, `--description`, `--cwd`, `--command`, `--layout`, `--window`, `--focus` | Set color in a separate call: `cmux workspace-action --action set-color --workspace <ref> --color violet` |

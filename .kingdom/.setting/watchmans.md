@@ -10,6 +10,16 @@ See [`index.md`](index.md) for the entry-point overview, [`kings.md`](kings.md) 
 
 ---
 
+## Rule cross-reference
+
+Three rules govern Watchman's relationship with the rest of the kingdom — keep these in mind before adding any new Watchman authority:
+
+- **R39 — King never dispatches to Watchman.** Watchman is self-scheduling (via `/loop`) and autonomous. King does not queue work for it, does not send it prompts mid-session, and does not treat it as a worker lane. The only King→Watchman interaction is the one-time spawn at kingdom startup (see § Dispatch below).
+- **R11 — Watchman is read-mostly on project source.** It may read any project file for situational awareness; it may run smoke/test commands; it may NOT edit project source code. Write authority is confined to `WATCH_*.md` reports, `watchman_state.json`, and low-risk kingdom-doc fixes (see § Docs audit duty).
+- **R27 — Watchman owns PR-number backfill.** Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick. King never does this work. See § PR-number backfill duty.
+
+---
+
 ## Watchman role
 
 - **Continuous monitor**, not a worker. Does NOT claim TODOs, edit code, push, or open PRs.
@@ -149,6 +159,238 @@ jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
 
 # Dynamic pacing: 5 min if any transition this tick, 15 min if quiet
 ```
+
+---
+
+## Autonomous Haiku fan-out (v0.29.0+, per rules.md R39 + R40)
+
+Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — it also fans out up to `haiku_cap_per_tick` Haiku sub-agents in parallel to perform four new surveillance duties. These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux tab-action --action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All four duties run in parallel at every tick; no duty waits for another.
+
+### `haiku_cap_per_tick` enforcement
+
+Read from `kingdom.json.watchman.haikuCapPerTick`. Default: `5`. Maximum: `10`.
+
+```bash
+HAIKU_CAP=$(jq -r '.watchman.haikuCapPerTick // 5' "$KJSON")
+# Clamp to [1, 10]
+if [ "$HAIKU_CAP" -gt 10 ]; then
+  HAIKU_CAP=10
+  echo "[$(date -u +%Y-%m-%dT%H%MZ)] WARN haiku_cap_per_tick clamped to 10 (configured value exceeded max)" \
+    >> "$LOGS/master_agent.log"
+fi
+if [ "$HAIKU_CAP" -lt 1 ]; then
+  HAIKU_CAP=1
+fi
+```
+
+Count all Haiku sub-agents spawned this tick across all four duties. If the combined count would exceed `HAIKU_CAP`, reduce the code-review fan-out first (it generates the most agents), then skip lower-priority duties in this order: git hygiene, conflict scan, CVE scan (CVE scan is rarely urgent mid-day; skip last). Log a one-line warning to `master_agent.log` whenever clamping occurs.
+
+---
+
+### Duty 1 — Code review fan-out
+
+For each lane that has new commits since the last tick, spawn one Haiku sub-agent that reads the diff and writes a one-page review artifact.
+
+**Trigger:** `git log --oneline <last-tick-sha>..<lane>-HEAD` returns at least one commit.
+
+**Per-lane Haiku prompt (condensed):**
+
+```bash
+LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
+NEW_SHA=$(git -C "$WORKTREES/$LANE" rev-parse HEAD 2>/dev/null)
+[ "$LAST_SHA" = "$NEW_SHA" ] && continue   # no new commits — skip
+
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+REVIEW_FILE="$LOGS/WATCH_REVIEW_${UTC}__${LANE}.md"
+
+Agent(
+  model="haiku",
+  prompt="You are a code reviewer. Read the diff below and write a concise one-page review.
+Diff: git -C $WORKTREES/$LANE diff $LAST_SHA..$NEW_SHA
+Output file: $REVIEW_FILE
+
+Review must cover (TL;DR header, then sections):
+- Missing or thin test coverage (flag any function >20 LOC with zero test calls)
+- Large untested chunks (>50 LOC change with no matching test file change)
+- Security smells (raw SQL, unescaped user input, hardcoded secrets, unsafe evals)
+- Style outliers (naming, file length, unusual patterns vs the rest of the lane's history)
+
+Severity: 'urgent' | 'warn' | 'info'. Mark the TL;DR with the highest severity found.
+Write ONLY the review file — no other edits."
+)
+```
+
+Update `watchman_state.json` after fan-out: `lane_shas["$LANE"] = $NEW_SHA`.
+
+---
+
+### Duty 2 — CVE scan
+
+Detect the project's package manager(s) by inspecting the project root. Spawn ONE Haiku per detected manager.
+
+**Detection → audit command map:**
+
+| Indicator file | Audit command |
+|---|---|
+| `package.json` + `pnpm-lock.yaml` | `pnpm audit --json` |
+| `package.json` (no pnpm lock) | `npm audit --json` |
+| `requirements.txt` or `pyproject.toml` | `pip-audit --format json` |
+| `Cargo.toml` | `cargo audit --json` |
+| `go.mod` | `go list -json -m -u all` |
+
+Multiple managers may coexist (e.g., a monorepo with both `pnpm-lock.yaml` and `requirements.txt`). Each gets its own Haiku, but each counts against `haiku_cap_per_tick`.
+
+**Output file:** `$LOGS/WATCH_CVE_<UTC>.md`
+
+**Haiku prompt (per manager):**
+
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+CVE_FILE="$LOGS/WATCH_CVE_${UTC}.md"
+
+Agent(
+  model="haiku",
+  prompt="Run: $AUDIT_CMD in $PROJ
+Parse the JSON output. Write $CVE_FILE with:
+## TL;DR
+- Severity: 'urgent' (any critical/high) | 'warn' (moderate) | 'info' (low/none)
+- Critical: N, High: N, Moderate: N, Low: N
+## Findings
+One row per advisory: package name | installed version | patched version | CVE ID | severity.
+## Remediation
+For each critical/high: recommended update command.
+Write ONLY the CVE file — no other edits."
+)
+```
+
+If no indicator files are found, skip this duty and note in the tick summary.
+
+---
+
+### Duty 3 — Cross-lane conflict scan
+
+Build a file-touch matrix across all active lanes since the last tick. Flag cases where two or more lanes have modified the same file.
+
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+CONFLICT_FILE="$LOGS/WATCH_CONFLICTS_${UTC}.md"
+
+# Build per-lane changed-file lists (using last-tick SHA from watchman_state.json)
+declare -A LANE_FILES
+for LANE in worker-1 worker-2 worker-3 co-worker-1; do
+  LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
+  [ -z "$LAST_SHA" ] && continue
+  CHANGED=$(git -C "$WORKTREES/$LANE" diff --name-only "$LAST_SHA"..HEAD 2>/dev/null)
+  LANE_FILES["$LANE"]="$CHANGED"
+done
+
+Agent(
+  model="haiku",
+  prompt="You are given per-lane file-touch lists below. Compute overlaps: any file touched
+by 2+ lanes since last tick is a potential conflict.
+
+Lane file lists:
+$(for L in "${!LANE_FILES[@]}"; do echo "=== $L ==="; echo "${LANE_FILES[$L]}"; done)
+
+Output file: $CONFLICT_FILE
+Format:
+## TL;DR
+- Severity: 'urgent' (same file modified in 2+ lanes) | 'info' (no overlaps)
+- N overlapping file(s) found
+
+## Conflict pairs
+| File | Lane A | Lane B | Risk |
+|---|---|---|---|
+<one row per overlap — Risk = 'merge conflict likely' if both modified; 'watch' if one added, one modified>
+
+Write ONLY the conflicts file — no other edits."
+)
+```
+
+If no overlaps exist, Haiku writes a minimal `## TL;DR — info: no overlaps this tick` file. Watchman still logs it in the tick summary.
+
+---
+
+### Duty 4 — Git hygiene scan
+
+Spawn one Haiku to scan for git-state drift across the kingdom worktree layout.
+
+**What to scan:**
+
+| Item | How to detect | Flag if |
+|---|---|---|
+| Stale worktrees | `ls $PROJ/.worktrees/` vs `git worktree list` | Directory exists but `git worktree list` has no matching entry |
+| Orphan branches | `git branch` (local) vs `kingdom.json.shape` lane names | Local branch not in kingdom shape + not `develop`/`main`/`watchman-*` |
+| Unflushed `.lane` claims | `ls $LOGS/claims/*.lane` | Claim file exists but matching sentinel in `$LOGS/done/` also exists |
+| Broken sentinels | `ls $LOGS/done/*.flag` | Sentinel flag exists but no matching task file in `$LOGS/tasks/` |
+| Commit-without-sentinel pairs | `git log --oneline` on each lane vs `$LOGS/done/` | Lane has ≥1 commit since last tick but no new sentinel in `done/` within 5 min of commit time |
+
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+GIT_FILE="$LOGS/WATCH_GIT_${UTC}.md"
+
+Agent(
+  model="haiku",
+  prompt="Perform a git hygiene scan for project $PROJ.
+
+Worktrees dir: $PROJ/.worktrees/
+Kingdom logs: $LOGS/
+Kingdom JSON: $KJSON
+
+Check all five hygiene items (stale worktrees, orphan branches, unflushed .lane claims,
+broken sentinels, commit-without-sentinel pairs). For each issue found, record:
+- Item type
+- Affected path / branch / file
+- Recommended remediation (one line)
+
+Output file: $GIT_FILE
+## TL;DR
+- Severity: 'urgent' (broken sentinel or commit-without-sentinel >30 min old) | 'warn' (stale worktree or orphan branch) | 'info' (no issues)
+- N issue(s) found
+
+## Findings
+<bulleted list, one item per finding>
+
+Write ONLY the git hygiene file — no other edits."
+)
+```
+
+---
+
+### Tick aggregation — `WATCH_TICK_<UTC>.md`
+
+At the END of each `/loop` tick (after all four fan-out duties complete and their Haiku sub-agents have written their output files), Watchman writes a single tick summary:
+
+**File:** `$LOGS/WATCH_TICK_<UTC>.md`
+
+```markdown
+# Watchman tick summary — <UTC>
+
+## TL;DR
+- Develop SHA: <sha> (moved | unchanged)
+- Smoke: pass | fail | skipped
+- Haiku sub-agents spawned: N / <haiku_cap_per_tick>
+- Highest severity this tick: urgent | warn | info
+
+## Duty results
+| Duty | Ran? | Findings | Severity | Output file |
+|---|---|---|---|---|
+| Code review fan-out | yes / no (cap) | N reviews written | urgent/warn/info | WATCH_REVIEW_... |
+| CVE scan | yes / no (no lockfile) | N advisories | urgent/warn/info | WATCH_CVE_... |
+| Cross-lane conflict scan | yes / no (cap) | N overlaps | urgent/warn/info | WATCH_CONFLICTS_... |
+| Git hygiene scan | yes / no (cap) | N issues | urgent/warn/info | WATCH_GIT_... |
+
+## Lane activity
+| Lane | New commits | Files changed | Conflicts |
+|---|---|---|---|
+| worker-1 | N | N | — |
+...
+
+## Cap warnings
+<list any duties skipped or trimmed due to haiku_cap_per_tick, or "none">
+```
+
+**Urgent escalation:** If any duty's output file contains `severity: urgent` (case-insensitive in its TL;DR), Watchman renders a `watchman-tick` card (from the `cards/` directory) and fires `cmux notify` to both `$KING_WS` and `$WATCHMAN_WS`. Non-urgent ticks are logged only; no notification.
 
 ---
 

@@ -287,6 +287,31 @@ The cmux native "1 local agent · ctrl+t to hide tasks" indicator (the compresse
 
 **Anti-pattern caught 2026-05-19:** King's session bottom showed `1 local agent · ctrl+t to hide tasks` with `general-purpose Phase B: per-app debug-data + /api/_dev/me proxy` running invisibly. User had no way to monitor the work without keypress-toggling the tasks panel. Per R38, that work should have spawned as a visible cmux tab inside a lane workspace.
 
+### R39. Watchman runs fully autonomously — Tier 1 (v0.29.0+)
+
+Watchman is a self-scheduling agent. King NEVER blocks waiting on watchman, never dispatches work to watchman, and never sends watchman briefs via `cmux send`.
+
+**Watchman's scheduling is pull-based, not push-based:**
+
+- Watchman owns its own `/loop` with dynamic pacing of 5-15 minutes per tick, calibrated at runtime based on lane activity, PR volume, and prior-tick findings.
+- Watchman's duties (polling `develop`, open PRs, lane state, git hygiene) are self-initiated. Nothing needs to trigger them from King.
+- King reads `watchman_state.json` + `WATCH_*.md` reports at session start (per R14, step 7) for situational awareness — that is the ONLY sanctioned King→watchman interaction, and it is read-only.
+
+**Fan-out capacity:**
+
+- Watchman may spawn up to N Haiku sub-agents per tick, where N = `kingdom.json.watchman.haikuCapPerTick` (default 5, hard max 10 — see R40 for capping rules).
+- Spawning, scheduling, and closing those sub-agents is watchman's own responsibility. King plays no role in this.
+
+**What "autonomous" means in practice:**
+
+| King's allowed actions toward watchman | King's BANNED actions toward watchman |
+|---|---|
+| Read `watchman_state.json` + `WATCH_*.md` at session start | Send a dispatch brief (`cmux send --workspace watchman-N -- "..."`) |
+| Include watchman's latest report in the daily-kickoff synthesis | Block or gate until watchman produces a report |
+| Surface a watchman finding to the user as an FYI | Ask watchman to check something specific (watchman decides what to check) |
+
+**Incident reference:** this was implicit pre-v0.29.0 but never codified. In several sessions, King treated watchman like a worker lane — sending it scan requests via `cmux send` or waiting on its output before proceeding. This created bidirectional coupling that broke watchman's autonomous `/loop` pacing (watchman would be mid-tick when King interrupted; King would stall waiting for a watchman reply that never came because watchman was already in a new tick). The autonomy boundary is now explicit and enforceable.
+
 ### R22. The closer (4-step or 5-step) MUST fire on EVERY task completion — Tier 1
 
 Even on `blocked` / `cancelled` / `errored` exit, the worker writes:
@@ -505,6 +530,31 @@ git -C "$WORKTREE" status                         # MUST print "nothing to commi
 | `gh pr view <N>` flips to MERGED | **R26** post-merge resync | fetch + ff develop → kingdom = NEW `origin/develop` tip (advanced SHA) + free merged lane |
 
 R29 fires first (per-push, no remote movement). R26 fires later when the lead merges (advances remote, then resync).
+
+### R40. Watchman Haiku fan-out cap per tick — Tier 2 (v0.29.0+)
+
+`kingdom.json.watchman.haikuCapPerTick` governs how many Haiku sub-agents watchman may spawn in a single `/loop` tick.
+
+**Defaults and hard limits:**
+
+| Setting | Value |
+|---|---|
+| Default | `5` |
+| Hard maximum | `10` |
+| Clamp behaviour | If configured value exceeds 10, clamp to 10 + write one warning line to `master_agent.log` (`[UTC] WATCHMAN_CAP_CLAMPED requested=<N> clamped=10`) |
+
+**Rationale:** multiple kingdoms (one per project) may run simultaneously on the same machine and share the same Anthropic API key. Without a per-kingdom cap, a watchman that finds 30 files changed in one tick could saturate the API with 30 Haiku calls — multiplied by the number of live kingdoms. The default of 5 lets each kingdom run 5 parallel scans per tick while leaving headroom for others.
+
+**What watchman uses the fan-out budget for (in priority order):**
+
+1. **Code review** — one Haiku sub-agent per file touched since the last tick (diff review, style, obvious bugs). Each sub-agent writes `WATCH_CR_<file-hash>_<UTC>.md`.
+2. **CVE / dependency audit** — one Haiku sub-agent per lockfile changed since last tick (`npm audit` / `pnpm audit` / `pip-audit` / `cargo audit`). Each writes `WATCH_CVE_<lockfile-hash>_<UTC>.md`.
+3. **Cross-lane conflict detection** — one Haiku sub-agent scans all active `worker-N` diffs for overlapping file edits. Writes `WATCH_CONFLICT_<UTC>.md`.
+4. **Git hygiene scan** — one Haiku sub-agent checks for: stale worktrees (no sentinel activity > 2 hours), orphan branches (no matching task file), broken sentinels (done flag missing for a task file marked `done`), unflushed `.lane` claims. Writes `WATCH_GIT_<UTC>.md`.
+
+**Aggregation:** watchman collects each sub-agent's sentinel, then writes `WATCH_TICK_<UTC>.md` as the per-tick summary. King reads the latest `WATCH_TICK_*.md` at session start (R14, step 7).
+
+**Cap enforcement mechanics:** before spawning each sub-agent, watchman checks its internal `spawned_this_tick` counter. If `spawned_this_tick >= haikuCapPerTick`, remaining work items are queued for the next tick — not dropped.
 
 ---
 
