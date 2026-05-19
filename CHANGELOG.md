@@ -4,6 +4,53 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.28.0] — 2026-05-19
+
+**Visible-first execution model + interactive no-args mode.** Three Tier-1 rules that make the kingdom feel responsive AND keep all work observable in cmux, plus a new interactive `/kingdom:day` (no args) that asks the user "what do you want to work on?" and parses natural-language replies.
+
+### Added
+
+- **R36 (Tier 1) Visible workspace progress BEFORE any processing.** On `/kingdom:day` invocation:
+  1. Within ~1s: King renames its OWN workspace to `👑 King · <project>` (amber, pinned) + sets description `Starting <project>…`. User sees immediate visual feedback.
+  2. Within ~5-10s: ALL lane workspaces from `kingdom.json.shape` spawn in parallel — every `worker-N`, `co-worker-N`, `watchman-N` appears in sidebar before any audit/dispatch.
+  3. Render `spawn-complete` card.
+  4. ONLY AFTER step 3 does processing begin.
+  No "Crunched for 30s while sidebar looks dead" allowed.
+- **R37 (Tier 1) Heavy processing runs IN lane workspaces, not King's session.** Audit fan-outs, pattern-grep scans, doc-digest fan-outs dispatch to lanes via `cmux send --workspace worker-N -- "..."`. King's main session does only: reading state, rendering cards, making dispatch decisions. Every lane has a Claude session already running — use them as parallel compute instead of spinning hidden in-process Agents.
+- **R38 (Tier 1) Sub-agent spawns are TABS or LANE DISPATCH — never in-process Agent().** The cmux native "1 local agent · ctrl+t to hide tasks" compressed bottom-pane indicator is banned for kingdom work. Allowed mechanisms: `cmux tab-action --action new-terminal-right --workspace <lane-ws>` (visible tab, auto-closes on sentinel) OR `cmux send --workspace worker-N -- "..."` (route to existing lane Claude session). Banned: `Agent(subagent_type="general-purpose", ...)` in King's main session.
+- **Interactive `/kingdom:day` mode** (new Step 0.0). `/kingdom:day` with NO args triggers interactive resolution: King renders `what-to-work-on` card listing all projects in workspace + live actionable state (open PRs awaiting review, in-flight task files with blockers, recently idle lanes). User replies with natural language; King parses project + task_hint + inline caps/targets. Confirmation gate prints back the parsed interpretation before proceeding. Three invocation shapes total:
+  - `/kingdom:day <project> [target=...] [cap=...]` — standard
+  - `/kingdom:day <project>` — standard, no caps
+  - `/kingdom:day` — interactive, asks user what to work on
+- **`cards/what-to-work-on.md`** (new, 21st card) — `[!IMPORTANT]` flavour, renders project list + live state + reply-format hints. Includes reply parsing rules table (natural-language → structured args), project fuzzy-matching, conversational vs invocation detection (`"hi"` → reply normally without starting kingdom).
+- **`commands/day.md` Step 0.4 — Visible-progress kickoff** (new step BEFORE Step 0.5). Renames King's workspace + spawns all lanes in parallel (background `&` jobs + `wait`), then renders `spawn-complete` card before any other processing.
+- **`commands/day.md` Step 1 — Audit dispatches to lanes** (not Agent()). Each of the 4 specialists routes to `worker-1..4` via `cmux send`; fallback for shapes with <4 workers spawns visible tabs in King's own workspace.
+
+### Changed
+
+- **`kingdom.json.template` `subAgentSpawnByModel` defaults** flipped: was `{"haiku":"background", "sonnet":"background", "opus":"tab"}`. Now `{"haiku":"tab", "sonnet":"tab", "opus":"tab"}`. Background (in-process Agent) is opt-in per-model. Tabs are slower (~10-20s boot) but visible, cancellable, audit-trail-clean.
+- `plugin.json`, `marketplace.json`, README badge — version → `0.28.0`.
+
+### Incidents that motivated this release (2026-05-19)
+
+- User screenshot showed cmux bottom of King's pane: `1 local agent · ctrl+t to hide tasks` with `general-purpose Phase B: per-app debug-data + /api/_dev/me proxy` running invisibly. R38 closes this.
+- Separate complaint: King spent ~5 minutes "Crunched" before sidebar showed any movement (no immediate rename/spawn feedback). R36 closes this.
+- Need to invoke `/kingdom:day` with a vague intent without remembering exact project names + budget syntax. Interactive mode (Step 0.0 + `what-to-work-on` card) closes this.
+
+### Apply on consumer side
+
+Re-run `/kingdom:init <project>` (or workspace-only `/kingdom:init`) to sync new `rules.md`, updated `kingdom.json.template` defaults, and new `cards/what-to-work-on.md` into the workspace copy.
+
+### Cumulative rules count
+
+| Tier | Count | IDs |
+|---|---|---|
+| Tier 1 (IRON-CLAD) | 16 | R1-R7, R22, R23, R30, R31, R33, R34, R35, R36, R37, R38 |
+| Tier 2 (STRONG DEFAULTS) | 16 | R8-R16, R24-R29, R32 |
+| Tier 3 (CONVENTIONS) | 5 | R17-R21 |
+
+---
+
 ## [0.27.0] — 2026-05-19
 
 **Multi-window cmux.app: explicit support.** Tested live against an 8-window cmux setup. Confirmed: `cmux new-workspace` (no `--window`) lands in the caller's process window (where the King's bash session lives), NOT the user's focused window. Workspace refs are globally unique so all dispatch ops (`cmux send` / `notify` / `workspace-action` / `tab-action` / `close-workspace`) work cross-window with no extra flags. Existing kingdom code "just worked" for multi-window because the default-to-caller's-window behaviour is exactly what we want.

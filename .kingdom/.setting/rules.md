@@ -238,6 +238,55 @@ If King realises it has violated R30 / R31 / R33 / R35 (or any other Tier-1 rule
 
 Per R34, performative apology is still banned. Acknowledgement is factual + repair-focused.
 
+### R36. Visible workspace progress BEFORE any processing — Tier 1 (v0.28.0+)
+
+On `/kingdom:day` or `/kingdom:start` invocation, the sequence MUST be (in this order, no exceptions):
+
+1. **Within ~1 second of command receipt:** King renames its OWN workspace to `👑 King · ${PROJECT}` (amber, pinned) and sets its description to `Starting ${PROJECT}…`. The user must see immediate visual feedback that the kingdom is responding to the command. No "Crunched for 30s while you wait staring at unchanged sidebar."
+2. **Within ~5-10 seconds:** all lane workspaces from `kingdom.json.shape` are spawned in parallel — every `worker-N`, `co-worker-N`, `watchman-N` appears in the cmux sidebar BEFORE any audit/dispatch processing begins. Sidebar shows the kingdom shape immediately so the user knows the lanes are alive and ready.
+3. **Render `spawn-complete` card** with the full lane roster as final visual confirmation.
+4. **ONLY AFTER step 3** does any further processing (audit, suggested-task synthesis, dispatch) begin.
+
+**Anti-pattern banned:** "I'll go think for a minute then spawn lanes when I've planned the day." The user sees an unchanged sidebar with King's "✳ Claude Code" auto-title while heavy planning runs. Looks dead. Multiple morning incidents traced to this perception gap.
+
+**Sequence is sequential at the surface level but parallel inside step 2.** Renames + spawns are independent operations that can run as background `&` jobs; what matters is the sidebar SHOWS the full kingdom shape within ~10 seconds of command receipt.
+
+### R37. Heavy processing runs IN lane workspaces, not in King's session — Tier 1 (v0.28.0+)
+
+Audit fan-outs (the 4 specialists from `/kingdom:update`), pattern-grep scans (R8 Layer-1 Discovery), doc-digest fan-outs, and any other parallelisable work must dispatch to lane workspaces via `cmux send --workspace worker-N -- "..."`. King's main session never runs the work itself.
+
+**Rationale:** every lane already has its own Claude session running. Using them as parallel compute (instead of spinning new in-process Agent() calls) gives:
+
+- Visible progress (each lane's workspace shows the running command)
+- Cancellable per-lane (click the workspace, ctrl-c, no King restart needed)
+- No "1 local agent · hidden in compressed indicator" obscurity
+- Audit-trail clarity (each lane writes its own sentinel + log line; King aggregates)
+
+**Allowed exceptions (King-only work):**
+
+- Reading task files, log files, watchman state — these are fast, sequential, single-purpose; no need to dispatch.
+- Rendering cards to chat (`render_card` calls).
+- The dispatch decisions themselves (which lane gets which task).
+
+**Banned in King's main session:** `Agent()` calls for parallel fan-out, `pattern_grep_fanout` invocation, audit specialist spawning. All of these get `cmux send`'d to a worker lane instead.
+
+### R38. Sub-agent spawns are TABS or LANE DISPATCH — never in-process Agent() — Tier 1 (v0.28.0+)
+
+The cmux native "1 local agent · ctrl+t to hide tasks" indicator (the compressed bottom-of-pane in-process Agent display) is **banned** for kingdom work. Reason: it's invisible to the user, can't be observed without keystroke, can't be paused, and bypasses the kingdom's audit-trail discipline (sub-agents that spawn this way often skip the 4-step closer because their lifecycle is the parent session's lifecycle).
+
+**Allowed sub-agent spawn mechanisms:**
+
+| Pattern | When |
+|---|---|
+| **Visible tab via `cmux tab-action --action new-terminal-right --workspace <lane-ws>`** | All Layer-3 fan-out, all sub-agent work that needs visibility, all work that should auto-close on sentinel (5-step closer Step 5) |
+| **Lane dispatch via `cmux send --workspace worker-N -- "..."`** | Routing work to an already-running lane Claude session (most common for kingdom-internal work like audit specialists) |
+
+**Banned:** `Agent(subagent_type="general-purpose", ...)` or any in-process Claude Code agent-team spawn in King's main session.
+
+**Config change for v0.28.0:** `kingdom.json.cmux.subAgentSpawnByModel` defaults flip from `{"haiku":"background","sonnet":"background","opus":"tab"}` to **`{"haiku":"tab","sonnet":"tab","opus":"tab"}`**. Background spawns are opt-in (set explicitly to `"background"` per-model) but no longer the default.
+
+**Anti-pattern caught 2026-05-19:** King's session bottom showed `1 local agent · ctrl+t to hide tasks` with `general-purpose Phase B: per-app debug-data + /api/_dev/me proxy` running invisibly. User had no way to monitor the work without keypress-toggling the tasks panel. Per R38, that work should have spawned as a visible cmux tab inside a lane workspace.
+
 ### R22. The closer (4-step or 5-step) MUST fire on EVERY task completion — Tier 1
 
 Even on `blocked` / `cancelled` / `errored` exit, the worker writes:

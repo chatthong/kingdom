@@ -5,13 +5,69 @@ argument-hint: [project] [target=N-M/<period>] [cap=N]
 
 You are running the kingdom's **full daily ritual** as one orchestrated flow. The user typed ONE command and expects the kingdom to "just run the day": audit the project state, spawn the lanes, brief the user with the local date+time and a suggested next task, then auto-dispatch + auto-gate until something needs a human decision. Block ONLY on genuine human-decision points.
 
-## Step 0 — Resolve project + parse arguments
+## Step 0 — Resolve project + parse arguments (3 invocation modes, v0.28.0+)
 
-From `$ARGUMENTS`:
+`/kingdom:day` accepts three invocation shapes:
 
-- **`project`** — first positional token. Defaults to `basename "$PWD"`. Verify `.kingdom/${project}/` exists; if missing, tell the user to run `/kingdom:init ${project}` first and stop.
-- **`target=N-M/<period>`** — soft dispatch budget. Period is one of `day`, `week`, `month`. King auto-splits across timeframes (see Step 0.1). Optional. Examples: `target=30-50/week`, `target=5-10/day`, `target=120-200/month`.
-- **`cap=N`** — hard ceiling for today's task completions. King will not dispatch more than `N` tasks today; further idle lanes wait. Optional. Overrides `target` for today only.
+| Form | Behaviour |
+|---|---|
+| `/kingdom:day <project> [target=...] [cap=...]` | Standard: explicit project + optional budget args. Skip to Step 0.1. |
+| `/kingdom:day <project>` | Standard: explicit project, no caps. Skip to Step 0.1. |
+| `/kingdom:day` *(no args)* | **Interactive mode (v0.28.0+):** King asks "What do you want to work on today?", waits for natural-language reply, auto-parses project + task scope. See Step 0.0 below. |
+
+### Step 0.0 — Interactive mode (no-args invocation only)
+
+If `$ARGUMENTS` is empty, do NOT default to `basename "$PWD"`. Instead:
+
+```bash
+# Enumerate available projects in this workspace
+PROJECTS=$(ls -d "$PWD"/.kingdom/*/ 2>/dev/null | xargs -I{} basename {} | grep -v '^\.setting$')
+N_PROJECTS=$(echo "$PROJECTS" | grep -c .)
+
+export AVAILABLE_PROJECTS="$PROJECTS" N_PROJECTS
+render_card "what-to-work-on"   # asks: "What do you want to work on today?"
+                                # lists known projects + open task files + open PRs as hints
+```
+
+The card lists what's actionable RIGHT NOW (open PRs awaiting review, in-flight task files, project-ledger heads) so the user can pick from concrete options or type free-form.
+
+**Then wait for the user's reply** (next chat message). Parse it as:
+
+1. **Project name** — match against `${AVAILABLE_PROJECTS}` whitelist. Examples: `"bfg-swt"`, `"work on bfg-swt"`, `"the cert site"` → resolved by fuzzy substring match.
+2. **Task scope** — everything else in the reply. Examples: `"fix login bug"`, `"continue worker-1's PDPA task"`, `"review PR 257"`, `"pair on co-worker-1 for the wireframe"`.
+3. **Inline caps/targets** — `"5 tasks today"` → `cap=5`; `"30-50 per week"` → `target=30-50/week`; `"till lunch"` → no cap, just hint to King.
+
+Resolve into normalised args:
+
+```bash
+project="<matched-project-name>"
+task_hint="<free-form scope, OR empty if user gave only project>"
+cap="<parsed N, or empty>"
+target="<parsed N-M/<period>, or empty>"
+```
+
+If the parse is ambiguous (multiple project matches, task hint doesn't match any known story/PR/lane), King prints back the interpretation + asks for confirmation BEFORE proceeding to Step 0.1:
+
+```text
+👑 Parsed:
+   project   = bfg-swt
+   task      = continue worker-1 PDPA (matched FE-P0-FOUND.5 task file)
+   cap       = (none)
+   target    = (none)
+
+   Proceed? Or correct the parse.
+```
+
+If the user types something unparseable (e.g. only `"hi"`, or a question), King replies in chat WITHOUT starting the kingdom — treat as conversational, not a `/kingdom:day` invocation. The user can re-run `/kingdom:day` explicitly when ready.
+
+**Why this mode exists:** lowers the friction for "I have a vague idea what I want to do today, just figure it out." King reads project state + open work + the user's hint and proposes a concrete dispatch plan. User confirms with one word (`go` / `yes`) and the kingdom starts.
+
+**Resolved args from Step 0 or Step 0.0:**
+
+- `project` — explicit positional OR fuzzy-matched from interactive reply. Verify `.kingdom/${project}/` exists; if missing, tell the user to run `/kingdom:init ${project}` first and stop.
+- `target=N-M/<period>` — soft dispatch budget; auto-split in Step 0.1.
+- `cap=N` — hard daily ceiling.
+- `task_hint` (interactive-mode only) — natural-language scope from the user's reply; King uses it as a strong prior in Step 0.6 resume-scan and `suggested-task` card synthesis.
 
 ### Step 0.1 — Auto-split `target` across timeframes
 
@@ -83,6 +139,78 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 | **Milestone** (`M01-M20`) | ❌ spans many tasks |
 
 So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. King echoes this unit definition back in the kickoff brief.
+
+## Step 0.4 — Visible workspace progress IMMEDIATELY (rules.md R36 · MANDATORY) (v0.28.0+)
+
+**Within ~1 second of `/kingdom:day` receipt, before anything else:** rename King's own workspace + set description. User must see the kingdom responding to the command, not stare at an unchanged sidebar.
+
+```bash
+# Captures King's window + workspace refs (v0.27.0 multi-window aware)
+KING_WS=$(cmux identify --json | jq -r .caller.workspace_ref)
+KING_WIN=$(cmux identify --json | jq -r .caller.window_ref)
+
+# Rename + describe in parallel (cosmetic, fire-and-forget)
+cmux workspace-action --action rename --workspace "$KING_WS" \
+  --title "👑 King · ${project}" 2>/dev/null &
+cmux workspace-action --action set-color --workspace "$KING_WS" --color Amber 2>/dev/null &
+cmux workspace-action --action set-description --workspace "$KING_WS" \
+  --description "Starting ${project}…" 2>/dev/null &
+cmux workspace-action --action pin --workspace "$KING_WS" 2>/dev/null &
+wait
+
+echo "👑 King's workspace renamed. Spawning lanes next…"
+```
+
+**Within ~5-10 seconds:** spawn all lane workspaces from `kingdom.json.shape` in parallel (per R28 parallel-by-default). Every `worker-N`, `co-worker-N`, `watchman-N` appears in the sidebar BEFORE audit/dispatch starts.
+
+```bash
+LANES_EXPECTED=$(jq -r '
+  (.shape.workers // 0) as $w
+  | (.shape["co-workers"] // 0) as $c
+  | (.shape.watchman // 0) as $wm
+  | (
+      [range(1; $w + 1)  | "worker-\(.)"],
+      [range(1; $c + 1)  | "co-worker-\(.)"],
+      [range(1; $wm + 1) | "watchman-\(.)"]
+    ) | flatten | .[]
+' "$PWD/.kingdom/${project}/kingdom.json")
+
+PROJ="$PWD/${project}"
+REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
+mkdir -p "$(dirname "$REFS_FILE")"
+
+for lane in $LANES_EXPECTED; do
+  (
+    # Skip if worktree already exists AND workspace ref already in REFS_FILE (resume)
+    if grep -q "^${lane}_WS=" "$REFS_FILE" 2>/dev/null; then
+      ref=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
+      cmux tree --all 2>/dev/null | grep -qF "$ref" && exit 0
+    fi
+    # Ensure worktree exists
+    [ -d "$PROJ/.worktrees/$lane" ] || \
+      git -C "$PROJ" worktree add -b "$lane" ".worktrees/$lane" "origin/$BASE" 2>/dev/null
+    # Pick color + label
+    case "$lane" in
+      worker-*)    color="Purple"; emoji="👷" ;;
+      co-worker-*) color="Blue";   emoji="🧑‍💼" ;;
+      watchman-*)  color="Rose";   emoji="🕵️" ;;
+    esac
+    label="$emoji $lane"
+    # Spawn via _primitives.md helper (respects v0.27.0 spawnWindow + 4-call name+color+description)
+    ref=$(spawn_master_workspace "$label" "$PROJ/.worktrees/$lane" "$color")
+    [ -n "$ref" ] && echo "${lane}_WS=$ref" >> "$REFS_FILE"
+  ) &
+done
+wait
+
+echo "👑 All lanes spawned. Sidebar shape confirmed before processing."
+
+# Render spawn-complete card so user visually confirms before audit/dispatch
+export PROJECT="$project"
+render_card "spawn-complete"
+```
+
+**ONLY AFTER step 0.4 completes** does processing (audit, suggested-task synthesis, dispatch) begin. Per R36, no "thinking for 30s while sidebar looks dead" allowed.
 
 ## Step 0.5 — Lane-readiness gate (rules.md R31 · MANDATORY) (v0.24.0+, mode-aware in v0.25.0)
 
@@ -194,17 +322,43 @@ fi
 
 **Decision queue items** surface in the [`suggested-task`](../.kingdom/.setting/cards/suggested-task.md) card as `→ Unblock <task-id>` candidates so the user resolves blockers before new work loads.
 
-## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
+## Step 1 — Audit (always — runs IN LANE WORKSPACES per R37) (v0.28.0+ R37-compliant)
 
-## Step 1 — Audit (always — `/kingdom:update` runs at EVERY `/kingdom:day` invocation)
+The audit's 4 specialists (Lead + A/B/C/D) dispatch to lane workspaces via `cmux send` — not to in-process Agent() calls. Per R37, parallelisable work runs in lanes that the user can SEE.
 
 ```bash
-echo "👑 Step 1/5 · Running /kingdom:update (refreshing project state)..."
-# Invoke the audit pass (parallel Lead + 4 specialists per /kingdom:update spec).
-# Wait for the sentinel before continuing.
+echo "👑 Step 1/5 · Dispatching audit specialists to lanes (R37)…"
+
+cmux workspace-action --action set-description --workspace "$KING_WS" \
+  --description "Audit in flight · 4 specialists across lanes" 2>/dev/null
+
+# Map specialists to lanes (use worker-1..4 if available; fall back to tab-spawn in King's workspace)
+SPECIALISTS=("audit-lead" "audit-a-project-scan" "audit-b-checkbox-reconcile" "audit-c-digest-quality" "audit-d-log-repair")
+i=0
+for spec in "${SPECIALISTS[@]}"; do
+  # Pick the lane: worker-1, worker-2, worker-3, worker-4, or tab in King's WS as fallback
+  i=$((i + 1))
+  lane="worker-${i}"
+  lane_ws=$(grep "^${lane}_WS=" "$REFS_FILE" 2>/dev/null | cut -d= -f2)
+  if [ -n "$lane_ws" ]; then
+    # Dispatch to lane Claude session
+    BRIEF="/kingdom audit specialist: ${spec}. Scope: \`.kingdom/${project}/\`. Write findings to \`.kingdom/${project}/logs/audit-${spec}.md\` + sentinel."
+    cmux send --workspace "$lane_ws" -- "$BRIEF" 2>/dev/null
+    cmux send --workspace "$lane_ws" Enter 2>/dev/null
+  else
+    # No lane available — spawn as visible TAB inside King's workspace (R38: never Agent())
+    cmux tab-action --action new-terminal-right --workspace "$KING_WS" --focus false 2>/dev/null
+    # Then send the brief to the new tab (see _primitives.md spawn_subagent_tab)
+  fi
+done
+
+# Poll for audit sentinels (parallel, each specialist writes its own)
+poll_for_sentinels "audit-*" 180  # 3-min timeout total
 ```
 
-The audit is **always run** at the start of `/kingdom:day`. There is no "skip if recent" gate; the audit is cheap (parallel fan-out, ~1-3 min) compared to acting on stale information. If you need to skip the audit deliberately (rare — King session crashed mid-day and you only want to resume the poll loop), invoke `/kingdom:start` directly + drop into Step 5 of this file manually.
+The audit is **always run** at the start of `/kingdom:day`. There is no "skip if recent" gate; the audit is cheap (parallel across N lanes, ~1-3 min) compared to acting on stale information. If you need to skip the audit deliberately (rare — King session crashed mid-day and you only want to resume the poll loop), invoke `/kingdom:start` directly + drop into Step 5 of this file manually.
+
+**Banned (R38 violation):** `Agent(subagent_type="general-purpose", prompt="audit specialist...")` in-process inside King. That hides the work behind the "1 local agent · ctrl+t to hide tasks" indicator. Always dispatch to a lane or spawn a visible tab.
 
 ## Step 2 — Spin up the kingdom (`/kingdom:start` — idempotent)
 

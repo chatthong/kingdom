@@ -25,6 +25,7 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`audit-summary.md`](audit-summary.md) | `[!NOTE]` | `/kingdom:update` audit-pass completion |
 | [`doctor-report.md`](doctor-report.md) | varies (TIP/IMPORTANT/CAUTION) | `/kingdom:doctor` check completion (3 variants) |
 | [`resume-queue.md`](resume-queue.md) | `[!IMPORTANT]` | `/kingdom:day` Step 0.6 — in-flight tasks from prior session(s) (v0.25.0+) |
+| [`what-to-work-on.md`](what-to-work-on.md) | `[!IMPORTANT]` | `/kingdom:day` Step 0.0 — interactive no-args mode, asks user for natural-language intent (v0.28.0+) |
 
 ## Alert flavour → colour mapping
 

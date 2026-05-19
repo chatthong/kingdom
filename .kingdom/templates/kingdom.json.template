@@ -51,9 +51,9 @@
       "watchman": "Rose"
     },
     "subAgentSpawnByModel": {
-      "_comment": "Model-tiered default spawn mode (v0.15.0+). Tab spawns cost ~10-20s each (full Claude session boot); Agent() spawns cost ~2s (in-process). Cheap fan-outs (Haiku Layer-1 scans, /kingdom:update specialists) shouldn't pay the tab cost. Sonnet defaults to background; override to 'tab' per-task when visibility matters. Opus defaults to tab (slow + expensive tasks deserve to be watched).",
-      "haiku":  "background",
-      "sonnet": "background",
+      "_comment": "Model-tiered default spawn mode. v0.28.0+: ALL models default to 'tab' per R38 (visible sub-agent work). Background (in-process Agent()) is opt-in per-model — set explicitly when you want a hidden fan-out (rare). Tab spawns are slower (~10-20s boot) but observable, cancellable, audit-trail-clean. The compressed 'local agent' indicator in cmux is banned for kingdom work.",
+      "haiku":  "tab",
+      "sonnet": "tab",
       "opus":   "tab"
     },
     "subAgentSpawnFallback": "tab",
