@@ -4,6 +4,42 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.27.0] — 2026-05-19
+
+**Multi-window cmux.app: explicit support.** Tested live against an 8-window cmux setup. Confirmed: `cmux new-workspace` (no `--window`) lands in the caller's process window (where the King's bash session lives), NOT the user's focused window. Workspace refs are globally unique so all dispatch ops (`cmux send` / `notify` / `workspace-action` / `tab-action` / `close-workspace`) work cross-window with no extra flags. Existing kingdom code "just worked" for multi-window because the default-to-caller's-window behaviour is exactly what we want.
+
+### Added
+
+- **`kingdom.json.cmux.spawnWindow` config** (default: `"current"`). Three valid values:
+  - `"current"` — no `--window` flag passed; lanes spawn in caller's process window (King's window). Behaviour unchanged from pre-0.27.0.
+  - `"new"` — kingdom calls `cmux new-window` once at session start, caches UUID in `workspace-refs.env` as `KING_WINDOW`, passes `--window $KING_WINDOW` on every lane spawn. Use when you want the kingdom to claim a dedicated window.
+  - `"window:N"` or `"<uuid>"` — explicit pin to a known window.
+- **`spawn_master_workspace` helper updated** to read `kingdom.json.cmux.spawnWindow` and apply the right `--window` flag. Caches `KING_WINDOW` UUID once for the session in `<LOGS>/workspace-refs.env`.
+- **`cmux.md` § Multi-window cmux.app** — new section documenting the tested behaviour: identify vs current-window difference, default-to-caller's-window, globally-unique refs, R31 cross-window verification, and the `spawnWindow` config table.
+
+### Tested live (2026-05-19)
+
+In an 8-window cmux.app setup:
+
+- `cmux current-window` returned UUID of FOCUSED window (window:7).
+- `cmux identify --json` reported `window_ref: window:1` for the caller's process (where the bash session lives).
+- Spawning 3 test workspaces (workspace:41/42/43) via `cmux new-workspace --name "🧪 test-worker-N" --cwd ~ --command "echo ..."` without `--window` flag → all landed in window:1 (caller's window), NOT window:7 (focused window).
+- `cmux workspace-action --action set-color --color Purple` applied successfully across-window (window:1 from a caller in window:1, all 3 refs).
+- Parallel `cmux close-workspace --workspace workspace:41 & cmux close-workspace --workspace workspace:42 & cmux close-workspace --workspace workspace:43 &; wait` closed all 3 in <1s.
+- `cmux tree --all` enumerated all 8 windows + their workspaces globally.
+
+**Conclusion: the kingdom's pre-0.27.0 cmux dispatch code was multi-window-compatible by accident** (because `cmux new-workspace` defaults to caller's window and all targeted ops use globally-unique refs). v0.27.0 makes the multi-window support explicit via the `spawnWindow` config and documents the tested behaviour, but doesn't change the default.
+
+### Changed
+
+- `plugin.json`, `marketplace.json`, README badge — version → `0.27.0`.
+
+### Apply on consumer side
+
+Re-run `/kingdom:init <project>` to sync the updated `kingdom.json.template` (now includes `cmux.spawnWindow`) — though omitting the key keeps the default `"current"` behaviour, so no action needed unless you want `"new"` or a pinned ref.
+
+---
+
 ## [0.26.0] — 2026-05-19
 
 **Two more gaps caught by another incident.** Same afternoon (2026-05-19), a King session: (a) read `feedback_kingdom_cmux_dispatch_fallback.md` from auto-memory and interpreted it as "skip cmux spawn this session entirely" — conflating a dispatch-time pivot with a spawn-time exemption; (b) authored Dockerfile changes on worker-1's worktree, `cp`'d the file to `.worktrees/worker-2/`, and committed it on worker-2's branch as "part of the slice." Two more Tier-1 rules added.

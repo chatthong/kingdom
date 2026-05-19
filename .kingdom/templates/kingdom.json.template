@@ -41,6 +41,8 @@
     "_comment": "How kingdom lays out roles in manaflow/cmux.app. Three-tier hierarchy: Workspace per master (King + workers + co-workers + watchman), Tab inside a master's workspace for visible sub-agent spawns (auto-close on sentinel flag), Split for predefined dual-view (watchman). Set 'enabled': false to use raw tmux fallback instead.",
     "enabled": true,
     "pinKingWorkspace": true,
+    "spawnWindow": "current",
+    "_spawnWindowComment": "Multi-window cmux support (v0.27.0+). 'current' (default): lanes spawn in caller's process window (King's window) — same as pre-0.27.0 behaviour. 'new': open a fresh cmux window and pin all lanes there (King moves to it). 'window:N' or '<uuid>': pin to a specific window by ref/UUID. Multi-window confirmed working in 8-window setups; refs are globally unique so cross-window dispatch works without extra flags.",
     "workspaceColors": {
       "_comment": "cmux named-color set (case-insensitive): Red Crimson Orange Amber Olive Green Teal Aqua Blue Navy Indigo Purple Magenta Rose Brown Charcoal. Or use #RRGGBB hex. NOTE: 'violet' is NOT a cmux color — use 'Purple' (or 'Indigo' as alternative).",
       "king":     "Amber",

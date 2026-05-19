@@ -92,13 +92,36 @@ Used by `commands/start.md` Phase 4. Reserved branch namespace: `worker-N` / `co
 spawn_master_workspace () {
   local label="$1" path="$2" color="$3"
 
+  # v0.27.0+: respect kingdom.json.cmux.spawnWindow for multi-window users
+  # Default = "current": no --window flag → sticks to caller's process window
+  # Other valid values: "new" (open fresh window), "window:N" / "window:<uuid>" (explicit ref)
+  local spawn_window=$(jq -r '.cmux.spawnWindow // "current"' "$KJSON" 2>/dev/null)
+  local window_flag=""
+  case "$spawn_window" in
+    current|"") window_flag="" ;;
+    new)
+      # Lazy-create the kingdom window once; cache UUID in workspace-refs.env
+      if ! grep -q '^KING_WINDOW=' "$LOGS/workspace-refs.env" 2>/dev/null; then
+        local king_win=$(cmux new-window 2>&1 | grep -oE '[A-F0-9-]{36}' | head -1)
+        [ -n "$king_win" ] && echo "KING_WINDOW=$king_win" >> "$LOGS/workspace-refs.env"
+      fi
+      local cached_win=$(grep '^KING_WINDOW=' "$LOGS/workspace-refs.env" | cut -d= -f2)
+      [ -n "$cached_win" ] && window_flag="--window $cached_win"
+      ;;
+    *)
+      # Explicit ref/index passed through
+      window_flag="--window $spawn_window"
+      ;;
+  esac
+
   # Step 1: create the workspace (capture ref via grep -oE — awk pipelines break in some shells)
   local result=$(cmux new-workspace \
     --name "$label" \
     --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
     --cwd "$path" \
     --command "claude" \
-    --focus false 2>&1)
+    --focus false \
+    $window_flag 2>&1)
   local ref=$(echo "$result" | grep -oE 'workspace:[0-9]+' | head -1)
   [ -z "$ref" ] && { echo "❌ spawn failed: $result" >&2; return 1; }
 
@@ -117,6 +140,13 @@ spawn_master_workspace () {
   echo "$ref"
 }
 ```
+
+**Multi-window confirmation (tested 2026-05-19 in 8-window cmux setup):**
+
+- `cmux new-workspace` (no `--window`) lands in the **caller's process window** (where the King's bash session is anchored), NOT the user's focused window. This is the safer default: lanes glued to the King even if user clicks around to other windows.
+- `cmux send` / `cmux notify` / `workspace-action` / `tab-action` / `close-workspace` are all ref-targeted (`workspace:N`) and window-agnostic — they work cross-window with no extra flags.
+- `cmux tree --all` enumerates everything globally; R31 lane-readiness check works across windows.
+- Set `kingdom.json.cmux.spawnWindow = "new"` if you want the kingdom to claim a fresh window for itself; otherwise leave at default `"current"`.
 
 All four calls silent-on-failure — descriptions/colors/badges are cosmetic, not load-bearing. Used by `commands/start.md` Phase 5 PRIMARY.
 

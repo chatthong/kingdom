@@ -235,6 +235,36 @@ See [§ Teardown / close commands](#teardown--close-commands) below for the full
 
 ---
 
+## Multi-window cmux.app (v0.27.0+)
+
+Confirmed working in 8-window setups. Key facts:
+
+| Fact | Implication |
+|---|---|
+| `cmux identify --json` returns `window_ref` for caller | King knows which window it's anchored to |
+| `cmux current-window` returns UUID of **focused** window (≠ caller's process window) | "Focused" and "caller's" diverge when user clicks around |
+| `cmux new-workspace` without `--window` → lands in **caller's process window** (where the calling shell lives, via `$CMUX_WORKSPACE_ID`) | Default: lanes glued to King's session, not to user's UI focus. Safer. |
+| `cmux new-workspace --window <id|ref|index>` | Explicit pin to a specific window |
+| Workspace refs (`workspace:N`) are **globally unique** | `cmux send` / `notify` / `workspace-action` / `tab-action` / `close-workspace` all work cross-window with no `--window` flag |
+| `cmux tree --all` enumerates ALL windows | R31 lane-readiness check works globally |
+| `cmux list-windows` lists window UUIDs + selected workspace per window | Useful for the kingdom's `KING_WINDOW` capture |
+| `cmux move-workspace-to-window --workspace <ref> --window <id|ref>` | Reparent a lane (rarely needed; spawn-time pinning is enough) |
+
+**Config in `kingdom.json.cmux.spawnWindow`:**
+
+| Value | Behaviour |
+|---|---|
+| `"current"` (default) | No `--window` flag; lanes go in caller's process window (King's window). Same as pre-0.27.0. |
+| `"new"` | Kingdom calls `cmux new-window` once at session start, caches the new UUID in `<LOGS>/workspace-refs.env` as `KING_WINDOW`, then passes `--window $KING_WINDOW` on every lane spawn. Lanes get a fresh dedicated window. |
+| `"window:N"` or `"<uuid>"` | Explicit pin to a known window. Power-user override. |
+
+**Testing notes (2026-05-19, 8-window setup):**
+
+- Spawned 3 test workspaces (workspace:41/42/43) with the kingdom's `spawn_master_workspace` helper.
+- All landed in `window:1` (where the bash session lives) even though `window:7` was the user's focused window.
+- Confirms: default behaviour follows caller's process, not UI focus.
+- Cleanup via parallel `cmux close-workspace --workspace <ref> &; wait` worked fine; all 3 closed in <1s.
+
 ## Teardown / close commands
 
 cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom:exit` cycle on cryptic `Unknown tab action` errors — King has trial-and-errored this before. **Canonical mapping:**
