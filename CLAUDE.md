@@ -10,14 +10,15 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.29.4 (2026-05-20)
+## Current state — v0.30.0 (2026-05-20)
 
-The plugin is on `main` at commit `cbb677e`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
+The plugin is on `main`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
 
 Recent version history (worth reading the CHANGELOG for full detail):
 
 | Version | Theme | What landed |
 |---|---|---|
+| **0.30.0** | Open-thread cleanup + R42 (bounded wait) | Closed 3 v0.29.x open threads: (1) `kings.md` Step 7 now calls `kingdom_resync_after_merge` (preserves worker worktree per R35, was destroy+recreate); (2) `parallel_edit_fanout` helper body + `watchmans.md` rewired; (3) `/kingdom:self-care` Check 9 detects workspace files missing from plugin source. **NEW R42 (Tier 1):** every parallel fan-out uses `_bounded_wait`, never bare `wait` — diagnosed via live cmux audit (all cmux ops <0.65s; real hang was bare `wait` in 5 sites blocking on stuck git/gh subshells). `_bounded_wait` helper added; 5 sites converted (work.md ×2, save.md, watchmans.md, parallel_edit_fanout itself). |
 | **0.29.4** | R41 propagation + role-doc step audit (no spec changes) | Version bump only; confirms R41 propagated correctly across role docs and step sequences; no new rules or spec changes |
 | **0.29.3** | Skill-aware execution: R41 + routing table expansion | R41 (Tier 1): 3-step skill resolution before any work (routing table → system-reminder fallback → skip); 15 new skill-routing.md entries (Prisma family ×7, remaining superpowers ×8); auto-discovery fallback section; ASCII wizard mascot removed from README |
 | **0.29.2** | README polish: ASCII wizard mascot + `/kingdom:work` shape examples | ASCII wizard mascot added under README header (inside `[!WARNING]` amber frame); 12 expanded examples in 4 categories; 6-row shape-by-situation guide |
@@ -66,7 +67,7 @@ README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions — 25 total (don't re-debate without reading the rationale)
+## Key architectural decisions — 26 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -118,6 +119,8 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 25. **Auto-discover and use the right skill BEFORE any work** (R41, v0.29.3). At task receipt, every actor (King or lane) resolves a skill set via 3-step priority: (1) fast path — run `pick_skills_for_task` against `skill-routing.md` keyword table; (2) fallback — scan the system-reminder skill list and match by description; (3) no-skill is valid — skip rather than load a vaguely-related skill. A 12-row domain→skill quick map covers the main domains (frontend, prisma, supabase, stripe, figma, plugin-dev, file formats, claude api, hugging face, security, code review, git workflow); a separate 10-skill process map covers King-side planning skills (brainstorming, writing-plans, TDD, systematic-debugging, etc). Skills are resolved per-task, not per-lane.
 
+26. **Every parallel fan-out uses `_bounded_wait`, never bare `wait`** (R42, v0.30.0). Bare `wait` blocks until every backgrounded subshell exits — if one stalls (`git worktree add` blocked on `.git/index.lock`, `gh pr view` on stale network, `cmux send` to not-yet-ready workspace), the parent script hangs forever and the Claude Code harness auto-pushes the bash call to background. User sees "Job's output is empty and files weren't written." Diagnosed via live cmux audit (2026-05-20): every cmux command itself returns in <0.65s; the perceived hangs across v0.27-v0.29.4 were all downstream subshells. Spec: collect PIDs (`PIDS="$PIDS $!"`), pass to `_bounded_wait <budget> $PIDS`, helper `kill -9`'s survivors and returns 124 on timeout. Helper is pure-bash + portable (macOS lacks GNU `timeout` and `gtimeout`). Default budgets: 5s cosmetic cmux fan-outs, 15s teardown, 45s `parallel_edit_fanout`, 60s lane spawn cycle. Five call sites converted: `commands/work.md` ×2 (King rename + lane spawn), `commands/save.md`, `watchmans.md` PR-backfill, `_primitives.md` `parallel_edit_fanout` self.
+
 ## Working conventions for THIS repo
 
 - **English only in chat** (per memory rule `feedback_communication`).
@@ -137,11 +140,11 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ## Open threads (things to pick up next session)
 
-1. **`/kingdom:self-care` should detect workspace-stale files.** v0.22 introduced `cards/`, v0.23 added `skill-routing.md`. Both require `/kingdom:init` re-run to land in the workspace. Self-care doesn't currently flag the gap. Spec: scan `.kingdom/.setting/` for files referenced by current plugin version that don't exist in workspace; render `doctor-report` `partial-pass` variant with auto-fix offer. Mentioned as v0.23.1 candidate.
+~~1. **`/kingdom:self-care` should detect workspace-stale files.**~~ — **CLOSED in v0.30.0** (Check 9: scans plugin's `.kingdom/.setting/` vs workspace, prompts for one-keystroke import, routes through existing partial-pass card).
 
-2. **`parallel_edit_fanout` helper** is referenced by R28 but spec-only (body unwritten). Needed for the parallel branch-amend pattern described in R27 (PR-number backfill).
+~~2. **`parallel_edit_fanout` helper.**~~ — **CLOSED in v0.30.0** (body landed in `_primitives.md`; `watchmans.md` PR-number backfill rewired to call it).
 
-3. **Wire `kingdom_resync_after_merge` call site** into `kings.md` § Push approval gate Step 7. Helper exists in `_primitives.md` (R26); the role-doc Step 7 still inlines the old per-lane cleanup pattern.
+~~3. **Wire `kingdom_resync_after_merge` call site into `kings.md` Step 7.**~~ — **CLOSED in v0.30.0** (Step 7 now calls the helper; behavioural fix — worker worktree preserved per R35 instead of destroy+recreate).
 
 4. **Companion app discussion (open)** — user asked about forking ghostty / building a richer UI vs sticking with cmux.app cards. Two paths explored:
    - **(a)** Thin web dashboard reading kingdom's audit files (`master_agent.log`, sentinel flags, task files, `watchman_state.json`). Ships in days, read-mostly, chat stays in cmux.app.
@@ -185,4 +188,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-20 after v0.29.4 ship. Update this file when shipping a release that changes architectural decisions (1-25 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-20 after v0.30.0 ship. Update this file when shipping a release that changes architectural decisions (1-25 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

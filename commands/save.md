@@ -220,10 +220,14 @@ for I in $(seq 1 "$WATCHMEN");  do
   [ -n "$REF" ] && LANE_WSes="$LANE_WSes $REF"
 done
 
+CLOSE_PIDS=""
 for ws in $LANE_WSes; do
   cmux close-workspace --workspace "$ws" 2>/dev/null &
+  CLOSE_PIDS="$CLOSE_PIDS $!"
 done
-wait
+# R42: bounded wait — cmux close-workspace usually <0.05s but can stall if a workspace
+# is mid-spawn or has unresponsive surface; 15s budget is generous.
+_bounded_wait 15 $CLOSE_PIDS || echo "⚠️ teardown hit 15s budget; survivors killed (next /kingdom:work will rebuild)"
 
 echo "All lane workspaces closed."
 

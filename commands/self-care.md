@@ -3,7 +3,7 @@ description: Prerequisite checks for the kingdom — cmux/tmux/jq/gh/git, settin
 argument-hint:
 ---
 
-You are running the kingdom's prerequisite checks. Run 8 checks in order. Report a checkmark, warning, or fail marker for each. At the end, render the `doctor-report` card (3 variants: all-pass / partial-pass / failed) and print the detected operating mode.
+You are running the kingdom's prerequisite checks. Run 9 checks in order. Report a checkmark, warning, or fail marker for each. At the end, render the `doctor-report` card (3 variants: all-pass / partial-pass / failed) and print the detected operating mode.
 
 Idempotent — re-running reports checkmark for everything already satisfied. No side effects unless the user confirms a patch.
 
@@ -270,17 +270,80 @@ If no `.kingdom/*/kingdom.json` files exist yet, mark this check as not applicab
 
 ---
 
+## Check 9 — Workspace `.kingdom/.setting/` is in sync with plugin source (v0.30.0+)
+
+`/kingdom:init` copies role docs, helpers, cards, and `skill-routing.md` from the plugin's `.kingdom/.setting/` into the workspace. Subsequent plugin upgrades add new files (cards/ in v0.22, skill-routing.md in v0.23, parallel_edit_fanout body in v0.30, …) that DO NOT propagate without re-running init. This check is the canary.
+
+```bash
+SRC="${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting"
+DEST="$PWD/.kingdom/.setting"
+
+# Skip if workspace was never initialised (init handles greenfield setup)
+if [ ! -d "$DEST" ]; then
+  STALE_RESULT="WARN  workspace .kingdom/.setting/ absent — run /kingdom:init"
+  STALE_FILES=""
+else
+  # Build the expected file list from plugin source (relative paths)
+  EXPECTED=$(cd "$SRC" && find . -type f \( -name '*.md' \) | sed 's|^\./||' | sort)
+
+  MISSING=""
+  while IFS= read -r rel; do
+    [ -z "$rel" ] && continue
+    [ -f "$DEST/$rel" ] || MISSING="$MISSING $rel"
+  done <<< "$EXPECTED"
+
+  if [ -z "$MISSING" ]; then
+    STALE_RESULT="OK    workspace .kingdom/.setting/ in sync ($(echo "$EXPECTED" | wc -l | tr -d ' ') files)"
+    STALE_FILES=""
+  else
+    N_STALE=$(echo $MISSING | wc -w | tr -d ' ')
+    STALE_RESULT="PATCHED  ${N_STALE} stale workspace file(s) — see Patched"
+    STALE_FILES="$MISSING"
+  fi
+fi
+```
+
+If `STALE_FILES` is non-empty, prompt the user before importing (per § Conventions — auto-patching is allowed only after confirmation):
+
+```
+${N_STALE} file(s) in the plugin's .kingdom/.setting/ are missing from this workspace:
+  ${STALE_FILES}
+
+These usually accumulate after a plugin upgrade. Import them now? [y/N]
+```
+
+On `y`:
+
+```bash
+mkdir -p "$DEST"
+for rel in $STALE_FILES; do
+  mkdir -p "$DEST/$(dirname "$rel")"
+  cp "$SRC/$rel" "$DEST/$rel"
+  PATCHED_LIST="${PATCHED_LIST}
+  ✓ imported $rel"
+done
+N_PATCHED=$((N_PATCHED + N_STALE))
+```
+
+On `N` → warning: stale files left in place. King may misbehave if it references a file that doesn't exist locally; flag this to the user.
+
+**Why not auto-import without asking:** plugin upgrades may add files that the user has intentionally not configured (e.g. a card template they overrode). Per § Conventions, every disk write needs a confirmation, even one this benign.
+
+---
+
 ## Final summary
 
-After all 8 checks (including any patch outcomes for Check 6), collect results. Use these result symbols:
+After all 9 checks (including any patch outcomes for Check 6 + import outcomes for Check 9), collect results. Use these result symbols:
 - `OK` = passed or patched
 - `WARN` = optional / informational / skipped by user
 - `FAIL` = missing critical dependency
+- `PATCHED` = auto-fixed after user confirmation (Check 6 settings.json or Check 9 file import)
 
 ```bash
 CHECK_RESULTS_LIST=$(printf '%s\n' \
   "${CMUX_RESULT}" "${TMUX_RESULT}" "${JQ_RESULT}" "${GH_RESULT}" "${GIT_RESULT}" \
-  "${USER_SETTINGS_RESULT}" "${TASKS_WRITABLE_RESULT}" "${ORPHAN_AUDIT_RESULT}")
+  "${USER_SETTINGS_RESULT}" "${TASKS_WRITABLE_RESULT}" "${ORPHAN_AUDIT_RESULT}" \
+  "${STALE_RESULT}")
 
 N_FAILED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^FAIL')
 N_PATCHED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^PATCHED')

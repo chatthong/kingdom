@@ -6,6 +6,64 @@ Goal: single source of truth for shared bash patterns. Edit the helper once, eve
 
 ---
 
+## Bounded parallel wait — never block forever on a bare `wait` (v0.30.0+, R42)
+
+Bare `wait` blocks until **every** backgrounded subshell exits. If any one hangs (a `git worktree add` blocked on `.git/index.lock`, a `cmux send` to a not-yet-ready workspace, a `gh pr view` on a stale network connection), the parent script hangs forever. The Claude Code harness then auto-pushes the bash call to background and the user sees "Job's output is empty."
+
+`_bounded_wait` enforces a global wall-clock budget: if any PID exceeds it, every surviving PID is `kill -9`ed and the function returns `124` (the conventional GNU-timeout exit code, even though we don't use GNU timeout).
+
+```bash
+_bounded_wait () {
+  # Inputs:
+  #   $1     = max_seconds   (global wall-clock budget; e.g. 60 for spawn, 30 for teardown)
+  #   $2..$N = PIDs to wait for (default = all current background jobs from `jobs -p`)
+  # Output:
+  #   stderr line on timeout listing killed PIDs
+  # Returns:
+  #   0   — all PIDs exited cleanly within budget
+  #   124 — global timeout; surviving PIDs killed (matches GNU `timeout` convention)
+  #   N   — first non-zero per-PID exit code if any subshell errored
+  local max="$1"; shift
+  local pids="${*:-$(jobs -p)}"
+  [ -z "$pids" ] && return 0
+
+  local start=$(date +%s)
+  local rc=0
+  for pid in $pids; do
+    while kill -0 "$pid" 2>/dev/null; do
+      local now=$(date +%s)
+      if [ $((now - start)) -ge "$max" ]; then
+        local survivors=""
+        for p in $pids; do
+          kill -0 "$p" 2>/dev/null && { kill -9 "$p" 2>/dev/null; survivors="$survivors $p"; }
+        done
+        echo "⚠️ _bounded_wait timeout after ${max}s; killed:$survivors" >&2
+        return 124
+      fi
+      sleep 0.5
+    done
+    wait "$pid" 2>/dev/null
+    local pid_rc=$?
+    [ "$pid_rc" -ne 0 ] && [ "$rc" -eq 0 ] && rc="$pid_rc"
+  done
+  return $rc
+}
+```
+
+**Budget guidance:**
+
+| Site | Recommended budget | Reasoning |
+|---|---|---|
+| King workspace-rename fan-out | `5s` | 4 cmux calls × <0.05s each = 0.2s nominal |
+| All-lane spawn cycle | `60s` | `git worktree add` + 4 cmux calls per lane × N lanes |
+| `parallel_edit_fanout` | `45s` | `gh pr view` + `sed` + `git commit` + `git push --force-with-lease` |
+| Save-cycle teardown | `15s` | `cmux close-workspace` per lane (read-after-detach can stall) |
+| Watchman orphan-tab sweep | `10s` | `cmux tab-action --action close` per stale tab |
+
+Used by: `commands/work.md` Step 0.4 (King rename + lane spawn), `commands/save.md` teardown, `watchmans.md` orphan-tab sweep, `_primitives.md` `parallel_edit_fanout`. Replaces every bare `wait` in load-bearing fan-outs (see R42).
+
+---
+
 ## State + UX helpers
 
 ### `cmux_set_state` — update workspace description (live status line)
@@ -413,6 +471,111 @@ After grep, worker synthesises in task file Step 1:
 - OR: "No pattern. Grepped N files. Confirming new approach with King BEFORE implementing." → escalate
 
 Used by `workers.md` § Layer 1 — Discovery.
+
+---
+
+## Parallel edit fan-out — N branches, one search/replace each (v0.30.0+, R27/R28)
+
+Sibling to `pattern_grep_fanout`. Where the grep helper does parallel **reads**, this does parallel **writes** across N independent branch worktrees. Each unit: `cd $lane_wt && rg --replace + amend + force-push-with-lease`. Serial **within** a branch (switch → edit → amend → push is atomic), parallel **across** branches (no shared destination — each lane writes only to its own worktree).
+
+```bash
+parallel_edit_fanout () {
+  # Inputs:
+  #   $1 = search term            (literal string, no regex)
+  #   $2 = replacement term       (literal string)
+  #   $3 = lane spec              (space-separated: "worker-1=246 worker-2=247 co-worker-1=248")
+  #                               format = "<lane>=<pr_number>"; pr_number resolves the lane's target PR
+  #   $4 = file glob              (relative to lane worktree; default '**/*')
+  # Outputs:
+  #   per-lane stdout line: "OK <lane> <files_changed>" or "SKIP <lane> <reason>"
+  #   exit 0 iff every lane succeeded or skipped cleanly
+  local search="$1" replace="$2" spec="$3" glob="${4:-}"
+  local rc=0 lane pr lane_wt pids=""
+  local tmpdir=$(mktemp -d)
+
+  for unit in $spec; do
+    lane="${unit%=*}"
+    pr="${unit#*=}"
+    lane_wt="$WORKTREES/$lane"
+    [ -d "$lane_wt" ] || { echo "SKIP $lane no-worktree" >> "$tmpdir/out"; continue; }
+
+    # Each lane runs in its own subshell — parallel across branches,
+    # but `switch → edit → amend → push` stays atomic within the branch.
+    (
+      cd "$lane_wt" || { echo "SKIP $lane cd-failed" >> "$tmpdir/out"; exit 0; }
+
+      # R27: skip if PR already merged (force-push would touch a closed branch)
+      if [ -n "$pr" ]; then
+        state=$(gh pr view "$pr" --json state -q .state 2>/dev/null)
+        [ "$state" = "MERGED" ] && { echo "SKIP $lane pr-merged" >> "$tmpdir/out"; exit 0; }
+        [ "$state" = "CLOSED" ] && { echo "SKIP $lane pr-closed" >> "$tmpdir/out"; exit 0; }
+      fi
+
+      # Discover files containing the search term (scoped by glob if provided)
+      if [ -n "$glob" ]; then
+        files=$(rg -l --fixed-strings "$search" -g "$glob" 2>/dev/null)
+      else
+        files=$(rg -l --fixed-strings "$search" 2>/dev/null)
+      fi
+      [ -z "$files" ] && { echo "SKIP $lane no-matches" >> "$tmpdir/out"; exit 0; }
+
+      # Apply replacement (literal, no regex — sed -i '' on macOS, sed -i on Linux)
+      n=0
+      while IFS= read -r f; do
+        if [ "$(uname)" = "Darwin" ]; then
+          sed -i '' "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
+        else
+          sed -i "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
+        fi
+        n=$((n + 1))
+      done <<< "$files"
+
+      # Amend + force-with-lease (R1 / R28 exclusive-sensitive — but limited to lane's
+      # own short-lived worktree, not a primary branch; safe under R28's parallel-across-
+      # branches clause). --force-with-lease bails if remote moved since fetch.
+      git add -u 2>/dev/null
+      if git diff --cached --quiet; then
+        echo "SKIP $lane no-staged-changes" >> "$tmpdir/out"
+        exit 0
+      fi
+      git commit --amend --no-edit >/dev/null 2>&1 || {
+        echo "FAIL $lane amend-failed" >> "$tmpdir/out"
+        exit 1
+      }
+      git push --force-with-lease >/dev/null 2>&1 || {
+        echo "FAIL $lane push-failed" >> "$tmpdir/out"
+        exit 1
+      }
+      echo "OK $lane $n" >> "$tmpdir/out"
+    ) &
+    pids="$pids $!"
+  done
+  # R42: bounded wait — each subshell does gh + sed + git commit + git push --force-with-lease;
+  # network stalls on any one of those would block bare `wait` forever. 45s budget covers
+  # the slowest credible case (push to slow remote × parallelism).
+  _bounded_wait 45 $pids
+  local wait_rc=$?
+  [ "$wait_rc" -eq 124 ] && echo "FAIL _bounded_wait timeout — surviving subshells killed" >> "$tmpdir/out"
+
+  # Aggregate + log
+  cat "$tmpdir/out" 2>/dev/null
+  if grep -q '^FAIL ' "$tmpdir/out" 2>/dev/null; then
+    rc=1
+  fi
+  printf '%s  PARALLEL_EDIT_FANOUT  search=%q  replace=%q  result=%s\n' \
+    "$(date -u +%FT%TZ)" "$search" "$replace" \
+    "$([ $rc -eq 0 ] && echo ok || echo partial)" \
+    >> "$LOGS/master_agent.log"
+  rm -rf "$tmpdir"
+  return $rc
+}
+```
+
+Used by:
+- `watchmans.md` § PR-number backfill duty — `(PR #pending) → (PR #<N>)` flips across all active lanes.
+- Future R28 fan-out work — any "N independent branches, same string operation" task.
+
+**Why a helper, not inlined per call site:** the inlined pattern in `watchmans.md` was correct but duplicated the parallel `&` + `wait` skeleton, the `--force-with-lease` bail logic, and the MERGED/CLOSED state guard. Three call sites would have triplicated the bug surface. One helper, one place to fix.
 
 ---
 

@@ -185,17 +185,23 @@ KING_WIN=$(cmux identify --json | jq -r .caller.window_ref)
 KJSON="$PWD/.kingdom/${project}/kingdom.json"
 KING_COLOR=$(jq -r '.cmux.workspaceColors.king // "amber"' "$KJSON")
 
-# Rename + describe in parallel (cosmetic, fire-and-forget)
+# Rename + describe in parallel (cosmetic, fire-and-forget; R42: bounded wait)
+RENAME_PIDS=""
 cmux workspace-action --action rename --workspace "$KING_WS" \
   --title "👑 King · ${project}" 2>/dev/null &
+RENAME_PIDS="$RENAME_PIDS $!"
 cmux workspace-action --action set-color --workspace "$KING_WS" \
   --color "$KING_COLOR" 2>/dev/null &
+RENAME_PIDS="$RENAME_PIDS $!"
 cmux workspace-action --action set-description --workspace "$KING_WS" \
   --description "Starting ${project}..." 2>/dev/null &
+RENAME_PIDS="$RENAME_PIDS $!"
 PIN_KING=$(jq -r '.cmux.pinKingWorkspace // true' "$KJSON")
-[ "$PIN_KING" = "true" ] && \
+if [ "$PIN_KING" = "true" ]; then
   cmux workspace-action --action pin --workspace "$KING_WS" 2>/dev/null &
-wait
+  RENAME_PIDS="$RENAME_PIDS $!"
+fi
+_bounded_wait 5 $RENAME_PIDS  # 4 cmux calls × <0.05s nominal; 5s budget covers slow socket
 
 echo "👑 King's workspace renamed. Spawning lanes next..."
 ```
@@ -220,6 +226,7 @@ LANES_EXPECTED=$(
 )
 BASE=$(jq -r '.git.base // "develop"' "$KJSON")
 
+SPAWN_PIDS=""
 for lane in $LANES_EXPECTED; do
   (
     # Skip if workspace ref already present + alive (resume)
@@ -240,8 +247,11 @@ for lane in $LANES_EXPECTED; do
     ref=$(spawn_master_workspace "$label" "$PROJ/.worktrees/$lane" "$color")
     [ -n "$ref" ] && echo "${lane}_WS=$ref" >> "$REFS_FILE"
   ) &
+  SPAWN_PIDS="$SPAWN_PIDS $!"
 done
-wait
+# R42: bounded wait — git worktree add can stall on .git/index.lock or half-created worktrees;
+# 60s budget covers ~5 lanes × (worktree add 2s + 4 cmux calls 0.2s) with 5x safety margin.
+_bounded_wait 60 $SPAWN_PIDS || echo "⚠️ spawn cycle hit 60s budget; survivors killed (check cmux tree --all + worktree-refs.env)"
 
 echo "👑 All lanes spawned. Sidebar shape confirmed."
 

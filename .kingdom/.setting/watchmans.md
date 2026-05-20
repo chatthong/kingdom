@@ -571,7 +571,7 @@ Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify`
 
 The worker commits TODO/CSV close-suffix as `(PR #pending)` because the PR number doesn't exist at commit time. **Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick** — King never does this work.
 
-**Scan logic (parallel by default, per [rules.md R28](rules.md#r28)):**
+**Scan logic (parallel by default, per [rules.md R28](rules.md#r28)) — calls the `parallel_edit_fanout` helper from [`_primitives.md`](_primitives.md):**
 
 ```bash
 # Build feature/<topic> → PR #N map from King's master_agent.log
@@ -582,19 +582,41 @@ while IFS= read -r line; do
   [ -n "$feat" ] && [ -n "$prn" ] && PR_MAP["$feat"]="$prn"
 done < "$LOGS/master_agent.log"
 
-# Scan EACH lane worktree for `(PR #pending)` — IN PARALLEL via Agent fan-out
+# Build the lane=pr spec for the helper. Lane → feature → PR resolution is
+# watchman's local concern; the helper just needs <lane>=<pr> tuples.
+spec=""
 for lane in worker-1 worker-2 worker-3 co-worker-1; do
-  Agent_dispatch_sonnet \
-    "name=watchman-pr-backfill-$lane" \
-    "cd $WORKTREES/$lane && \
-     pr=${PR_MAP[feature/<topic-for-$lane>]} && \
-     [ -z \"\$pr\" ] && exit 0 && \
-     gh pr view \$pr --json state -q .state | grep -qv MERGED || exit 0 && \
-     rg -l '(PR #pending)' | xargs sed -i '' \"s/(PR #pending)/(PR #\$pr)/g\" && \
-     git add -u && git commit --amend --no-edit && git push --force-with-lease" &
+  feat=$(jq -r ".dispatch.$lane.feature // empty" "$LOGS/state.json" 2>/dev/null)
+  [ -z "$feat" ] && continue
+  pr="${PR_MAP[$feat]}"
+  [ -z "$pr" ] && continue
+  spec="$spec $lane=$pr"
 done
-wait
+
+# One call — handles parallel-across-branches, MERGED/CLOSED skip, amend +
+# --force-with-lease, and master_agent.log line. Per-lane stdout lines reach
+# the WATCH_PR_BACKFILL.md report.
+parallel_edit_fanout "(PR #pending)" "(PR #${pr})" "$spec" > "$LOGS/WATCH_PR_BACKFILL.md" 2>&1
 ```
+
+**On per-lane `(PR #${pr})` expansion:** the helper does literal string replace, not shell expansion, so the second argument must already encode the lane's own PR number. The wrapper above is illustrative; in practice watchman calls `parallel_edit_fanout` **once per lane** when PR numbers differ across lanes, or once collectively when the search/replace is identical (e.g. a structural footer change). The library favours the latter — different PR numbers per lane is the watchman-specific edge.
+
+For the common case (one PR per lane), watchman fans out per-lane:
+
+```bash
+FANOUT_PIDS=""
+for unit in $spec; do
+  lane="${unit%=*}"
+  pr="${unit#*=}"
+  parallel_edit_fanout "(PR #pending)" "(PR #$pr)" "$lane=$pr" '**/*.{md,csv}' &
+  FANOUT_PIDS="$FANOUT_PIDS $!"
+done
+# R42: bounded wait — gh + sed + git commit + git push --force-with-lease can each
+# stall on network or remote refs; 45s budget covers the slowest of those × parallelism.
+_bounded_wait 45 $FANOUT_PIDS
+```
+
+This is still parallel **across** lanes, with a hard ceiling so a stuck `gh pr view` or `git push` can't block the watchman tick. The helper itself is no-op-fast when a lane has nothing to flip.
 
 **Constraints:**
 

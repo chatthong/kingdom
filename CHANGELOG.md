@@ -4,6 +4,57 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.30.0] — 2026-05-20
+
+Three open threads from v0.29.x cleanup + one new Tier-1 rule discovered via live cmux audit. The audit was triggered by user report of "stuck on real use for many versions"; root cause turned out to be bare `wait` in 5 load-bearing fan-outs, not cmux itself.
+
+### Added
+
+- **R42 (Tier 1) — Every parallel fan-out uses `_bounded_wait`, never bare `wait`.** Bare `wait` (no PID, no timeout) blocks until every backgrounded subshell exits; if any one hangs (`git worktree add` blocked on `.git/index.lock`, `gh pr view` on stale network, `cmux send` to not-yet-ready workspace), the parent script hangs forever and the Claude Code harness auto-pushes the bash call to background. User sees "Job's output is empty and files weren't written" — the actual hang vector observed across v0.27-v0.29.4. Spec: collect PIDs (`PIDS="$PIDS $!"`), pass to `_bounded_wait <budget> $PIDS`, function `kill -9`'s survivors and returns 124 on timeout.
+- **`_bounded_wait` helper** in `_primitives.md`. Pure-bash, macOS-portable (no GNU `timeout` dependency — confirmed missing on default macOS in audit). Per-PID poll loop with global wall-clock budget; default budgets table (5s cosmetic, 15s teardown, 45s `parallel_edit_fanout`, 60s spawn) documented inline.
+- **`parallel_edit_fanout` helper** in `_primitives.md` (sibling to `pattern_grep_fanout`). Takes `<search> <replace> <lane=pr-spec> [glob]`; fans out per-lane subshells, each running `rg-discover → sed → amend → push --force-with-lease`. Honours R27 (skips MERGED/CLOSED PRs), R28 (parallel across branches, serial within), R42 (bounded wait, 45s budget). Logs a `PARALLEL_EDIT_FANOUT` line to `master_agent.log`. Removes ~20 lines of inlined parallel `&`/`wait` skeleton from `watchmans.md`.
+- **Check 9 in `/kingdom:self-care` — workspace file sync.** Scans the plugin's `.kingdom/.setting/` against the workspace copy; missing files (a common after-effect of upgrading the plugin without re-running `/kingdom:init`) are listed for one-keystroke import. Reuses the existing `doctor-report/partial-pass` card variant — no new card needed.
+
+### Changed
+
+- **`kings.md` § Push approval gate Step 7** now calls `kingdom_resync_after_merge "$PR" "$LANE"` instead of inlining the old `worktree remove + branch add -b` cleanup. Behavioural improvement: the helper does `branch -f $merged_lane $BASE`, **preserving** the worker's local worktree (R35) — the inlined pattern destroyed and recreated it. Feature-branch deletion remains inline (one-shot ref hygiene).
+- **`watchmans.md` § PR-number backfill duty** rewritten to call `parallel_edit_fanout`. Per-lane `&` fan-out with PID-collection + `_bounded_wait 45 $FANOUT_PIDS` instead of bare `wait`. Stdout drains to `WATCH_PR_BACKFILL.md`.
+- **`commands/work.md` Step 0.4** — King workspace-rename fan-out (4 cmux calls) and all-lane spawn cycle now both collect PIDs + call `_bounded_wait` (5s and 60s budgets respectively). The 60s spawn budget covers ~5 lanes × (worktree add 2s + 4 cmux calls 0.2s) with 5× safety margin.
+- **`commands/save.md` teardown** — `cmux close-workspace` fan-out now uses `_bounded_wait 15 $CLOSE_PIDS`.
+- **`rules.md` R28 footer** — removed "(the latter to be added in v0.19.0)" parenthetical now that the helper body exists.
+- **`doctor-report` card all-pass variant** — added "workspace .kingdom/.setting/ in sync" check line; notes block updated from "10 standard checks" → "9 standard checks" + Check 9 auto-patch behaviour documented.
+- **`commands/self-care.md` intro** — "8 checks" → "9 checks"; `CHECK_RESULTS_LIST` now appends `${STALE_RESULT}`.
+- **`CLAUDE.md`** — open-threads list crossed out #1/#2/#3 (closed); architectural decisions list extended with #26 (R42 bounded wait).
+
+### Fixed (open threads from v0.29.x)
+
+- Thread #1 ("self-care should detect workspace-stale files") — closed via Check 9.
+- Thread #2 ("`parallel_edit_fanout` referenced by R28 but spec-only") — body landed.
+- Thread #3 ("wire `kingdom_resync_after_merge` into `kings.md` Step 7") — Step 7 now calls the helper.
+
+### Audit findings (cmux command surface, 2026-05-20)
+
+Live test of every cmux subcommand the kingdom invokes, on macOS 25.4.0 with cmux 0.64.6:
+
+- **All 18 commands return in <0.65s.** None hang.
+- Slowest: `events --limit 1 --no-heartbeat --no-ack` at 0.61s (this is a stream by design).
+- `cmux send` requires non-empty text (rc=1 if empty).
+- `cmux workspace-action set-color "" / set-description ""` rejects empty value (rc=1) — documentation: don't try to "clear" via empty string.
+- `cmux tab-action` without `--tab` or `--surface` ref → "Tab not found" (rc=1) — closer pattern depends on `$CMUX_SURFACE_ID` being set.
+- **GNU `timeout` is NOT on macOS.** `gtimeout` is also absent by default. Kingdom doesn't reference either (audited); `_bounded_wait` uses pure-bash poll loop.
+
+The user-perceived "cmux hangs" across v0.27-v0.29.4 were all downstream subshells (git, gh, network) caught by bare `wait` — R42 closes that gap.
+
+### Architectural decisions (CLAUDE.md)
+
+Decision #26 added: **R42 bounded wait** — every parallel fan-out must collect PIDs and call `_bounded_wait` with an explicit budget. List grows from 25 to 26.
+
+### No new commands. No card renames.
+
+R26/R27/R28 contracts unchanged — this release lands the **implementation** of helpers those rules already named, plus one new rule (R42) discovered by the live cmux audit.
+
+---
+
 ## [0.29.4] — 2026-05-20
 
 R41 propagation across docs + role-doc step audit. Shipped via 7 parallel Sonnet agents. No spec changes (rules unchanged); fixed-in-place corrections found by auditing each role doc against current rules.

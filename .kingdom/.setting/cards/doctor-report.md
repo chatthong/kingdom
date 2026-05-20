@@ -24,6 +24,7 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 > │  ✓ workspace settings.json                              │
 > │  ✓ tasks/ writable                                      │
 > │  ✓ no orphan audit artifacts                            │
+> │  ✓ workspace .kingdom/.setting/ in sync                  │
 > │  ✓ git state across ${N_PROJECTS} projects              │
 > │                                                         │
 > │  Ready to run /kingdom:work <project>.                  │
@@ -87,5 +88,5 @@ The card has 3 variants based on overall result: all-pass, partial-pass (some au
 
 ## Notes
 
-- 10 standard checks (per [`commands/self-care.md`](../../../commands/self-care.md)). Card shows all 10 in `${CHECK_RESULTS_LIST}` regardless of variant.
-- Auto-patch happens only for `.claude/settings.json` permission entries; binary installs require user action (the card lists the exact `brew install` or download URL).
+- 9 standard checks (per [`commands/self-care.md`](../../../commands/self-care.md)). Card shows all 9 in `${CHECK_RESULTS_LIST}` regardless of variant.
+- Auto-patch happens for `.claude/settings.json` permission entries (Check 6) and for missing `.kingdom/.setting/` files imported from the plugin source (Check 9, v0.30.0+). Binary installs always require user action — the card lists the exact `brew install` or download URL.

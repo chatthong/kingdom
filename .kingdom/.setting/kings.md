@@ -1079,16 +1079,21 @@ King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = pr
        --title "feat(scope): ..." --body "..." --reviewer <lead>
    ```
 6. **King logs push** — appends one line to `master_agent.log` with timestamp + PR number.
-7. **After PR merge** (lead clicks Merge or manually closes): King cleans up:
+7. **After PR merge** (lead clicks Merge or manually closes): King resyncs kingdom and frees the merged lane via the canonical helper (R26):
    ```bash
    cd "$PROJ"
-   git checkout kingdom
-   git branch -D "feature/<topic>"
+
+   # Helper handles: overlay clean → fetch + ff base → reset kingdom →
+   # free merged lane (branch -f, worktree preserved) → rebase remaining
+   # active lanes → verify kingdom delta empty → log KINGDOM_RESYNC line.
+   kingdom_resync_after_merge "<PR_NUMBER>" "<role>-<n>"
+
+   # Carve-only feature branch is one-shot — delete local + remote ref.
+   git branch -D "feature/<topic>" 2>/dev/null || true
    git push origin --delete "feature/<topic>" 2>/dev/null || true
-   git worktree remove "$PROJ/.worktrees/<role>-<n>" --force
-   git branch -D "<role>-<n>" 2>/dev/null || true
-   git worktree add -b "<role>-<n>" "$PROJ/.worktrees/<role>-<n>" "origin/develop"
    ```
+
+   The merged lane's `.worktrees/<role>-<n>/` checkout is **preserved** (R35) — only the branch ref is reset to `origin/$BASE`. The lane is now free for the next dispatch round without re-creating its worktree.
 
 **Why not push lane branches directly?** Lane branches are persistent identities (`worker-1` always = worker-1) — pushing them mixes lane-rotation hygiene with remote-branch hygiene. Carving `feature/<topic>` keeps the PR surface descriptive and one-shot.
 

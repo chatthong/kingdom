@@ -281,18 +281,20 @@ cmux has three distinct close commands. Picking the wrong one wastes a `/kingdom
 - ❌ `cmux tab-action --action close --workspace <ws>` — error: `Unknown tab action` when `--workspace` is passed without `--surface`. tab-action close targets a surface, not a workspace.
 - ❌ `cmux workspace-action --action close ...` — there is no `close` workspace-action; only `rename`, `set-color`, `set-description`, `mark-read`, `mark-unread`, `pin`.
 
-**Parallel teardown (correct pattern for `/kingdom:save` Step 5):**
+**Parallel teardown (correct pattern for `/kingdom:save` Step 5; R28 parallel-by-default + R42 bounded wait):**
 
 ```bash
 # Close N lane workspaces IN PARALLEL — each close is independent (rules.md R28)
+CLOSE_PIDS=""
 for I in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
   REF=$(eval echo "\$$I")
   cmux close-workspace --workspace "$REF" &
+  CLOSE_PIDS="$CLOSE_PIDS $!"
 done
-wait
+_bounded_wait 15 $CLOSE_PIDS  # R42: bare `wait` is banned; 15s budget covers cmux socket retry
 ```
 
-Each `close-workspace` is a network call to cmux.app — serializing them makes teardown of 5 lanes take 5× longer for no reason.
+Each `close-workspace` is a network call to cmux.app — serializing them makes teardown of 5 lanes take 5× longer for no reason. The bounded wait stops a stuck close (cmux unresponsive, workspace mid-spawn) from blocking the whole teardown.
 
 ---
 
