@@ -246,6 +246,12 @@ for lane in $LANES_EXPECTED; do
     label="$emoji $lane"
     ref=$(spawn_master_workspace "$label" "$PROJ/.worktrees/$lane" "$color")
     [ -n "$ref" ] && echo "${lane}_WS=$ref" >> "$REFS_FILE"
+    # v0.31.0 R39: watchmen are autonomous — auto-dispatch /loop on spawn.
+    # Without this, watchman sits at a shell prompt; the kingdom appears half-alive
+    # until the user manually notices and asks "watchman why do nothing".
+    case "$lane" in
+      watchman-*) [ -n "$ref" ] && spawn_watchman_loop "$ref" ;;
+    esac
   ) &
   SPAWN_PIDS="$SPAWN_PIDS $!"
 done
@@ -479,6 +485,9 @@ for lane in $LANES_EXPECTED; do
     BRIEF="[RESUME] ${lane} · task ${TASK_ID} · status=${TASK_STATUS}. \
 Last progress: ${LAST_PROGRESS}. Continue from where you left off."
     lane_ws=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
+    # v0.31.0 R31+R36 hard gate: refuse dispatch if lane workspace missing.
+    # Bypassing this caused "dispatch into the void" in the 2026-05-19 session.
+    guard_lane_workspace_exists "$lane" || { echo "⏸ skipping resume of $lane (workspace check failed)"; continue; }
     cmux send --workspace "$lane_ws" -- "$BRIEF" 2>/dev/null
     echo "Resumed $lane → $TASK_ID"
     continue
@@ -492,6 +501,10 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
   BRIEF=$(render_card "dispatch-brief")
 
   lane_ws=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
+  # v0.31.0 R31+R36 hard gate: refuse dispatch if lane workspace missing.
+  # The 2026-05-20 morning incident was a dispatch that ran without a visible
+  # workspace — work happened in King's session, the user saw nothing happen.
+  guard_lane_workspace_exists "$lane" || { echo "⏸ skipping $lane (workspace check failed)"; continue; }
   cmux send --workspace "$lane_ws" -- "$BRIEF"
   echo "Dispatched $lane → $TASK"
   TASKS_DISPATCHED_TODAY=$((TASKS_DISPATCHED_TODAY + 1))

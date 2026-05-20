@@ -10,7 +10,7 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.30.0 (2026-05-20)
+## Current state — v0.31.0 (2026-05-20)
 
 The plugin is on `main`. Pushed to `origin/main` at `github.com/chatthong/kingdom`. All releases since v0.18.0 ship per-release; no separate release branch.
 
@@ -18,6 +18,7 @@ Recent version history (worth reading the CHANGELOG for full detail):
 
 | Version | Theme | What landed |
 |---|---|---|
+| **0.31.0** | Hard gates replace prose; Tier 1 capped at 10 | After v0.30.0 shipped, a 4-hour consumer session (`/kingdom:work bfg-swt cap=5`, 2026-05-20 morning) shipped 0 PRs despite all lanes spawning. The King violated R4 (committed on `feature/*` then FF-merged onto `kingdom`), R9 (feature ≠ worker-N byte-for-byte), R30+R37 (`cd .worktrees/worker-1 && git commit` in its OWN session), R36 (skipped lane spawn entirely until user asked), and re-asked execute-mode after `go`. **Diagnosis: prose rules aren't gates.** v0.31.0 picks a different lane: 5 new helpers in `_primitives.md § Hard gates` BLOCK these at call site — `guard_worker_commit_branch` (R4+R9), `guard_lane_workspace_exists` (R31+R36), `guard_no_king_session_worktree_cd` (R30+R37), `kingdom_overlay_lane` (R15 — correct overlay flow), `spawn_watchman_loop` (R39 — auto-dispatch `/loop`). Plus `rules.md` opens with a **Tier 1 cap legend**: exactly 10 iron-clad rules (R1, R2, R4, R5, R14, R22, R30, R31, R36, R42); 29 prior Tier-1 markers demoted to Tier 2 by the legend. **NEW R43 (Tier 2):** closing actions (AC flips, heading suffix, Final summary, closer) agent-owned; brief MUST NOT annotate as user-owned. **NEW R44 (Tier 2):** after user `go`, King executes — no more "pick execute mode m/a/m1/self?" questions. **R33 amended:** mandatory `git fetch` + merged-PR scan + recovery-PR detect BEFORE reading task files (the 0-jobs morning's root cause). |
 | **0.30.0** | Open-thread cleanup + R42 (bounded wait) | Closed 3 v0.29.x open threads: (1) `kings.md` Step 7 now calls `kingdom_resync_after_merge` (preserves worker worktree per R35, was destroy+recreate); (2) `parallel_edit_fanout` helper body + `watchmans.md` rewired; (3) `/kingdom:self-care` Check 9 detects workspace files missing from plugin source. **NEW R42 (Tier 1):** every parallel fan-out uses `_bounded_wait`, never bare `wait` — diagnosed via live cmux audit (all cmux ops <0.65s; real hang was bare `wait` in 5 sites blocking on stuck git/gh subshells). `_bounded_wait` helper added; 5 sites converted (work.md ×2, save.md, watchmans.md, parallel_edit_fanout itself). |
 | **0.29.4** | R41 propagation + role-doc step audit (no spec changes) | Version bump only; confirms R41 propagated correctly across role docs and step sequences; no new rules or spec changes |
 | **0.29.3** | Skill-aware execution: R41 + routing table expansion | R41 (Tier 1): 3-step skill resolution before any work (routing table → system-reminder fallback → skip); 15 new skill-routing.md entries (Prisma family ×7, remaining superpowers ×8); auto-discovery fallback section; ASCII wizard mascot removed from README |
@@ -67,7 +68,7 @@ README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions — 26 total (don't re-debate without reading the rationale)
+## Key architectural decisions — 27 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -121,6 +122,8 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 26. **Every parallel fan-out uses `_bounded_wait`, never bare `wait`** (R42, v0.30.0). Bare `wait` blocks until every backgrounded subshell exits — if one stalls (`git worktree add` blocked on `.git/index.lock`, `gh pr view` on stale network, `cmux send` to not-yet-ready workspace), the parent script hangs forever and the Claude Code harness auto-pushes the bash call to background. User sees "Job's output is empty and files weren't written." Diagnosed via live cmux audit (2026-05-20): every cmux command itself returns in <0.65s; the perceived hangs across v0.27-v0.29.4 were all downstream subshells. Spec: collect PIDs (`PIDS="$PIDS $!"`), pass to `_bounded_wait <budget> $PIDS`, helper `kill -9`'s survivors and returns 124 on timeout. Helper is pure-bash + portable (macOS lacks GNU `timeout` and `gtimeout`). Default budgets: 5s cosmetic cmux fan-outs, 15s teardown, 45s `parallel_edit_fanout`, 60s lane spawn cycle. Five call sites converted: `commands/work.md` ×2 (King rename + lane spawn), `commands/save.md`, `watchmans.md` PR-backfill, `_primitives.md` `parallel_edit_fanout` self.
 
+27. **Hard gates beat prose; Tier 1 capped at 10** (v0.31.0). Prior versions encoded critical rules as prose in `rules.md` with anti-pattern callouts and "why Tier 1" justifications. The 2026-05-20 morning consumer session showed this has a ceiling: a King operating in real-time chat will pattern-match the surface shape of the task and not re-read 700 lines of `rules.md` between Bash calls. v0.31.0 picks a different lane — keep the rules as documentation, but make load-bearing rules call-site blocks. Five new helpers in `_primitives.md § Hard gates` BLOCK violations: `guard_worker_commit_branch` (R4+R9), `guard_lane_workspace_exists` (R31+R36), `guard_no_king_session_worktree_cd` (R30+R37), `kingdom_overlay_lane` (R15 — correct overlay flow), `spawn_watchman_loop` (R39 — auto-`/loop`). Same release caps Tier 1 at exactly 10 rules (R1, R2, R4, R5, R14, R22, R30, R31, R36, R42) — Tier 1 should mean "violation = kingdom worse than running solo," not "important enough to add a tier marker." 29 prior Tier-1 markers demoted to Tier 2 via a legend at the top of `rules.md` (per-rule heading sweep deferred). Adds R43 (closing actions agent-owned; no "Ter's hand" in briefs) and R44 (after `go`, King executes — no execute-mode follow-up) as Tier 2.
+
 ## Working conventions for THIS repo
 
 - **English only in chat** (per memory rule `feedback_communication`).
@@ -145,6 +148,18 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ~~2. **`parallel_edit_fanout` helper.**~~ — **CLOSED in v0.30.0** (body landed in `_primitives.md`; `watchmans.md` PR-number backfill rewired to call it).
 
 ~~3. **Wire `kingdom_resync_after_merge` call site into `kings.md` Step 7.**~~ — **CLOSED in v0.30.0** (Step 7 now calls the helper; behavioural fix — worker worktree preserved per R35 instead of destroy+recreate).
+
+~~7. **Wire the v0.31.0 hard-gate helpers into the role docs.**~~ — **CLOSED in v0.31.0** (same release as the helpers). Wires landed: `commands/work.md` Step 0.4 chains `spawn_watchman_loop` after `spawn_master_workspace` for watchman lanes; `commands/work.md` Step 4 (resume + new dispatch) calls `guard_lane_workspace_exists` before each `cmux send`; `kings.md` § Parallel duplicate dispatch and § Primary cmux send both call `guard_lane_workspace_exists`; `kings.md` § Overlay loop replaces inline `git diff \| git apply` with `kingdom_overlay_lane` (R4-guarded); `workers.md` adds a new "Pre-closer: the task commit" section mandating `guard_worker_commit_branch` before any lane `git commit`. Explicitly skipped: `watchmans.md` PR-backfill (R27 exception to R9 — watchman is allowed to amend `feature/*`); `commands/save.md` teardown (no commit/dispatch/cd to guard); orphan-tab sweep (only `cmux tab-action`, no guard target).
+
+8. **`guard_no_king_session_worktree_cd` exists but isn't yet wired** — the helper is defined in `_primitives.md` but no role doc currently calls it. The natural insertion point is the `kings.md` overlay/audit flow that historically `cd`'d into worker worktrees. v0.30.0+ refactored most of those to `git -C "$WT"` form (which doesn't change cwd, so the guard doesn't apply). Pending: a sweep to add the guard at the few remaining `cd "$PROJ/.worktrees/...` sites in `kings.md` (line ~120, ~747) for defence in depth.
+
+8. **Per-rule heading sweep for the Tier 1 cap** — `rules.md` v0.31.0 has the Tier-1-cap legend at the top declaring exactly 10 iron-clad rules, but the per-rule headings (e.g. `### R33. King MUST read existing task state — Tier 1`) still carry their old `— Tier 1` suffix. The legend is authoritative for now, but a sweep should update each demoted rule's heading suffix to `— Tier 2`. Mechanical edit across ~19 rules.
+
+9. **R45 candidate — pre-commit hook installed by `/kingdom:init`** — install `guard_worker_commit_branch` as a real `.git/hooks/pre-commit` in each lane worktree at `/kingdom:init` time. The helper guards the action only if the calling script chooses to call it; a real pre-commit hook catches the failure mode even if the script forgets. Deferred to v0.31.1 pending consumer test of the v0.31.0 helpers first.
+
+10. **R34 hardening — session-start memory-vs-Tier-1 conflict scan** — today R34 says "rules win when memory and rules conflict" but the King session must self-detect conflicts; no automatic scan. Design needed for what the scan output looks like in chat (and how the King reads it without becoming a turn-eater).
+
+11. **Stale `cmux send` / `cmux notify` / `cmux tree` references** — grep across plugin source shows 11+11+4 hits. Live cmux 0.64.6+ accepts these as undocumented subcommands but `cmux capabilities` lists the RPC methods (`surface.send_text`, `notification.create_for_target`, etc.) as the documented surface. Audit + standardize in v0.32.0.
 
 4. **Companion app discussion (open)** — user asked about forking ghostty / building a richer UI vs sticking with cmux.app cards. Two paths explored:
    - **(a)** Thin web dashboard reading kingdom's audit files (`master_agent.log`, sentinel flags, task files, `watchman_state.json`). Ships in days, read-mostly, chat stays in cmux.app.
@@ -188,4 +203,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-20 after v0.30.0 ship. Update this file when shipping a release that changes architectural decisions (1-25 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-20 after v0.31.0 ship. Update this file when shipping a release that changes architectural decisions (1-27 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

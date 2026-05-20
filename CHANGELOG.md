@@ -4,6 +4,45 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.31.0] — 2026-05-20
+
+Released the same day as v0.30.0 after a real consumer-kingdom session (`/kingdom:work bfg-swt cap=5`, 2026-05-20 morning) shipped **zero PRs in four hours** despite all five lanes spawning successfully. The transcript exposed that the kingdom's Tier-1 rules (R4, R9, R30, R31, R36, R37, R38) were being violated in sequence by the same King session — committing on `feature/<topic>` instead of `worker-N` (R9), FF-merging onto `kingdom` (R4), `cd`-ing into worker worktrees from the King's own session (R30 + R37), skipping the lane-spawn step entirely (R36), and asking "pick execute mode m/a/m1/self?" after the user said `go`. **Diagnosis: prose rules aren't gates.** A King operating fast in chat will skim past 600 lines of `rules.md` and reach a `cd .worktrees/worker-1 && git commit -m ...` line that looks reasonable in isolation. v0.31.0 turns the load-bearing rules into actual call-site blocks.
+
+### Added
+
+- **`_primitives.md` § Hard gates — 5 new helpers** that BLOCK violations at call time instead of describing them in prose:
+  - **`guard_worker_commit_branch`** — refuses to proceed if `git commit` is about to land on `kingdom` (R4 violation), on `feature/*` (R9 violation — those are carved at push time), or on a branch whose name doesn't match the worktree's lane (`worker-1` worktree must be on `worker-1` branch). Returns `1` with a specific error + fix recipe; calling script's `set -e` propagates the fail.
+  - **`guard_lane_workspace_exists`** — before any dispatch, checks `.worktrees/<lane>/` exists AND `cmux list-workspaces` shows the lane's labelled workspace. R31 + R36 enforcement: dispatch fails loud if the user can't see the lane in the cmux sidebar.
+  - **`guard_no_king_session_worktree_cd`** — when invoked with `KINGDOM_ROLE=king` (or by default), refuses to `cd` into any path matching `*/.worktrees/worker-*|co-worker-*|watchman-*`. R30 + R37 enforcement: King's session can `git -C <path> <cmd>` for trivial reads but never assumes the lane's working directory.
+  - **`kingdom_overlay_lane`** — wraps the correct `git diff origin/$base..$lane | git apply --3way` overlay flow with R4 guards (kingdom branch checked out + HEAD == origin/$base). Replaces the ad-hoc inline overlay the 2026-05-20 session got wrong (which FF-merged onto kingdom, making it a commit branch).
+  - **`spawn_watchman_loop`** — after `spawn_master_workspace` returns a watchman workspace ref, auto-launches `claude` + `/loop` via `cmux rpc surface.send_text`. R39 enforcement: watchman is autonomous by spec; spawning a watchman workspace without dispatching `/loop` is a setup bug, not a deferred decision. The 2026-05-20 session left watchman-1 idle at a shell prompt for 47 minutes before the user asked "watchman why do nothing".
+- **R43 (Tier 2)** — Job-done closing actions are agent-owned. The 4-step closing checklist (flip AC checkboxes in the project ledger, append `— ✅ closed YYYY-MM-DD (PR #N)` to the heading, write Final summary, run 4-step closer) is wholly the lane's responsibility; King's dispatch brief MUST NOT annotate any of these as user-owned ("Ter's hand" / "(human flip)" / "Ledger update: manual"). Lane MUST reject any brief containing such fields. The 2026-05-19 worker-1 incident motivated the rule: brief said "TODO_Webshop.md AC flip held on kingdom branch — Ter's hand", worker-1 never flipped, drift leaked into kingdom as unstaged changes, and the next morning the King re-read the field and asked the user "decide how to ship the AC flip" — burning 15 minutes on a step that should have been silent.
+- **R44 (Tier 2)** — After user `go`, King executes. No further "pick execute mode m/a/m1/self?" or "spawn workspace now or later?" prompts. The user's `go` collapses all remaining dispatch branch points into kingdom defaults (`dispatch.defaultExecuteMode` = `cmux-lane`, smallest-task-first lane order, reuse-then-spawn workspace policy). What `go` does NOT collapse: R1 push approval (still per-PR) and R5 destructive-op approval (still with target). Recovery when violated: factual-ack in chat, default + execute, log `RULE_VIOLATION R44`, do not block.
+- **Tier 1 cap (v0.31.0+)** — `rules.md` now opens with a prominent legend declaring exactly 10 Tier-1 rules: R1, R2, R4, R5, R14, R22, R30, R31, R36, R42. The cap is intentional: Tier 1 should be "violation = kingdom worse than running solo." 29 prior rules carrying `— Tier 1` markers in their headings are demoted to Tier 2 by the legend (per-rule headings will be swept in a future release; the legend is authoritative until then).
+- **`workers.md` task brief schema** — explicit "Forbidden brief fields" callout listing the user-ownership annotations that violate R43 + the lane's rejection template.
+- **`cards/daily-status.md`** — splits the lane table in two: a Dispatch-lanes table (worker-N + watchman-N rows only) and a Paired-sessions table (co-worker rows only, manual-only per R32 + R43). The 2026-05-20 session repeatedly listed co-worker-1 in the same table as workers, treating it as a dispatch candidate even though R32 forbids this.
+
+### Changed
+
+- **`rules.md` R33** — pre-scan now MANDATORY: `git fetch origin --prune` + `gh pr list --state merged` + per-lane recovery-PR check BEFORE reading task files. R33 v0.30.0 read frozen task-file snapshots and built a resume queue from them; if `origin/develop` advanced overnight via a recovery PR (e.g. `recovery/pr-262-consent-banner` after PR #262 had a stacked-retarget incident), the resume queue offered to "resume" work that had already shipped 8 hours earlier. The 2026-05-20 morning incident: King drafted a "ship the dependency chain" plan for worker-1 + worker-3, asked for `go`. User asked "did you cross check task ledgers?" — that triggered `git fetch` and the truth came out: both PRs already merged. 0 jobs shipped that morning. New 0.a/0.b/0.c pre-scan steps prevent the failure.
+- **`plugin.json` description** — updated to lead with the v0.31.0 gate-helpers theme, mentions the 5 helper names by name, and aligns command surface with the v0.29.0 4-command set (`/kingdom:work` / `/kingdom:save` / `/kingdom:init` / `/kingdom:self-care`; was still referencing `/kingdom:day` / `/kingdom:update` / `/kingdom:exit` from v0.20-0.28).
+- **`README.md` tagline + version badge** — both bumped to v0.31.0; tagline highlights "Hard gates replace prose" framing.
+
+### Architectural insight (the v0.31.0 design decision)
+
+Prior versions (v0.28.0 introduced R36/R37/R38; v0.29.0 added R39/R40/R41; v0.30.0 added R42) treated `rules.md` as the authoritative behaviour spec. Every new failure mode added a new rule + a new anti-pattern callout + a new "why Tier 1" justification. The 2026-05-20 session — running v0.30.0 in real consumer use — proved this approach has a ceiling. A King operating in real-time chat will not re-read 700 lines of rules between every Bash call; it will pattern-match the surface shape of the task and run with what looks right. Rules that aren't enforced at the call site are rules that get skimmed.
+
+v0.31.0 picks a different lane. The rules stay (documentation matters; reviewers still need to understand the *why*), but the load-bearing critical rules now have helper functions in `_primitives.md` that the role docs MUST call before any commit / dispatch / overlay / cd. The guards are bash, not prose: `return 1` is a real fail, `set -e` propagates it, and the script halts. If a future King writes `cd .worktrees/worker-1 && git commit`, the `cd` itself goes through `guard_no_king_session_worktree_cd` first and the script exits before the commit ever runs. The same insight motivated the Tier-1 cap: 10 truly iron-clad rules with bash gates beats 29 prose rules with no enforcement.
+
+### Open threads carried into v0.31.x
+
+- **R45 candidate** — pre-commit hook (not just helper) installed by `/kingdom:init` into each lane worktree's `.git/hooks/pre-commit` that calls `guard_worker_commit_branch` automatically. Would catch the failure mode even when a future role-doc forgets to call the guard. Deferred to v0.31.1 pending consumer test.
+- **R34 hardening** — session-start "memory vs Tier-1 conflict scan" required output (today, R34 says rules win but the King session must self-detect conflicts; no automatic scan). Deferred — needs design work on the scan format.
+- **Companion app discussion (open from v0.30.0)** — thin web dashboard vs cmux.app upstream PRs, still no decision.
+- **Stale `cmux send` / `cmux notify` / `cmux tree` references in plugin docs** — 11+11+4 hits across role docs. Live cmux 0.64.6+ still accepts these but the RPC method form (`cmux rpc surface.send_text` / `notification.create_for_target`) is the documented path. Audit deferred to v0.32.0.
+
+---
+
 ## [0.30.0] — 2026-05-20
 
 Three open threads from v0.29.x cleanup + one new Tier-1 rule discovered via live cmux audit. The audit was triggered by user report of "stuck on real use for many versions"; root cause turned out to be bare `wait` in 5 load-bearing fan-outs, not cmux itself.

@@ -39,7 +39,30 @@
 | `${N_MERGED_TODAY}` | `gh pr list --state merged --search "merged:>=$(date +%F)" \| jq length` | `0` |
 | `${N_BLOCKED}` | from `watchman_state.json.blocked_lanes` array length | `0` |
 
+## Lane tables — workers/watchman in dispatch, co-workers separate (v0.31.0+)
+
+After the daily-ritual box, the card renders TWO tables:
+
+**Dispatch lanes (auto-dispatchable)** — worker-N + watchman-N rows ONLY:
+
+```
+${WORKER_LANE_TABLE}
+```
+
+**Paired (manual-only) sessions** — co-worker rows ONLY. NEVER auto-dispatched, only via your explicit `pair on co-worker-N` (R32 + R43):
+
+```
+${COWORKER_PAIRED_TABLE}
+```
+
+This split is load-bearing: putting co-workers in the same table as workers historically caused the King to surface them as dispatch candidates. Two tables, never one.
+
+**`${WORKER_LANE_TABLE}` schema:** box-drawn ASCII; one row per worker-N and watchman-N lane from `kingdom.json.shape`. Columns: Lane / Branch / State / Last activity. If a lane is in resume queue (per R33), prefix State with `[RESUME]`. If marked obsolete (per R33 0.c outcome), prefix with `[OBSOLETE — shipped via #N]`.
+
+**`${COWORKER_PAIRED_TABLE}` schema:** same columns BUT State is only ever `paired-idle (awaiting dictation)` or `paired-active: <task-id>`. If no co-workers in `kingdom.json.shape`, render: `(no co-workers configured — manual-pair sessions disabled)`.
+
 ## Notes
 
 - The counting-unit line is hardcoded (not a variable) because rules.md R23 + R25 fix the unit definition. Per kingdom contract: 1 sentinel = 1 task.
 - `${BUDGET_TODAY}` ranges respect both `cap` (hard) and `target` (soft). If both passed, `cap` wins; the line reflects whichever is more restrictive.
+- **v0.31.0 split:** worker / watchman lanes go in the dispatch table; co-workers go in the paired-sessions block. Visual separation enforces R32 + the new R43 — co-workers are NEVER dispatch candidates.

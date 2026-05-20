@@ -142,6 +142,256 @@ Used by `commands/start.md` Phase 4. Reserved branch namespace: `worker-N` / `co
 
 ---
 
+## Hard gates — enforce critical rules at call-site, not in prose (v0.31.0+)
+
+> **Why these exist:** v0.30.0 and earlier encoded R4, R9, R30, R36, R37 as prose in `rules.md`. The 2026-05-20 morning incident showed Kings still violating all of them — committing on `feature/*` instead of `worker-N` (R9), FF-merging onto `kingdom` (R4), `cd`-ing into worker worktrees from the King's session (R30+R37), skipping the workspace-spawn step entirely (R36). Prose isn't a gate. These helpers ARE gates: they call `return 1` on violation and the calling script's `set -e` propagates the failure. Source the helpers, then ANY commit / dispatch / overlay in role docs flows through them. If the King's bash environment doesn't have these sourced, that itself is a setup bug.
+
+### `guard_worker_commit_branch` — block commits on wrong branch from worker worktrees (R4 + R9)
+
+A `git commit` inside `.worktrees/worker-N/` must land on the `worker-N` lane branch — NEVER on `feature/<topic>` (those get carved at push time per R9), and NEVER on `kingdom` (R4). This guard is called before any commit in a lane worktree.
+
+```bash
+guard_worker_commit_branch () {
+  # Inputs:
+  #   $1 = worktree path (defaults to $PWD)
+  # Returns:
+  #   0  — current branch is acceptable for committing here
+  #   1  — R4 or R9 violation; commit MUST NOT proceed
+  local wt="${1:-$PWD}"
+  local current=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  local wt_name=$(basename "$wt")
+
+  # Case A: kingdom branch — R4 absolute ban
+  if [ "$current" = "kingdom" ]; then
+    echo "❌ R4 VIOLATION: commits forbidden on \`kingdom\` branch. It's a dirty working-tree overlay; never advances past origin/develop. Fix: git stash → git switch <worker-N> → git stash pop → re-commit." >&2
+    return 1
+  fi
+
+  # Case B: feature/* branch in any worktree — R9 absolute ban
+  case "$current" in
+    feature/*)
+      echo "❌ R9 VIOLATION: commits forbidden on \`$current\`. feature branches are CARVED from worker-N tips at push time (byte-for-byte). Fix: git branch -f $wt_name HEAD && git switch $wt_name && git branch -D $current → re-commit." >&2
+      return 1
+      ;;
+  esac
+
+  # Case C: worker-N / co-worker-N / watchman-N worktree but branch name doesn't match
+  case "$wt_name" in
+    worker-*|co-worker-*|watchman-*)
+      if [ "$current" != "$wt_name" ]; then
+        echo "❌ R21 + R9 VIOLATION: worktree \`$wt_name\` but current branch \`$current\` ≠ lane branch. Each worktree commits ONLY on its matching lane branch. Fix: git switch $wt_name (creates if missing from base)." >&2
+        return 1
+      fi
+      ;;
+  esac
+
+  return 0
+}
+```
+
+Usage in role docs and wrapper scripts:
+
+```bash
+# In workers.md task close-out, watchmans.md PR-backfill, anywhere a commit lands in a worker worktree:
+guard_worker_commit_branch "$WT" || exit 1
+git -C "$WT" add ...
+git -C "$WT" commit -m "..."
+```
+
+### `guard_lane_workspace_exists` — block dispatch if lane workspace not visible in cmux (R31 + R36)
+
+R31 says "lane infrastructure spawned + verified BEFORE any dispatch." R36 says "visible workspace progress within ~10s." Both routinely skipped. This guard makes dispatch fail-fast when the lane workspace isn't in `cmux list-workspaces` output.
+
+```bash
+guard_lane_workspace_exists () {
+  # Inputs:
+  #   $1 = lane name (worker-1, co-worker-1, watchman-1, etc.)
+  # Returns:
+  #   0  — lane workspace visible in cmux + worktree exists; dispatch may proceed
+  #   1  — R31/R36 violation; dispatch MUST NOT fire
+  local lane="$1"
+  local proj_dir="${PROJ:-$PWD}"
+
+  # Worktree check (universal, mode-agnostic per R31 expanded)
+  if [ ! -d "$proj_dir/.worktrees/$lane" ]; then
+    echo "❌ R31 VIOLATION: worktree .worktrees/$lane missing. Run attach_or_create_worktree before dispatch." >&2
+    return 1
+  fi
+
+  # cmux workspace check (PRIMARY mode only — AGENT fallback skips this)
+  if ! command -v cmux >/dev/null 2>&1; then
+    return 0  # FALLBACK/AGENT mode — worktree existence is enough
+  fi
+
+  local ws_list=$(cmux list-workspaces 2>/dev/null)
+  if [ -z "$ws_list" ]; then
+    return 0  # cmux not running; not PRIMARY mode
+  fi
+
+  # Look for the lane label in workspace titles (matches "👷 worker-1", "👑 King · ...", etc.)
+  if ! echo "$ws_list" | grep -qE "(👷|🧑‍💼|🕵️|👑).*$lane\b|\b$lane\b"; then
+    echo "❌ R31 + R36 VIOLATION: lane $lane has no workspace in cmux sidebar. Run spawn_master_workspace before dispatch. Without a visible workspace, the user sees nothing happening (R36 'stuck on fan-out' anti-pattern)." >&2
+    return 1
+  fi
+
+  return 0
+}
+```
+
+Usage:
+
+```bash
+# In kings.md Step 4 dispatch, work.md Step 4, anywhere a brief is sent to a lane:
+guard_lane_workspace_exists "$LANE" || exit 1
+cmux rpc surface.send_text "{\"surface_id\":\"...\",\"text\":\"...\"}"
+```
+
+### `guard_no_king_session_worktree_cd` — block King's main session from `cd`-ing into a lane worktree (R30 + R37)
+
+R30 says "King is orchestrator-only." R37 says "heavy processing runs IN lane workspaces, not in King's session." The combined violation looks like `cd $PROJ/.worktrees/worker-1 && git commit ...` directly from the King's session — work runs invisibly to the user (no cmux progress), bypasses the workspace pattern entirely, and breaks R30/R37.
+
+```bash
+guard_no_king_session_worktree_cd () {
+  # Inputs:
+  #   $1 = target path being cd'd into
+  #   $2 = optional caller role (defaults to whatever $KINGDOM_ROLE is set to; "king" if unset)
+  # Returns:
+  #   0  — cd is allowed (not King, or target isn't a lane worktree)
+  #   1  — R30/R37 violation; cd MUST NOT proceed
+  local target="$1"
+  local role="${2:-${KINGDOM_ROLE:-king}}"
+
+  # Non-king roles (lanes themselves) cd freely
+  [ "$role" != "king" ] && return 0
+
+  # Resolve target to absolute path
+  local abs=$(cd "$target" 2>/dev/null && pwd)
+  [ -z "$abs" ] && return 0  # target doesn't exist; let the cd fail naturally
+
+  # Detect: is target inside a .worktrees/<lane>/ directory?
+  case "$abs" in
+    */.worktrees/worker-*|*/.worktrees/co-worker-*|*/.worktrees/watchman-*)
+      local lane=$(basename "$abs")
+      echo "❌ R30 + R37 VIOLATION: King session attempting to cd into $lane worktree. King is orchestrator-only — heavy processing belongs IN the lane workspace, not the King's session. Fix: cmux rpc surface.send_text into the lane's surface, OR (for trivial reads) use git -C \"$abs\" <cmd> without changing directory." >&2
+      return 1
+      ;;
+  esac
+
+  return 0
+}
+```
+
+Usage (wraps the `cd` in role docs that the King is meant to run):
+
+```bash
+# In any King-side helper that touches lane content:
+LANE_WT="$PROJ/.worktrees/worker-1"
+
+# WRONG — direct cd from King session:
+# cd "$LANE_WT" && git commit -m "..."
+
+# RIGHT — guarded:
+guard_no_king_session_worktree_cd "$LANE_WT" || exit 1   # blocks if called from King
+# (you'll never reach here from King; lane runs the commit in its own workspace)
+
+# RIGHT for trivial reads (no cd):
+git -C "$LANE_WT" log -1 --oneline
+git -C "$LANE_WT" diff --stat
+```
+
+### `kingdom_overlay_lane` — auto-overlay a worker's diff onto kingdom as dirty (R15 enforcement)
+
+After every worker sentinel, the kingdom branch should auto-overlay the worker's diff as uncommitted changes — that's the review surface (per R15 + branch-model.md). The 2026-05-20 incident: King carved/committed on `feature/*` instead of overlaying. This helper makes the correct overlay flow callable in one line.
+
+```bash
+kingdom_overlay_lane () {
+  # Inputs:
+  #   $1 = project directory (the worktree on kingdom branch)
+  #   $2 = lane name (worker-1, worker-2, etc.)
+  #   $3 = base branch (default: develop)
+  # Returns:
+  #   0 — overlay applied as dirty changes; kingdom HEAD unchanged
+  #   1 — overlay refused (R4 guard, or git apply conflict)
+  local proj="$1" lane="$2" base="${3:-develop}"
+
+  # Guard 1: kingdom branch must be currently checked out in proj
+  local current=$(git -C "$proj" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  if [ "$current" != "kingdom" ]; then
+    echo "❌ R4 GUARD: kingdom_overlay_lane called but $proj is on $current, not kingdom. Refusing." >&2
+    return 1
+  fi
+
+  # Guard 2: kingdom HEAD must equal origin/$base (no rogue commits per R4)
+  local king_sha=$(git -C "$proj" rev-parse HEAD)
+  local base_sha=$(git -C "$proj" rev-parse "origin/$base")
+  if [ "$king_sha" != "$base_sha" ]; then
+    echo "❌ R4 GUARD: kingdom HEAD ($king_sha) ≠ origin/$base ($base_sha). Run \`git reset --hard origin/$base && git clean -fd\` first." >&2
+    return 1
+  fi
+
+  # Apply lane's diff as dirty working-tree changes
+  if ! git -C "$proj" diff "origin/$base..$lane" | git -C "$proj" apply --3way; then
+    echo "❌ overlay failed: git apply --3way returned non-zero for $lane → kingdom" >&2
+    return 1
+  fi
+
+  echo "✅ overlay applied: $lane diff is now dirty on kingdom (HEAD still $base_sha)" >&2
+  return 0
+}
+```
+
+Usage in `kings.md` Step 7 (auto-fires on every worker sentinel — no longer manual):
+
+```bash
+# After detecting a fresh sentinel for worker-N:
+kingdom_overlay_lane "$PROJ" "worker-$N" "$BASE" || return 1
+# Now user can review the combined dirty overlay in their IDE
+```
+
+### `spawn_watchman_loop` — auto-dispatch `/loop` to a watchman workspace (R39)
+
+R39 says watchman runs autonomously, but spawning a watchman workspace without sending `/loop` leaves it idle at a shell prompt. This helper fires `/loop` immediately after the watchman workspace exists.
+
+```bash
+spawn_watchman_loop () {
+  # Inputs:
+  #   $1 = watchman workspace ref (e.g., workspace:7) — output of spawn_master_workspace
+  # Returns:
+  #   0 — /loop dispatch fired
+  #   1 — dispatch failed (workspace not ready, surface not resolvable)
+  local ws_ref="$1"
+
+  # Find the surface inside this workspace (claude needs a surface to receive text)
+  local surface=$(cmux rpc workspace.list 2>/dev/null \
+    | jq -r ".[] | select(.ref == \"$ws_ref\") | .surfaces[0].ref" 2>/dev/null)
+
+  if [ -z "$surface" ] || [ "$surface" = "null" ]; then
+    echo "❌ spawn_watchman_loop: no surface found in $ws_ref" >&2
+    return 1
+  fi
+
+  # Step 1: launch claude
+  cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}" 2>/dev/null
+  sleep 1.5  # claude boot
+
+  # Step 2: send /loop
+  cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"/loop\n\"}" 2>/dev/null
+
+  return 0
+}
+```
+
+Usage in `commands/work.md` Step 0.4 (lane spawn) — wrap the existing spawn call:
+
+```bash
+# Existing: spawn_master_workspace "🕵️ watchman-1" "$PROJ/.worktrees/watchman-1" "Rose"
+WS_REF=$(spawn_master_workspace "🕵️ watchman-1" "$PROJ/.worktrees/watchman-1" "Rose")
+# v0.31.0 addition: auto-launch claude + /loop for watchmen only
+case "$WS_REF" in workspace:*) spawn_watchman_loop "$WS_REF" & ;; esac
+```
+
+---
+
 ## Workspace spawn — 4-call pattern (master workspaces)
 
 `cmux new-workspace --name "X"` doesn't make the sidebar show "X" (cmux auto-renames to the active surface title like `"✳ Claude Code"`). The kingdom enforces a **4-call** sequence per master to make name + color + description actually stick:
@@ -266,17 +516,10 @@ kingdom_reset () {
   git reset --hard "origin/$BASE"
 }
 
-kingdom_overlay_lane () {
-  local lane="$1"
-  echo "▶ Overlaying $lane changes..."
-  git diff "origin/$BASE..$lane" | git apply --3way - || {
-    echo "⚠️ Conflict overlaying $lane — resolve in working tree."
-    echo "   TODO_*.md → keep all close-suffix headers"
-    echo "   CHANGELOG.md → keep both entries; order by sub-task ID"
-    echo "   docs/test-reports/ → no real conflict (different filenames)"
-    return 1
-  }
-}
+## NOTE: kingdom_overlay_lane moved to "## Hard gates" section above (v0.31.0).
+## The new version takes (proj, lane, base) and enforces R4 — refuses to apply
+## if kingdom isn't checked out or kingdom HEAD ≠ origin/$base. Callers that
+## previously passed only (lane) MUST update to the 3-arg form.
 
 kingdom_discard_overlay () {
   git checkout kingdom

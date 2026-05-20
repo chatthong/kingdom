@@ -258,6 +258,26 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 <written when status → done OR blocked. covers: what landed, what didn't, why, follow-ups>
 ```
 
+**Forbidden brief fields (R43 — v0.31.0+).** The King's dispatch brief MUST NOT contain any of the following annotations, because they assign agent-owned closing actions (AC flips, heading-suffix updates, ledger mirror) to the user:
+
+| Forbidden text | Why banned |
+|---|---|
+| `TODO_*.md AC flip held on kingdom branch — Ter's hand` (or any `<user>'s hand` variant) | AC flips are R25 + R43 agent-owned at job-done. |
+| `(user will tick box after merge)` | Same — watchman backfills PR#, lane flips AC. |
+| `Ledger update: manual` / `manual mirror` | R25 says agent commits ledger updates in same task commit. |
+| `(human flip)` in any acceptance-criteria checklist | Same. |
+| Any field that splits ownership of the 4 closing steps (AC flip / heading suffix / Final summary / 4-step closer) between user + agent | The closing checklist is wholly lane-owned per R43. |
+
+**If a lane receives such a brief, the lane MUST reject it.** Reject template:
+
+```
+R43 violation: brief field "<exact text>" annotates agent-owned closing action as user-owned.
+Re-brief required. The closing checklist (AC flip / heading suffix / Final summary / closer) is
+wholly lane-owned per R43. Please re-dispatch with the annotation removed.
+```
+
+See `rules.md § R43` for the full rule + the 2026-05-19 worker-1 incident that motivated it.
+
 The status checkboxes are flipped sequentially as work progresses. Each Layer's bullets are checked off as their sub-agents complete. Progress notes are appended freely (one paragraph per layer-completion or significant event).
 
 ### Live workspace description (PRIMARY mode)
@@ -389,11 +409,30 @@ Lanes never receive a "queue" of multiple tasks; the King serialises task-to-lan
 
 ---
 
+## Pre-closer: the task commit (v0.31.0+ — R4 + R9 hard gate)
+
+Before the 4-step closer fires, the lane stages and commits its work on its **own lane branch** (`worker-N`). The commit lands all three things in one atom: the project source change, the project task-ledger update (per R25), and the kingdom task-file update.
+
+**MANDATORY:** call `guard_worker_commit_branch "$PWD"` BEFORE every `git commit`. The helper is in `_primitives.md § Hard gates` and refuses to proceed if:
+
+- Current branch is `kingdom` → R4 violation (kingdom never holds commits)
+- Current branch is `feature/<topic>` → R9 violation (feature is carved from `worker-N` at push time, byte-for-byte)
+- Current branch doesn't match the worktree's lane name → R21 + R9 violation (worktree `.worktrees/worker-1/` must commit on branch `worker-1`)
+
+```bash
+# Inside a lane worktree, AT TASK CLOSE-OUT, before any other commit step:
+guard_worker_commit_branch "$PWD" || exit 1   # blocks bad-branch commits
+git -C "$PWD" add <files-touched>
+git -C "$PWD" commit -m "<lane sub-task-id>: <one-line> — closes $SUBTASK_ID (PR #pending)"
+```
+
+**Why this guard exists (2026-05-20 incident):** a King session, working in `worker-1`'s worktree, committed on `feature/todo-cleanup-fe-p0-found-5-closure-mark` (carved prematurely) then FF-merged that onto `kingdom`. Two simultaneous violations: R9 (feature ≠ worker-1 tip byte-for-byte; feature WAS the work) and R4 (kingdom became a commit branch). Recovery required `git branch -f worker-1 <sha>`, `git branch -D feature/...`, `git reset --hard origin/develop`, then re-overlay via `kingdom_overlay_lane`. The guard would have caught it at the `git commit` line.
+
 ## The 4-step closer (mandatory for every worker task)
 
 The worker prompt has **four mandatory closing actions** done at the end of each task, in this order:
 
-> **Note:** The task file (see "Task file" section above) is an auxiliary parallel artifact — like the claim file, it runs alongside the task lifecycle. The task file's "Final summary" section is written and status flipped to done/blocked **before step 1 of the closer fires.** The closer itself is always exactly 4 steps.
+> **Note:** The task file (see "Task file" section above) is an auxiliary parallel artifact — like the claim file, it runs alongside the task lifecycle. The task file's "Final summary" section is written and status flipped to done/blocked **before step 1 of the closer fires.** The closer itself is always exactly 4 steps. The lane's `git commit` (per the "Pre-closer" section above) lands BEFORE the closer fires too — closer step 1 (raw log write) is the FIRST closer action; the task commit is its predecessor.
 
 1. **Write raw** → `<LOGS>/raw/<UTC>__<sub>-<lane-name>__<sub-task-id>.md` (full raw output; lane embedded for grep)
 2. **Write curated** → `<LOGS>/<UTC>__<lane-name>__<sub-task-id>.md` with `## TL;DR` at top (machine-readable digest; lane embedded)

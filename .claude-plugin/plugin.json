@@ -1,7 +1,7 @@
 {
   "name": "kingdom",
-  "version": "0.30.0",
-  "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees and native cmux.app. /kingdom:day runs the full daily cycle in one command. Pre-warmed sub-agent pool makes Layer-3 fan-outs effectively instant. Auto-generated PR bodies from task files. A King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own cmux.app workspace. Calibrated philosophy: 60% conservative core + 40% industrial overlay. Mandatory exhaustive pattern grep before any implementation. Kingdom branch is a WORKING-TREE OVERLAY for review (never commit on kingdom). PRs carve from worker-N tip byte-for-byte. Two-tier gate. Domain-agnostic. Bootstrap with /kingdom:init; run the day with /kingdom:day; audit with /kingdom:update; close with /kingdom:exit. Won't touch your project files, develop/main branches, shell config, or git config.",
+  "version": "0.31.0",
+  "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees and native cmux.app. /kingdom:work runs the full daily cycle in one command. v0.31.0 hardens R4/R9/R30/R36/R37 with bash-level gate helpers (guard_worker_commit_branch / guard_lane_workspace_exists / guard_no_king_session_worktree_cd / kingdom_overlay_lane / spawn_watchman_loop) — prose rules turned into call-site blocks. Tier 1 now capped at exactly 10 rules. A King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own cmux.app workspace. Kingdom branch is a WORKING-TREE OVERLAY for review (never commit on kingdom). PRs carve from worker-N tip byte-for-byte. Two-tier gate. Domain-agnostic. Bootstrap with /kingdom:init; run the day with /kingdom:work; close with /kingdom:save. Won't touch your project files, develop/main branches, shell config, or git config.",
   "author": {
     "name": "kingdom contributors"
   },

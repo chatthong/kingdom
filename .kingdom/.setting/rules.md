@@ -7,6 +7,29 @@
 
 ---
 
+## 🔒 Tier 1 cap — exactly 10 rules, no more (v0.31.0+)
+
+Tier 1 is reserved for rules whose violation is **irreversible** (data loss / force-push / destructive op), **architecturally fatal** (the kingdom doesn't work as designed without them), or a **gateway** (without it, no other rule loads). To stay disciplined, **Tier 1 holds exactly 10 rules**. New iron-clad candidates must displace an existing Tier 1 rule, not add to the count.
+
+| # | Rule | Why Tier 1 |
+|---|---|---|
+| **R1** | Push approval is single-shot + PR-specific | Irreversible remote action |
+| **R2** | Never force-push to `main` / `develop` | Irreversible data loss |
+| **R4** | Never edit or commit on `kingdom` branch | Overlay-model integrity; silent fatal if broken |
+| **R5** | Destructive ops require explicit target confirmation | Irreversible data loss |
+| **R14** | Reads ALL context at session start (rules → CLAUDE → memory → watchman) | Gateway — without it, no other rule actually loads |
+| **R22** | Closer fires on EVERY task completion | Audit-trail integrity |
+| **R30** | King is orchestrator-only — never executes task work | Architectural — whole kingdom assumes this |
+| **R31** | Lane infrastructure spawned + verified BEFORE any dispatch | Dispatch fails silently without it |
+| **R36** | Visible workspace progress within ~10s of `/kingdom:work` | User trust contract — prevents "stuck on fan-out" failure mode |
+| **R42** | Every parallel fan-out uses `_bounded_wait`, never bare `wait` | Prevents kingdom-frozen failure mode |
+
+**Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
+
+Tier 1 = 10. Tier 2 ≈ 27. Tier 3 = 5. Total = 42 rules.
+
+---
+
 ## 🔴 Tier 1 — IRON-CLAD (never violate, ever, no override)
 
 Violating Tier 1 = kingdom is worse than running solo.
@@ -169,24 +192,42 @@ Per-role idle behaviour:
 
 ### R33. King MUST read existing task state BEFORE dispatching new tasks — Tier 1 (v0.25.0+)
 
-At session start (per R14) and at every `/kingdom:work` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**:
+At session start (per R14) and at every `/kingdom:work` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**.
+
+**Pre-scan (v0.31.0+ — mandatory before reading task files):** task files are frozen snapshots; if `origin` advanced overnight via merge or recovery PR, the resume queue built from disk alone will offer to "resume" work that's already shipped. Three commands run FIRST:
+
+0.a. **`git -C <project> fetch origin --prune`** — pull all remote refs and prune deleted ones. Mandatory; cheap (~1s).
+0.b. **`gh -R <repo> pr list --state merged --limit 30 --json number,headRefName,mergedAt`** — cache the recent merge log.
+0.c. **For each lane worktree:** compare its branch's tip commit against `origin/${BASE}`. Three outcomes:
+   - **Equivalent work merged** (lane's commit message subject or PR title appears in the merged-PR log, including `recovery/pr-<N>-*` recovery branches) → mark the task **obsolete (shipped)**, surface in the `resume-queue` card as a CLEANUP candidate, not a resume candidate. Lane needs `worktree remove` + branch FF to base, not re-dispatch.
+   - **Lane base is an ancestor of `origin/${BASE}` but lane commit is NOT on develop** → genuine in-flight work; proceed to resume-queue classification below.
+   - **Lane base diverged from `origin/${BASE}`** → flag as `needs rebase`, surface in decision queue.
+
+Then proceed with the disk scan:
 
 1. **`ls -t .kingdom/<project>/tasks/*.md`** — newest first.
 2. For each task file: read `## Status` checkboxes. Classify:
    - `done` / `cancelled` → ignore.
-   - `planning` / `executing` / `verifying` (no matching sentinel in `<LOGS>/done/`) → **resume queue**.
+   - `planning` / `executing` / `verifying` (no matching sentinel in `<LOGS>/done/`) → cross-reference with the 0.c outcome:
+     - if lane marked **obsolete (shipped)** → move to **cleanup queue**, NOT resume queue.
+     - otherwise → **resume queue**.
    - `blocked` → **decision queue** (lane needs user input or dependency resolution).
 3. **Resume queue takes priority over new dispatch.** Lanes already in-flight get re-briefed with `[RESUME]` flag + same task ID + their last `## Progress notes` line. NEVER open a fresh task file for a lane that already has an in-flight one.
 4. **Decision queue items get surfaced in the `suggested-task` card** with `→ Unblock <task-id>` as a candidate so the user can resolve before new work loads.
-5. Only AFTER resume + decision queues are addressed does Step 4 auto-dispatch reach for new tasks from the project ledger.
+5. **Cleanup queue items** are surfaced with `→ Discard obsolete lane <lane>` (per R5 destructive-op rules) so the user can confirm before `worktree remove` + branch reset. NEVER auto-discard.
+6. Only AFTER resume + decision + cleanup queues are addressed does Step 4 auto-dispatch reach for new tasks from the project ledger.
 
 **Render** the `resume-queue` card (new in v0.25.0) right after `daily-status` if any in-flight task files exist.
 
-**Anti-pattern:** King ignores `.kingdom/<project>/tasks/2026-05-19T0353Z__worker-1__FE-P0-FOUND.5.md` (status: discovery-complete, 2 soft blockers), starts drafting a fresh dispatch for worker-1 from scratch. Now worker-1 has TWO task files for overlapping work, the old one rots, sentinels mismatch, audit-trail corrupts.
+**Anti-pattern (1):** King ignores `.kingdom/<project>/tasks/2026-05-19T0353Z__worker-1__FE-P0-FOUND.5.md` (status: discovery-complete, 2 soft blockers), starts drafting a fresh dispatch for worker-1 from scratch. Now worker-1 has TWO task files for overlapping work, the old one rots, sentinels mismatch, audit-trail corrupts.
 
-**Why Tier 1:** ignoring in-flight task files = orphaning real work + duplicating effort + confusing the audit trail. This is correctness, not cosmetic.
+**Anti-pattern (2 — v0.31.0):** King reads the on-disk task file, sees "executing — smoke test pending" on worker-1, builds a resume queue from disk alone, offers the user "resume worker-1 + run smoke test." Meanwhile `origin/develop` already shipped the work via `recovery/pr-262-consent-banner` 8 hours earlier. Re-running smoke + opening a new PR would create a duplicate of the merged commit → conflict → recovery-PR cycle #3. Skipping the 0.a/0.b/0.c pre-scan = repeating the same incident every morning until the user manually pulls.
 
-**Incident that motivated this rule (2026-05-19):** King session greeted user with "Suggested next tasks:" candidates pulled from the project ledger, while `.kingdom/bfg-swt/tasks/` had a worker-1 task file from the morning with Status=discovery-complete waiting on 2 user-decision blockers. The right behaviour: open with "Resume worker-1 FE-P0-FOUND.5? Two blockers need your call: A=<X> B=<Y>" — that's both decision-queue item + resume candidate in one prompt. King missed it entirely because R14 read-order didn't enforce reading task state, only meta-state (memory, watchman state, README).
+**Why Tier 1:** ignoring in-flight task files = orphaning real work + duplicating effort + confusing the audit trail. Re-shipping already-merged work = conflict storm + recovery-PR cycle. This is correctness, not cosmetic.
+
+**Incident #1 that motivated this rule (2026-05-19):** King session greeted user with "Suggested next tasks:" candidates pulled from the project ledger, while `.kingdom/bfg-swt/tasks/` had a worker-1 task file from the morning with Status=discovery-complete waiting on 2 user-decision blockers. The right behaviour: open with "Resume worker-1 FE-P0-FOUND.5? Two blockers need your call: A=<X> B=<Y>" — that's both decision-queue item + resume candidate in one prompt. King missed it entirely because R14 read-order didn't enforce reading task state, only meta-state (memory, watchman state, README).
+
+**Incident #2 that motivated the v0.31.0 pre-scan addition (2026-05-20):** Morning `/kingdom:work bfg-swt cap=5` session. King read worker-1 + worker-3 task files (both `executing — smoke test pending`), built a resume queue, drafted a "ship the dependency chain" plan, asked for go. User asked "did you cross check task ledgers?" — that triggered a `git fetch` and the truth came out: both PRs had already shipped to `origin/develop` 8 hours earlier via `recovery/pr-262-consent-banner` and `recovery/pr-266-admin-activation`. Local kingdom was 9 commits behind. 0 jobs shipped that morning — entire session spent chasing ghosts. Root cause: R33 required reading task files but not fetching first. Fixed in v0.31.0 by adding 0.a/0.b/0.c pre-scan.
 
 ### R34. Tier-1 rules override memory notes — Tier 1 (v0.26.0+)
 
@@ -643,6 +684,66 @@ R29 fires first (per-push, no remote movement). R26 fires later when the lead me
 **Aggregation:** watchman collects each sub-agent's sentinel, then writes `WATCH_TICK_<UTC>.md` as the per-tick summary. King reads the latest `WATCH_TICK_*.md` at session start (R14, step 7).
 
 **Cap enforcement mechanics:** before spawning each sub-agent, watchman checks its internal `spawned_this_tick` counter. If `spawned_this_tick >= haikuCapPerTick`, remaining work items are queued for the next tick — not dropped.
+
+### R43. Job-done closing actions are agent-owned — Tier 2 (v0.31.0+)
+
+The closing checklist at task completion is **wholly the lane's responsibility**, never the user's:
+
+1. Flip acceptance-criteria checkboxes in the project task-ledger (`TODO_Webshop.md` / `TODO_Backend.md` / `TODO_Master.csv` / `STEP.md`).
+2. Update the sub-task heading suffix: append `— ✅ closed YYYY-MM-DD (PR #N)` (or `(PR #pending)` — watchman backfills the number per R27).
+3. Write the task file's `## Final summary` section.
+4. Run the 4-step closer (raw → curated → `master_agent.log` → sentinel).
+
+All four land in the lane's single task commit, alongside the code change. The user's hand is on **push approval (R1)** and **dispatch decisions (R44)** — NEVER on the audit-trail flips that prove the work is done.
+
+**King's dispatch brief MUST NOT annotate any of these as user-owned.** Forbidden brief fields:
+
+| Forbidden text | What it really means | Fix |
+|---|---|---|
+| `TODO_*.md AC flip held on kingdom branch — Ter's hand` (or any `<user>'s hand` variant) | "King is leaving this for the user" | Drop the field. Worker flips at job-done. |
+| `(user will tick box after merge)` | Same — passing audit-trail work to user | Drop. Watchman handles post-merge per R27. |
+| `Ledger update: manual` / `manual mirror` | User is being assigned ledger maintenance | Drop. R25 says agent-owned. |
+| `(human flip)` in any AC checklist | Same | Drop. |
+
+**If a lane receives such a brief, the lane MUST reject it.** Reject template:
+
+```
+R43 violation: brief field "<exact text>" annotates agent-owned closing action as user-owned.
+Re-brief required. The closing checklist (AC flip / heading suffix / Final summary / closer)
+is wholly lane-owned per R43. Please re-dispatch with the annotation removed.
+```
+
+**Anti-pattern (2026-05-19 worker-1 incident):** task file header line `TODO_Webshop.md AC flip held on kingdom branch — Ter's hand`. Result: the AC flip never happened in worker-1's commit, leaked into the kingdom branch as unstaged drift, and the King later (2026-05-20 morning) read the same field and pre-emptively asked the user to "decide how to ship the AC flip" — burning 15 minutes of user time on a step that should have been silent + automatic.
+
+**Why Tier 2 (not Tier 1):** correctness, not irreversibility. A lane that ships code but leaves the AC unflipped reads as "in progress" in the ledger even though the work merged — confusing but recoverable. The user can spot it and tell the agent to flip it. Demoted from the original Tier-1 draft per the v0.31.0 Tier-1-cap legend.
+
+**Cross-references:** R22 (closer fires on EVERY task completion), R25 (update BOTH files in the same commit), R32 (workers don't wait — they pull; "Ter's hand" is the inverse failure where King stages user-blocking when it shouldn't).
+
+### R44. After user `go`, King executes — no further mode questions — Tier 2 (v0.31.0+)
+
+When the user replies `go` (or `push`, `yes`, `proceed`, `do it`, or any explicit affirmation) to a dispatch plan, the King MUST execute. **Asking another question — "pick execute mode m/a/m1/self?", "which lane first?", "spawn workspace now or later?" — is an R44 violation.**
+
+The user's `go` collapses ALL remaining branch points into the kingdom's defaults:
+
+| Branch point | Default that `go` collapses to | Override |
+|---|---|---|
+| Execute mode | `cmux-lane` (spawn workspace, dispatch via `cmux send`) per R36/R37/R38 | `kingdom.json.dispatch.defaultExecuteMode` |
+| Lane order | Smallest task first (fastest to ship), then size-ascending | brief-specified order if present |
+| Workspace spawn vs reuse | Reuse existing lane workspaces (R31), spawn missing ones | always-spawn if `kingdom.json.dispatch.alwaysFreshSpawn` |
+| Push approval | NOT collapsed — R1 still gates every `git push` | none (R1 is iron-clad) |
+| Destructive op approval | NOT collapsed — R5 still gates every `rm -rf` / `branch -D` / etc. | none (R5 is iron-clad) |
+
+**What `go` does NOT collapse:** R1 push approval (still required per-PR), R5 destructive-op approval (still required with explicit target). Those keep their own gates because they're irreversible. EVERYTHING ELSE the King has already decided in the dispatch plan card — execute it.
+
+**Anti-pattern (2026-05-20 morning incident):** User asked `/kingdom:work bfg-swt cap=5`, got a 3-task dispatch plan, replied `go`. King wrote the 3 task files, then asked `Pick execute mode: m — master-direct / a — Agent sub-agents / m1 self2 self3 — mix / self — you drive`. User had to reply a SECOND time (`what ever just fucking do working i run this at 10am stilkl question`) to get any actual work to start. The second prompt was an R44 violation: the user's `go` was already an execute trigger.
+
+**Combined R36+R37+R44 anti-pattern (same morning):** After the second `go`, King STILL didn't spawn workspaces — went straight to inline `cd $HOME/Desktop/Bonfire/bfg-swt/.worktrees/worker-1; git commit ...` in its OWN session. R36/R37/R38 say processing runs in lane workspaces; R44 says `go` triggers the kingdom's default execute mode (`cmux-lane`). Both were skipped. Worker-1 commit landed but in the wrong session, with no visible progress in the cmux sidebar, and worker-2 + worker-3 work was abandoned because the user interrupted to ask "what why not spawn workspace?"
+
+**Recovery when violated:** if King realises mid-session it asked a post-`go` question, it should (a) factual-ack in chat: "R44 violation: I asked for execute-mode after your `go`. Defaulting to `cmux-lane` and proceeding"; (b) execute the default immediately; (c) log `RULE_VIOLATION R44` to `master_agent.log` per R34's self-detect protocol; (d) NEVER block on user response.
+
+**Why Tier 2 (not Tier 1):** UX correctness, not irreversibility. A spurious second question wastes 1-2 user turns but doesn't lose data. Demoted from the original Tier-1 draft per the v0.31.0 Tier-1-cap legend.
+
+**Cross-references:** R30 (King is orchestrator-only — once dispatch decided, execute; don't re-decide), R36 (visible-first — `go` triggers workspace-spawn within ~10s), R37 (heavy processing in lanes), R38 (sub-agent spawns are tabs or lane dispatch, never in-process Agent in King's session).
 
 ---
 

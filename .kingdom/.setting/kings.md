@@ -220,6 +220,10 @@ When the right approach is uncertain, dispatching the SAME task to 2+ workers wi
 DISPATCH_A_BRIEF="Approach A (minimal): <one-line>. Constraints: <X>"
 DISPATCH_B_BRIEF="Approach B (full refactor): <one-line>. Constraints: <Y>"
 
+# v0.31.0 R31+R36 hard gate before any dispatch:
+guard_lane_workspace_exists "worker-1" || { echo "❌ worker-1 not spawned"; exit 1; }
+guard_lane_workspace_exists "worker-2" || { echo "❌ worker-2 not spawned"; exit 1; }
+
 # Dispatch in parallel
 cmux send --workspace "$WORKER_WS_1" -- "$DISPATCH_A_BRIEF"
 cmux send --workspace "$WORKER_WS_1" Enter
@@ -725,6 +729,13 @@ Tab-spawned sub-agents follow the 5-step closer (Step 5 = close own tab via
 cmux tab-action --action close --surface \$CMUX_SURFACE_ID).
 Background Agent() spawns are opt-in only (set spawn_mode: background in brief)."
 
+# v0.31.0 R31+R36 hard gate: refuse to send brief if worker-1's cmux workspace
+# is missing from the sidebar. Without this guard, the brief was historically
+# routed into a void: dispatch returned success, no lane ever saw it, King
+# polled forever for a sentinel that never came. The 2026-05-20 morning session
+# burned ~3 hours on exactly this failure mode.
+guard_lane_workspace_exists "worker-1" || { echo "❌ worker-1 workspace missing — spawn first"; exit 1; }
+
 cmux send --workspace "$WORKER_WS_1" -- "$PROMPT"
 cmux send --workspace "$WORKER_WS_1" Enter
 ```
@@ -1010,10 +1021,16 @@ git checkout kingdom
 git fetch origin
 git reset --hard "origin/$BASE"
 
-# Overlay each gated lane's CHANGES onto the working tree (no commits)
+# Overlay each gated lane's CHANGES onto the working tree (no commits).
+#
+# v0.31.0: route through kingdom_overlay_lane helper (in _primitives.md).
+# The helper enforces R4 at call-site: refuses to apply if kingdom branch
+# isn't checked out, or if kingdom HEAD ≠ origin/$BASE (which would mean
+# a rogue commit landed on kingdom — common 2026-05-20 failure mode where
+# the King FF-merged a feature branch onto kingdom).
 for LANE in $(ls -t "$LOGS/done/"*.flag | xargs -I{} basename {} | sed 's/^.*__\([^.]*\).flag/\1/' | sort -u); do
   echo "▶ Overlaying $LANE..."
-  if ! git diff "origin/$BASE..$LANE" | git apply --3way -; then
+  if ! kingdom_overlay_lane "$PWD" "$LANE" "$BASE"; then
     echo "⚠️ Conflict overlaying $LANE — resolve in working tree"
     echo "   Common cases:"
     echo "     - TODO_*.md  → keep all close-suffix headers from each lane"

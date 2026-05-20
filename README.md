@@ -18,9 +18,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-`v0.30.0: R42 bounded-wait fixes the "stuck on fan-out" hang. Plus resync wiring, parallel_edit_fanout body, self-care stale-file detection.`
+`v0.31.0: Hard gates replace prose. 4 new bash helpers BLOCK R4/R9/R30/R36/R37 violations at call-site instead of describing them in rules.md. Tier 1 capped at 10. R43 + R44 added (closing-actions agent-owned; go = no more questions).`
 
-![Version](https://img.shields.io/badge/version-0.30.0-success)
+![Version](https://img.shields.io/badge/version-0.31.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
