@@ -350,7 +350,7 @@ kingdom_overlay_lane "$PROJ" "worker-$N" "$BASE" || return 1
 
 ### `spawn_watchman_loop` — auto-dispatch `/loop` to a watchman workspace (R39)
 
-R39 says watchman runs autonomously, but spawning a watchman workspace without sending `/loop` leaves it idle at a shell prompt. This helper fires `/loop` immediately after the watchman workspace exists.
+R39 says watchman runs autonomously. Claude REPL is already up after `spawn_master_workspace` (v0.31.1+ — explicit `claude\n` baked into the spawn helper). This helper does the **watchman-only extra step**: send `/loop\n` so the watchman starts ticking immediately.
 
 ```bash
 spawn_watchman_loop () {
@@ -361,7 +361,8 @@ spawn_watchman_loop () {
   #   1 — dispatch failed (workspace not ready, surface not resolvable)
   local ws_ref="$1"
 
-  # Find the surface inside this workspace (claude needs a surface to receive text)
+  # Find the surface inside this workspace (claude REPL is the receiver — already
+  # launched by spawn_master_workspace Step 1b)
   local surface=$(cmux rpc workspace.list 2>/dev/null \
     | jq -r ".[] | select(.ref == \"$ws_ref\") | .surfaces[0].ref" 2>/dev/null)
 
@@ -370,11 +371,11 @@ spawn_watchman_loop () {
     return 1
   fi
 
-  # Step 1: launch claude
-  cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}" 2>/dev/null
-  sleep 1.5  # claude boot
-
-  # Step 2: send /loop
+  # Send /loop to the already-running claude REPL.
+  # v0.31.1: the prior `claude\n` send + sleep was removed — that's now
+  # spawn_master_workspace's job. Sending /loop here while claude is still
+  # booting is safe because cmux buffers surface input until the receiver is
+  # ready (Step 1b's 1.5s sleep gives the REPL time to attach).
   cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"/loop\n\"}" 2>/dev/null
 
   return 0
@@ -386,9 +387,158 @@ Usage in `commands/work.md` Step 0.4 (lane spawn) — wrap the existing spawn ca
 ```bash
 # Existing: spawn_master_workspace "🕵️ watchman-1" "$PROJ/.worktrees/watchman-1" "Rose"
 WS_REF=$(spawn_master_workspace "🕵️ watchman-1" "$PROJ/.worktrees/watchman-1" "Rose")
-# v0.31.0 addition: auto-launch claude + /loop for watchmen only
+# v0.31.0+: claude is already running by the time spawn_master_workspace returns;
+# this only adds the /loop dispatch for watchmen.
 case "$WS_REF" in workspace:*) spawn_watchman_loop "$WS_REF" & ;; esac
 ```
+
+---
+
+## Orientation — Haiku-army doc read (v0.31.1+, R45)
+
+**Every role** (King, worker-N, co-worker-N, watchman-N) calls this when it needs the project's big picture — at session start, at new-task receipt, or any time it's *not sure* about a documented convention. The protocol fans out cheap Haiku reads in parallel so the calling role's own context window stays uncluttered.
+
+### `haiku_read_docs_orientation` — parallel doc digest
+
+```bash
+haiku_read_docs_orientation () {
+  # Inputs:
+  #   $1 = ROLE         — "king" | "worker-1" | "co-worker-2" | "watchman-1" | etc.
+  #   $2 = PROJ         — project root
+  #   $3 = LOGS         — kingdom logs dir (digests + final context file land here)
+  # Env (optional):
+  #   HAIKU_CAP         — max parallel Haiku sub-agents (default 10, hard ceiling)
+  # Returns:
+  #   prints path to consolidated context file on stdout
+  local role="$1" proj="$2" logs="$3"
+  local cap="${HAIKU_CAP:-10}"; [ "$cap" -gt 10 ] && cap=10
+  local utc=$(date -u +%Y-%m-%dT%H%MZ)
+  local digest_dir="$logs/.${role}_${utc}_doc_digests"
+  local out="$logs/.${role}_${utc}_doc_context.md"
+  mkdir -p "$digest_dir"
+
+  # === Phase 1: "you are here" files ===
+  # readme.md / index.md / todo*.md in EVERY directory (not just root + docs/).
+  # These are the project's wayfinding — read first so subsequent doc reads land
+  # in the right mental scaffold.
+  #
+  # v0.31.1 fix: dropped the `eval "find ..."` indirection. eval was redundant
+  # and introduced a quoting vulnerability if $proj contains special chars.
+  # Backslash-escaped parens for the prune group work directly in bash.
+  local phase1_files
+  phase1_files=$(find "$proj" \
+    -type d \( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name target -o -name .venv -o -name __pycache__ \) -prune \
+    -o -type f \( -iname 'readme.md' -o -iname 'index.md' -o -iname 'todo*.md' \) -print 2>/dev/null | head -30)
+
+  # === Phase 2: full markdown landscape (minus Phase 1) ===
+  # v0.31.1: also dropped eval here for the same reason.
+  local all_md
+  all_md=$(find "$proj" \
+    -type d \( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name target -o -name .venv -o -name __pycache__ -o -name test-reports \) -prune \
+    -o -type f -name '*.md' -print 2>/dev/null)
+
+  # Subtract Phase 1; sort by mtime desc; cap to 20 newest.
+  # v0.31.1 fix: all variable expansions quoted to preserve filenames with spaces.
+  # Previous version word-split paths like `docs/My Architecture.md` before sort.
+  local phase2_files
+  phase2_files=$(comm -23 \
+    <(printf '%s\n' "$all_md"      | sort -u) \
+    <(printf '%s\n' "$phase1_files" | sort -u) \
+    | while IFS= read -r f; do
+        [ -z "$f" ] && continue
+        [ -f "$f" ] || continue
+        # Try BSD stat (-f) first, then GNU stat (-c) — explicit if-else avoids
+        # silent empty-output from a partially-succeeding stat (rare but real
+        # on minimal Alpine containers where neither flavour is GNU).
+        if mtime=$(stat -f '%m' "$f" 2>/dev/null); then :
+        else mtime=$(stat -c '%Y' "$f" 2>/dev/null); fi
+        [ -n "$mtime" ] && printf '%s\t%s\n' "$mtime" "$f"
+      done | sort -rn | head -20 | cut -f2-)
+
+  # === Phase 1 fan-out — read wayfinding files first ===
+  # Up to $cap Haiku in parallel; bounded by _bounded_wait so one slow read
+  # doesn't hang the orientation step (R42).
+  local pids="" count=0
+  for f in $phase1_files; do
+    [ "$count" -ge "$cap" ] && break
+    local slug=$(echo "$f" | sed 's|/|_|g; s|^[._]*||; s|\.md$||')
+    (
+      Agent \
+        model="haiku" \
+        prompt="Read $f. Write a 5-bullet digest covering:
+1. What this file is FOR (purpose / audience)
+2. Where it sits in the project (root readme? subdir todo? api index?)
+3. Current state it captures (status / open work / decisions locked in)
+4. Cross-refs it makes (other docs it points to)
+5. Anything a new contributor MUST know from this file before touching nearby code
+Output ONLY to $digest_dir/phase1__${slug}.md — no other edits."
+    ) &
+    pids="$pids $!"; count=$((count+1))
+  done
+  _bounded_wait 45 $pids   # 45s budget; phase1 files are short
+
+  # === Phase 2 fan-out — full doc landscape ===
+  pids=""; count=0
+  for f in $phase2_files; do
+    [ "$count" -ge "$cap" ] && break
+    local slug=$(echo "$f" | sed 's|/|_|g; s|^[._]*||; s|\.md$||')
+    (
+      Agent \
+        model="haiku" \
+        prompt="Read $f. Write a 5-bullet digest:
+1. One-line purpose
+2. Key conventions / patterns / decisions stated here
+3. Anything that would override default behaviour for a lane working in this area
+4. Pointers to deeper docs it references
+5. Last-modified context (is this file fresh or stale?)
+Output ONLY to $digest_dir/phase2__${slug}.md — no other edits."
+    ) &
+    pids="$pids $!"; count=$((count+1))
+  done
+  _bounded_wait 60 $pids   # 60s budget; phase2 docs can be longer
+
+  # === Consolidate ===
+  {
+    echo "# Doc orientation for $role — $utc"
+    echo ""
+    echo "## Source files digested"
+    echo ""
+    echo "### Phase 1 — wayfinding (readme / index / todo)"
+    printf '%s\n' "$phase1_files" | sed 's/^/- /'
+    echo ""
+    echo "### Phase 2 — broader docs"
+    printf '%s\n' "$phase2_files" | sed 's/^/- /'
+    echo ""
+    echo "---"
+    echo ""
+    echo "## Phase 1 digests"
+    echo ""
+    for d in "$digest_dir"/phase1__*.md; do
+      [ -f "$d" ] && { echo "### $(basename "$d" .md | sed 's/^phase1__//')"; cat "$d"; echo ""; }
+    done
+    echo "## Phase 2 digests"
+    echo ""
+    for d in "$digest_dir"/phase2__*.md; do
+      [ -f "$d" ] && { echo "### $(basename "$d" .md | sed 's/^phase2__//')"; cat "$d"; echo ""; }
+    done
+  } > "$out"
+
+  echo "$out"
+}
+```
+
+### Calling protocol (R45)
+
+| Caller | When | What it does with the output |
+|---|---|---|
+| **King** | At `/kingdom:work` session start, immediately after R14 context read | Reads the consolidated file once; uses it to ground all dispatch briefs that tick |
+| **worker-N / co-worker-N** | At task brief receipt (before any code edit, Layer 1 of the 4-layer worker flow) | Reads ONLY the Phase 1 wayfinding section + any Phase 2 digest matching its task keywords (the calling role decides relevance) |
+| **watchman-N** | Once at spawn; then refreshed every 10 `/loop` ticks (or when any *.md in root/docs/ changes mtime) | Becomes the doc-context cache for Duty 1's senior-dev review (see `watchmans.md` § Duty 1) |
+| **Any role, "not sure"** | When the role can't confirm a pattern, convention, or decision from its current context | One-shot call; reads the new digest before answering / dispatching |
+
+**Hard ceiling:** `HAIKU_CAP=10` per call (the user-facing limit; helper enforces). If a project has >30 `.md` files, Phase 2 reads only the 20 newest — older docs are deemed less likely to reflect current truth. If full coverage is needed, raise the cap or split into multiple calls.
+
+**Cost rough-out:** each Haiku call ~300 input + ~150 output tokens for a 5-bullet digest. 30 files × 450 tokens ≈ 14k Haiku tokens per orientation pass. At Haiku 4.5 pricing this is sub-penny. Fast (parallel) and cheap by design — that's why it's the doc-reading mechanism instead of having the calling role read everything itself.
 
 ---
 
@@ -422,16 +572,33 @@ spawn_master_workspace () {
       ;;
   esac
 
-  # Step 1: create the workspace (capture ref via grep -oE — awk pipelines break in some shells)
+  # Step 1: create the workspace (capture ref via grep -oE — awk pipelines break in some shells).
+  #
+  # v0.31.1: dropped `--command "claude"`. Consumer-tested 2026-05-21: the flag
+  # was unreliable across cmux versions — workspaces frequently came up at a
+  # bash prompt and King's subsequent `cmux send -- "<brief>"` landed in the
+  # shell. Explicit post-spawn `claude\n` (Step 1b below) replaces it; the
+  # `spawn_watchman_loop` helper already proved this pattern works.
   local result=$(cmux new-workspace \
     --name "$label" \
     --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
     --cwd "$path" \
-    --command "claude" \
     --focus false \
     $window_flag 2>&1)
   local ref=$(echo "$result" | grep -oE 'workspace:[0-9]+' | head -1)
   [ -z "$ref" ] && { echo "❌ spawn failed: $result" >&2; return 1; }
+
+  # Step 1b (v0.31.1): explicitly launch claude in the workspace's surface.
+  # Without this, the workspace sits at a bash prompt and dispatch briefs
+  # sent later via `cmux send` land in the shell — silent failure mode.
+  local surface=$(cmux rpc workspace.list 2>/dev/null \
+    | jq -r ".[] | select(.ref == \"$ref\") | .surfaces[0].ref" 2>/dev/null)
+  if [ -n "$surface" ] && [ "$surface" != "null" ]; then
+    cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}" 2>/dev/null
+    sleep 1.5   # claude boot — same budget proven by spawn_watchman_loop
+  else
+    echo "⚠️ $label: no surface found post-spawn; claude REPL not launched. Dispatch will land in shell." >&2
+  fi
 
   # Step 2: FORCE sidebar name (override "✳ Claude Code" auto-title)
   cmux workspace-action --action rename --workspace "$ref" --title "$label" 2>/dev/null
@@ -460,7 +627,9 @@ All four calls silent-on-failure — descriptions/colors/badges are cosmetic, no
 
 ---
 
-## Sub-agent pool — pre-warmed `claude -p` processes (v0.18.0+)
+## Sub-agent pool — pre-warmed `claude -p` processes (v0.18.0+, v0.31.1 Sonnet default)
+
+**Model default (v0.31.1+):** lane sub-agents default to **Sonnet**. Workers and co-workers are Opus, but their sub-agents handle one logical chunk each — Sonnet is the right cost/quality fit. Override via `kingdom.json.cmux.subAgentPool.model` (`"sonnet"` default, `"haiku"` for cheap reads only, `"opus"` for sensitive design work).
 
 ```bash
 init_subagent_pool () {
@@ -474,8 +643,13 @@ spawn_pool_slot () {
   local surface=$(echo "$result" | grep -oE 'surface:[0-9]+' | head -1)
   [ -z "$surface" ] && return 1
 
-  cmux rename-tab --surface "$surface" -- "🐱 sub · idle (pool)"
-  cmux send --surface "$surface" -- "claude -p 'AWAITING_DISPATCH'"
+  # v0.31.1: read model from config (default sonnet) and pass to claude -p.
+  # Pool slots are long-lived; the cost gap between Opus and Sonnet matters here.
+  local pool_model=$(jq -r '.cmux.subAgentPool.model // "sonnet"' "$KJSON")
+  cmux rename-tab --surface "$surface" -- "🐱 sub · idle (pool, $pool_model)"
+  # v0.31.1 fix: --model must come BEFORE -p (verified against cmux.md syntax).
+  # Wrong: `claude -p --model sonnet`  Right: `claude --model sonnet -p`
+  cmux send --surface "$surface" -- "claude --model $pool_model -p 'AWAITING_DISPATCH'"
   cmux send --surface "$surface" Enter
 
   echo "$surface" >> "$LOGS/.subagent-pool-${CMUX_WORKSPACE_ID#workspace:}.list"

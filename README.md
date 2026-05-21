@@ -18,9 +18,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-`v0.31.0: Hard gates replace prose. 4 new bash helpers BLOCK R4/R9/R30/R36/R37 violations at call-site instead of describing them in rules.md. Tier 1 capped at 10. R43 + R44 added (closing-actions agent-owned; go = no more questions).`
+`v0.31.1: Consumer-test fix release. Worker spawn now reliably launches claude REPL (fixes silent dispatch-to-shell on workers/co-workers). Poll loop's overlay call points at the right helper name (was silently a no-op). New: R45 mandates Haiku-army doc orientation for all roles (10 parallel reads of wayfinding + recent docs). Watchman Duty 1 expanded into senior-dev review with doc cross-check. Workers now write mandatory smoke-test reports to docs/test-reports/ (format-discovery first). Sub-agent pool defaults to Sonnet.`
 
-![Version](https://img.shields.io/badge/version-0.31.0-success)
+![Version](https://img.shields.io/badge/version-0.31.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)

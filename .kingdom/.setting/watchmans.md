@@ -189,13 +189,41 @@ Count all Haiku sub-agents spawned this tick across all four duties. If the comb
 
 ---
 
-### Duty 1 — Code review fan-out
+### Duty 1 — Senior-dev review fan-out (with doc cross-check) — v0.31.1+
 
-For each lane that has new commits since the last tick, spawn one Haiku sub-agent that reads the diff and writes a one-page review artifact.
+For each lane that has new commits since the last tick — **worker-N**, **co-worker-N**, AND the **King's overlay state on kingdom** — spawn one Haiku sub-agent that reads the diff plus the project's documented architecture, and writes a one-page senior-dev review.
 
-**Trigger:** `git log --oneline <last-tick-sha>..<lane>-HEAD` returns at least one commit.
+**Trigger:** `git log --oneline <last-tick-sha>..<lane>-HEAD` returns at least one commit, OR (for King) the kingdom working tree shows uncommitted changes against `origin/$BASE`.
 
-**Per-lane Haiku prompt (condensed):**
+**Doc context — read ONCE per tick, reused across lanes (R28 parallel-safe).** Before fan-out, gather the project's architectural ground truth:
+
+```bash
+# Tick-level setup — one-time read for the whole fan-out.
+# v0.31.1: prefer the unified haiku_read_docs_orientation helper if you want
+# the full R45 protocol (Phase 1 wayfinding + Phase 2 broader docs). For the
+# narrower per-tick code-review context, the lightweight scan below is enough.
+DOC_CONTEXT_FILE="$LOGS/.watchman_doc_context_${UTC}.txt"
+{
+  # Root-level docs (CLAUDE.md, README.md, AGENTS.md, CONTRIBUTING.md, etc.).
+  # Hard-cap at 10 files to keep the per-lane prompt under ~50k tokens.
+  find "$PROJ" -maxdepth 1 -name "*.md" -type f 2>/dev/null | head -10
+
+  # docs/ tree — same hard cap, prefer recently-modified.
+  if [ -d "$PROJ/docs" ]; then
+    find "$PROJ/docs" -name "*.md" -type f -not -path "*/test-reports/*" 2>/dev/null \
+      | while IFS= read -r f; do
+          mtime=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null)
+          [ -n "$mtime" ] && printf '%s\t%s\n' "$mtime" "$f"
+        done | sort -rn | head -10 | cut -f2-
+  fi
+} > "$DOC_CONTEXT_FILE"
+
+# v0.31.1 fix: DON'T collapse to space-separated — that splits paths with
+# spaces (e.g., `docs/My Architecture.md`). Pass the file LIST as-is and let
+# the Haiku read it line by line.
+```
+
+**Per-lane Haiku prompt:**
 
 ```bash
 LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
@@ -203,26 +231,88 @@ NEW_SHA=$(git -C "$WORKTREES/$LANE" rev-parse HEAD 2>/dev/null)
 [ "$LAST_SHA" = "$NEW_SHA" ] && continue   # no new commits — skip
 
 UTC=$(date -u +%Y-%m-%dT%H%MZ)
-REVIEW_FILE="$LOGS/WATCH_REVIEW_${UTC}__${LANE}.md"
+REVIEW_FILE="$PROJ/docs/test-reports/WATCH_REVIEW_${UTC}__${LANE}.md"
 
 Agent(
   model="haiku",
-  prompt="You are a code reviewer. Read the diff below and write a concise one-page review.
-Diff: git -C $WORKTREES/$LANE diff $LAST_SHA..$NEW_SHA
-Output file: $REVIEW_FILE
+  prompt="You are a SENIOR DEVELOPER reviewing this lane's recent work. Your job is two-fold:
+(1) standard code review and (2) cross-check the changes against the project's
+documented architecture, conventions, and decisions.
 
-Review must cover (TL;DR header, then sections):
-- Missing or thin test coverage (flag any function >20 LOC with zero test calls)
+== Project documentation (architectural ground truth) ==
+The file paths to read are listed (one per line, may contain spaces) in:
+  $DOC_CONTEXT_FILE
+Use your Read tool on each path in that file (do NOT use cat — Read returns
+line-numbered content with cleaner cap behavior). Build your mental model of
+how this project is *supposed* to be structured BEFORE you open the diff.
+
+Pay special attention to:
+- README.md / docs/architecture.md / docs/how-it-works.md — system design
+- CLAUDE.md / AGENTS.md — codebase conventions and project-specific rules
+- CONTRIBUTING.md / docs/style.md — naming, patterns, file organization
+- docs/branch-model.md or docs/git-workflow.md — git conventions
+- Any 'decisions' / 'ADR' / 'rfc' files — locked-in architectural choices
+
+== Lane diff (the work to review) ==
+git -C $WORKTREES/$LANE diff $LAST_SHA..$NEW_SHA
+
+== Output file ==
+$REVIEW_FILE
+
+== Review schema ==
+## TL;DR
+- **Severity:** urgent | warn | info
+- **Lane:** $LANE
+- **Verdict:** <one sentence — does this change align with the project's documented direction?>
+
+## Doc cross-check (NEW — senior-dev lens)
+For each meaningful change in the diff, locate the relevant doc anchor and verify:
+- Does the change follow the documented pattern? (e.g., README says 'all DB calls go through repo/, this PR adds a direct DB call in route handler' → urgent)
+- Does the change contradict a documented decision? (e.g., docs/decisions/01-auth.md says 'JWT in httpOnly cookie', PR uses localStorage → urgent)
+- Is the change in the right architectural layer? (e.g., business logic in a UI component → warn)
+- Does the change need a doc update that wasn't made? (e.g., new env var added but README setup section unchanged → warn)
+Cite the doc file + line/section when you flag a mismatch.
+
+## Code review (the existing dimensions)
+- Missing or thin test coverage (any function >20 LOC with zero test calls)
 - Large untested chunks (>50 LOC change with no matching test file change)
 - Security smells (raw SQL, unescaped user input, hardcoded secrets, unsafe evals)
 - Style outliers (naming, file length, unusual patterns vs the rest of the lane's history)
 
-Severity: 'urgent' | 'warn' | 'info'. Mark the TL;DR with the highest severity found.
+## Recommendations
+A short bulleted list — what should change before this is ready for King's gate?
+If nothing needs to change, write 'LGTM — aligns with documented architecture.'
+
+Severity ladder:
+- urgent — contradicts a documented decision, security smell, or breaks a documented invariant
+- warn   — drifts from documented patterns, missing doc update, missing tests for >50 LOC chunk
+- info   — minor style/naming, suggestion only
+
 Write ONLY the review file — no other edits."
 )
 ```
 
+**King overlay review (the new third reviewee).** Once per tick, after lane fan-out, also review what's currently overlaid on kingdom (if anything):
+
+```bash
+KINGDOM_DIRTY=$(git -C "$PROJ" status --porcelain 2>/dev/null | head -1)
+if [ -n "$KINGDOM_DIRTY" ] && [ "$(git -C "$PROJ" branch --show-current)" = "kingdom" ]; then
+  KING_REVIEW_FILE="$PROJ/docs/test-reports/WATCH_REVIEW_${UTC}__king-overlay.md"
+  Agent(
+    model="haiku",
+    prompt="Review King's current kingdom-branch overlay against the docs above.
+Diff: git -C $PROJ diff origin/$BASE
+Same schema as the lane review, but the lane name is 'king-overlay'.
+Extra check: is the overlay consistent across the lanes it stitched together?
+(e.g., two lanes adding the same env var with different default values)
+Output file: $KING_REVIEW_FILE"
+  )
+fi
+```
+
 Update `watchman_state.json` after fan-out: `lane_shas["$LANE"] = $NEW_SHA`.
+
+**Why this is Tier 2, not Tier 1:** the senior-dev review is advisory — it does NOT block the King's gate. R11 still applies: watchman never edits project source. If watchman flags `urgent` doc-drift, King reads the report at gate time and decides whether to dispatch a fix-up task to the lane. The user retains final say at push time.
 
 ---
 

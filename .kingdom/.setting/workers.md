@@ -226,6 +226,7 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 
 > **The "lazy implementor antidote" rule (v0.17.2+):** Before deciding "no existing pattern exists" or "I'll invent a new approach", the worker MUST exhaustively grep the project for existing references, conventions, env handling, scripts, and doc comments. Capacity is unlimited — fan out 5-10 Haiku scanners in parallel if needed. Default stance: **the project HAS a pattern; my job is to find it. Burden of proof is on me to demonstrate one doesn't exist.**
 
+- [ ] **Doc orientation FIRST (R45, v0.31.1+):** before any code grep, call `haiku_read_docs_orientation "<lane>" "$PROJ" "$LOGS"` (see [`_primitives.md`](_primitives.md) § Orientation). The helper fans out up to 10 Haiku in parallel, reads root + `docs/` markdown (wayfinding first: every `readme.md` / `index.md` / `todo*.md`; then the 20 newest others), and writes a consolidated digest to `<LOGS>/.<lane>_<UTC>_doc_context.md`. Read that digest, not the originals. Docs encode the project's documented conventions, which **override** code patterns when they conflict — finding the code pattern first risks reinforcing drift.
 - [ ] **Pattern grep — fan-out N× Agent(haiku) in parallel:**
   - [ ] `grep -rln "<key-term>" --include='*.{ts,tsx,js,py,sh,yml,yaml,json,md,env,env.example}' .` (any file types relevant)
   - [ ] Read every `.env*` and `.env.example` in the relevant subtree — these encode env conventions
@@ -406,6 +407,136 @@ Lanes never receive a "queue" of multiple tasks; the King serialises task-to-lan
 - **Lane master itself** uses slug `<role>-<n>` (e.g., `opus-worker-1`).
 - **Sub-agents spawned by lane master** use **dot-suffixed** slugs: `worker-1.a`, `worker-1.b`, `worker-1.docs`, `worker-1.tests` — chosen by the lane master per its internal partition.
 - The shared `<LOGS>/` already disambiguates because the task `<ID>` is unique per dispatch.
+
+---
+
+## Pre-closer: the smoke-test report (v0.31.1+ — MANDATORY for every task close)
+
+**Every lane (worker-N AND co-worker-N) MUST write a smoke-test report to `<project>/docs/test-reports/` before its task-commit fires.** Reports survive across PR reviews and are how the King's gate, the Watchman's senior-dev review, and the user audit "did this lane actually verify its work?"
+
+### Format-discovery first (R8 applied to reports)
+
+Per [R8](rules.md#r8) (pattern grep before implementation), look at how the dir is already organised before writing anything. Hand-rolling a new report shape would defeat the whole point.
+
+```bash
+REPORTS_DIR="$PROJ/docs/test-reports"
+mkdir -p "$REPORTS_DIR"
+
+# Step 1: list the dir to see what prefixes/conventions exist locally
+ls -t "$REPORTS_DIR" | head -10
+
+# Step 2: read 1-2 newest existing reports to match format
+#   - KING_*.md = King's pre-commit gate report (the most common reference)
+#   - WATCH_*.md = Watchman's reports
+#   - LANE_*.md = prior lane smoke-test reports (if any from earlier tasks)
+LATEST=$(ls -t "$REPORTS_DIR"/*.md 2>/dev/null | head -1)
+[ -n "$LATEST" ] && cat "$LATEST"
+```
+
+If the dir is empty (first-ever report on this project): bootstrap using the schema below. From the second report onward, mimic the existing format — same heading levels, same TL;DR header, same metadata block style.
+
+### File naming
+
+`<project>/docs/test-reports/LANE_<UTC>__<lane>__<sub-task-id>.md`
+
+- `LANE_` is the unified prefix for any non-King, non-Watchman report. Both `worker-N` and `co-worker-N` use it (no separate `WORKER_` / `COWORKER_` prefixes — segment 2 of the filename already disambiguates).
+- `<UTC>` = `date -u +%Y-%m-%dT%H%MZ`.
+- `<lane>` = `worker-1`, `co-worker-2`, etc. — preserves the lane-in-segment-2 grep contract (see § Artifact lifecycle above).
+- `<sub-task-id>` = same ID the closer's sentinel uses.
+
+### Minimum schema (bootstrap only — match existing convention from report 2 onward)
+
+```markdown
+# Smoke-test report — <lane> · <sub-task-id>
+
+## TL;DR
+- **Status:** pass | partial | fail
+- **Lane:** <lane>
+- **Task:** <sub-task-id>
+- **Tier-1 commands run:** N (all passed | M failed)
+- **Files touched in this task:** N
+- **Verdict:** <one sentence — is this work ready for King's gate?>
+
+## Commands run
+| Command | Exit | Time | Notes |
+|---|---|---|---|
+| `<from kingdom.json gate.typecheck>` | 0 | 4s | clean |
+| `<from kingdom.json gate.tests>` | 0 | 12s | 47 passed, 0 failed |
+| `<any extra smoke specific to this change>` | 0 | 2s | — |
+
+## Output excerpts
+<paste any failure output verbatim; for passes, paste the summary line only>
+
+## Files touched
+<git diff --name-only $BASE_SHA..HEAD — bulleted>
+
+## Caveats
+<anything the next reader should know — flaky test you retried, env var you set, etc. Or "None."
+```
+
+### Run script (lane prompt template — every closer must include this BEFORE the task commit)
+
+```bash
+REPORTS_DIR="$PROJ/docs/test-reports"
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+REPORT="$REPORTS_DIR/LANE_${UTC}__${LANE}__${SUBTASK_ID}.md"
+
+# v0.31.1 fix: $KJSON is set in King/Watchman contexts but NOT in worker context.
+# Define it locally before the jq calls so the script is self-contained.
+# WS is the workspace root (one level above $PROJ); kingdom.json lives at
+# $WS/.kingdom/<project>/kingdom.json.
+WS=$(dirname "$PROJ")
+KJSON="$WS/.kingdom/$(basename "$PROJ")/kingdom.json"
+[ -f "$KJSON" ] || { echo "❌ kingdom.json not found at $KJSON — smoke-test cannot proceed"; exit 1; }
+
+# Source the gate commands from kingdom.json so the script stays in sync with King's Tier-1 gate.
+TYPECHECK=$(jq -r '.gate.typecheck[]?' "$KJSON")
+TESTS=$(jq -r '.gate.tests[]?' "$KJSON")
+
+# Run commands, capture exit codes
+ALL_PASS=true
+{
+  echo "# Smoke-test report — $LANE · $SUBTASK_ID"
+  echo ""
+  echo "## TL;DR"
+  echo "- **Status:** <fill after commands run>"
+  echo "- **Lane:** $LANE"
+  echo "- **Task:** $SUBTASK_ID"
+  echo ""
+  echo "## Commands run"
+  echo "| Command | Exit | Notes |"
+  echo "|---|---|---|"
+  while IFS= read -r cmd; do
+    [ -z "$cmd" ] && continue
+    OUT=$(eval "$cmd" 2>&1); RC=$?
+    [ "$RC" != "0" ] && ALL_PASS=false
+    SHORT=$(echo "$OUT" | tail -1)
+    echo "| \`$cmd\` | $RC | $SHORT |"
+  done < <(printf '%s\n' "$TYPECHECK" "$TESTS")
+  echo ""
+  echo "## Files touched"
+  git -C "$PWD" diff --name-only "origin/$BASE"..HEAD | sed 's/^/- /'
+} > "$REPORT"
+
+# Patch TL;DR status (sed in-place — match existing project sed flavour if known, else BSD-safe)
+if [ "$ALL_PASS" = "true" ]; then
+  sed -i.bak 's/<fill after commands run>/pass/' "$REPORT"
+else
+  sed -i.bak 's/<fill after commands run>/fail/' "$REPORT"
+fi
+rm -f "$REPORT.bak"
+
+# Sanity: ensure the report exists before continuing to the task commit
+[ -s "$REPORT" ] || { echo "❌ smoke-test report missing or empty: $REPORT"; exit 1; }
+echo "✅ smoke-test report written: $REPORT"
+```
+
+### Anti-patterns
+
+- ❌ Writing the report **after** the task commit — by then the commit is already on the lane tip and the report can't influence what the King gates against.
+- ❌ Skipping format-discovery and inventing a fresh schema — defeats the point of having a shared `docs/test-reports/` folder.
+- ❌ Writing only on pass — failed smoke tests MUST also produce a report (status: `fail`) so the King's gate has audit trail of WHY it failed.
+- ❌ Writing the report at `<LOGS>/` instead of `<project>/docs/test-reports/` — the kingdom log dir is for kingdom audit; test reports live with the project.
 
 ---
 

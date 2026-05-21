@@ -539,9 +539,12 @@ while true; do
   # 5a. Detect un-gated sentinels
   for FLAG in "$LOGS"/done/*.flag; do
     [ -f "$FLAG" ] || continue
-    BASE=$(basename "$FLAG" .flag)
-    LANE=$(echo "$BASE" | sed 's/^[0-9-]*T[0-9]*Z__[a-z]*-//;s/__.*//')
-    SUBTASK_ID=$(echo "$BASE" | sed 's/.*__//')
+    # v0.31.1: rename from BASE → FLAG_BASE to stop shadowing the outer
+    # git-base var ($BASE = develop/main from line 227). The shadow silently
+    # broke kingdom_overlay_lane and the N_MODIFIED count for every push-prompt.
+    FLAG_BASE=$(basename "$FLAG" .flag)
+    LANE=$(echo "$FLAG_BASE" | sed 's/^[0-9-]*T[0-9]*Z__[a-z]*-//;s/__.*//')
+    SUBTASK_ID=$(echo "$FLAG_BASE" | sed 's/.*__//')
 
     # Already gated? (test report exists)
     ls "$PWD/${project}/docs/test-reports/KING_"*"__${LANE}__${SUBTASK_ID}.md" \
@@ -552,7 +555,14 @@ while true; do
 
     if [ "$?" = "0" ]; then
       cmux_set_state "" "Overlaying ${LANE} onto kingdom"
-      overlay_lane_onto_kingdom "${LANE}"
+      # v0.31.1: was a stale-name no-op call (overlay_lane_onto_kingdom is not
+      # defined anywhere — bash silently skipped, then Tier-2 ran against the
+      # empty kingdom branch). The real helper is kingdom_overlay_lane and it
+      # takes ($PROJ, $LANE, $BASE). See _primitives.md § Hard gates.
+      kingdom_overlay_lane "$PROJ" "${LANE}" "${BASE}" || {
+        echo "⚠️ Overlay failed for ${LANE} — see helper output above. Skipping Tier-2 for this lane this tick."
+        continue
+      }
 
       cmux_set_state "" "Tier-2 gate · kingdom overlay"
       run_tier2_gate

@@ -4,6 +4,57 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.31.1] — 2026-05-22
+
+Consumer-test fix release. A 2026-05-21 session running v0.31.0 surfaced two real bugs: (1) when the King spawned `worker-N` / `co-worker-N` / `watchman-N`, the cmux workspaces appeared but Claude REPL didn't start — `cmux new-workspace --command "claude"` turned out to be unreliable across cmux versions, so the King's subsequent `cmux send -- "<dispatch brief>"` landed in a bash prompt instead of a Claude session (the user had to manually ask King to run `claude` first); (2) when a worker closed a task, the King's poll loop was supposed to overlay the lane's diff onto the `kingdom` branch but didn't, because `commands/work.md:555` called `overlay_lane_onto_kingdom` — a function name that didn't exist anywhere (the v0.30.0 helper was named `kingdom_overlay_lane`, the call site was never updated). Bash's silent function-not-found behaviour meant the overlay step ran as a no-op for many releases without anyone noticing, and the subsequent Tier-2 gate fired against an empty kingdom branch.
+
+Beyond the two fixes, this release also lands four planned consumer requests from the same session — a unified doc-orientation protocol (R45), watchman senior-dev cross-check duty, mandatory worker smoke-test reports, and a Sonnet default for the sub-agent pool. Pre-commit Haiku-army audit (10 parallel agents) caught 16 distinct issues before ship; 7 critical/high were fixed inline.
+
+### Fixed
+
+- **Worker spawn now reliably launches Claude REPL.** `spawn_master_workspace` in `_primitives.md` no longer relies on `cmux new-workspace --command "claude"` (unreliable). Replaced with explicit post-spawn `cmux rpc surface.send_text "claude\n"` + 1.5s boot sleep — the same pattern `spawn_watchman_loop` already proved works. `spawn_watchman_loop` simplified accordingly: it now only sends `/loop\n` (claude is already running by the time it's called).
+- **King poll loop calls the right overlay helper.** `commands/work.md` Step 5a (sentinel-detection loop) was calling `overlay_lane_onto_kingdom "${LANE}"` — a function name that hadn't existed since v0.30.0. Replaced with `kingdom_overlay_lane "$PROJ" "${LANE}" "${BASE}"`. Discovered while fixing this: the loop's `BASE=$(basename "$FLAG" .flag)` was also **shadowing** the outer `$BASE` (git base branch, set at line 227) for the entire loop body. The shadow silently broke not just the overlay call but also the `N_MODIFIED=$(git diff --name-only "origin/${BASE}" | wc -l)` at line 566 (push-prompt card metadata). Inner var renamed to `FLAG_BASE` to stop the shadow.
+
+### Added
+
+- **R45 (Tier 2) — Haiku-army doc orientation for all roles.** Every role (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` when getting the big picture before work. The new helper in `_primitives.md` runs 2 phases: (1) Phase 1 — wayfinding fan-out: scans EVERY directory for `readme.md` / `index.md` / `todo*.md`, caps at 30 files, spawns up to 10 Haiku in parallel for 5-bullet digests; (2) Phase 2 — broader doc fan-out: full `*.md` landscape minus Phase 1, 20 newest by mtime, same parallel fan-out. Both phases bounded by `_bounded_wait` (R42). Consolidated digest at `<LOGS>/.<role>_<UTC>_doc_context.md`. King calls at session start; workers at task receipt before any code edit; watchman once at spawn (refresh trigger is design-forward — not yet implemented in watchman's loop); any role mid-task when "not sure." HAIKU_CAP=10 hard ceiling per call. R45 also locks model defaults: Haiku for doc-orientation fan-outs, Sonnet for lane sub-agents, Opus for sensitive design review.
+- **Watchman Duty 1 expanded to senior-dev review with doc cross-check.** Previous Duty 1 was a per-lane code review (test coverage, security, style). v0.31.1 keeps those dimensions and adds a Doc cross-check section: per-tick read of root + `docs/` markdown, then each lane's Haiku reviews the diff with that doc context grounded. New severity grounds: contradicts a documented decision (urgent), drifts from documented pattern (warn), missing doc update (warn). King's overlay state on `kingdom` branch is now also reviewed each tick (third reviewee alongside workers and co-workers). Output files land at `<project>/docs/test-reports/WATCH_REVIEW_<UTC>__<lane>.md` (convention-compliant — fixes audit finding H3).
+- **Worker smoke-test report MANDATORY before every task commit.** New pre-closer section in `workers.md` (sits before the existing R4/R9 task-commit guard). Format-discovery first per R8 spirit: `ls $REPORTS_DIR | head -10` then read one existing report to match conventions. Bootstraps with a minimum schema (TL;DR + commands run + files touched + caveats) but expected to mimic existing format from the 2nd report onward. File naming `LANE_<UTC>__<lane>__<sub-task-id>.md` preserves the segment-2-is-lane grep contract. Both `worker-N` and `co-worker-N` use this; King's `KING_*` and Watchman's `WATCH_*` prefixes are untouched.
+- **Sub-agent pool defaults to Sonnet.** `kingdom.json.cmux.subAgentPool.model` reads to `"sonnet"` by default (was previously implicit Opus via no `--model` flag). Override to `"haiku"` for cheap-read pools or `"opus"` for sensitive design pools. Pool slots are mono-model at boot — `spawn_subagent_from_pool` still accepts a `$model` arg for tab-rename labeling but no longer changes the slot's actual model. Flag order: `claude --model <m> -p 'AWAITING_DISPATCH'` (audit caught the inverted `-p --model` order before ship — would have failed entirely on consumer install).
+- **R43 + R44 + R45 cross-references added throughout role docs.** `workers.md` Layer 1 Discovery now lists R45 as step 0 (doc orientation before code grep). `kings.md` mandatory-reads table cell for `/kingdom:work` first-message expanded to include the helper invocation.
+
+### Changed
+
+- **`_primitives.md` orientation helper dropped `eval` indirection.** Original draft used `eval "find ... $prune -prune -o ..."` to interpolate the prune-clause string. Pre-commit audit (Audit #4) flagged this as redundant + a quoting vulnerability if `$proj` contains special chars. Replaced with direct backslash-escaped `\(` `\)` parens in the find invocation — works in bash without eval.
+- **`_primitives.md` orientation helper now handles filenames with spaces.** Phase 2 `comm -23` pipeline rewritten to use `IFS= read -r f` + per-line iteration instead of word-split-then-sort. The `stat -f %m` (BSD) vs `stat -c %Y` (Linux) fallback now uses explicit if-else with empty-output check rather than `||` short-circuit (handles minimal Alpine containers where both flavours behave oddly).
+- **`watchmans.md` Duty 1 doc-context pipeline mirrors the same fix.** Was `tr '\n' ' '` collapsing the file list to a space-separated string; now preserves newlines and the Haiku prompt is told to read line by line via the consolidated `$DOC_CONTEXT_FILE`. Prompt also clarifies "use your Read tool" explicitly (was ambiguous — auditor flagged Haiku could try cat).
+- **`CLAUDE.md` stale rule count.** "Pointers for unfamiliar areas" was still listing 40 rules with Tier 1 = 18. Updated to 43 rules; Tier 1 = 10 (per v0.31.0 cap); Tier 2 = 28; Tier 3 = 5.
+- **`kings.md` R45 reference scope corrected.** First-message-after-/kingdom:work mandatory-reads cell originally said "root *.md + docs/*.md"; updated to describe the actual two-phase / 30+20-file / every-directory scope.
+
+### Audit summary (pre-commit)
+
+10 parallel Haiku audits ran on the v0.31.1 changeset before commit. Findings:
+
+| Severity | Count | Fixed inline? |
+|---|---|---|
+| 🔴 CRITICAL | 2 | Both fixed (flag order; `$KJSON` undefined) |
+| 🟠 HIGH | 3 | All fixed (filename spaces ×2 sites; eval drop; WATCH_REVIEW path) |
+| 🟡 MEDIUM | 5 | 2 fixed (kings.md scope; CLAUDE.md count). 3 deferred (soft-fail surface lookup; R45 watchman aspirational claim; tick aggregation across multi-lane WATCH_REVIEW) |
+| 🟢 LOW | 5 | 1 fixed inline (Haiku prompt explicit Read-tool); 4 deferred to v0.32.0 |
+| ✅ PASS | 1 audit | (work.md BASE shadow + overlay rename) |
+
+Audit cost: ~10×30k Haiku tokens (sub-dollar). Caught issues that would have shipped broken to consumers.
+
+### Open threads — promoted to v0.32.0
+
+- **Soft-fail surface lookup** in `spawn_master_workspace` — currently warns + proceeds if `cmux rpc workspace.list` returns no surfaces yet; should add bounded retry loop (matching R42 pattern).
+- **Watchman doesn't actually call `haiku_read_docs_orientation`** — R45 claims watchman refreshes every 10 ticks OR on mtime change, but neither trigger is implemented in `watchmans.md`'s tick body yet. Either wire the call in or weaken R45's claim.
+- **Tick-aggregation across multiple per-lane `WATCH_REVIEW_*.md` files** — Duty 1's senior-dev fan-out produces one review file per lane per tick; the existing tick-summary table has one row per duty. Needs max-merge logic for the duty's severity column.
+- **Per-rule heading sweep for Tier 1 cap** — still pending from v0.31.0; the legend at `rules.md:27` is authoritative, but per-rule headings still carry `— Tier 1` suffixes for ~19 rules that should be `— Tier 2`.
+- **`_primitives.md` split into `_primitives/` directory** — file has grown to ~1380 lines; proposed shape: ~15 per-area files (hard-gates / spawn / orientation / overlay / feature-carve / etc), with `_primitives.md` becoming a 50-line index. Discussed; deferred to v0.32.0 to keep v0.31.1 blast radius bounded.
+
+---
+
 ## [0.31.0] — 2026-05-20
 
 Released the same day as v0.30.0 after a real consumer-kingdom session (`/kingdom:work bfg-swt cap=5`, 2026-05-20 morning) shipped **zero PRs in four hours** despite all five lanes spawning successfully. The transcript exposed that the kingdom's Tier-1 rules (R4, R9, R30, R31, R36, R37, R38) were being violated in sequence by the same King session — committing on `feature/<topic>` instead of `worker-N` (R9), FF-merging onto `kingdom` (R4), `cd`-ing into worker worktrees from the King's own session (R30 + R37), skipping the lane-spawn step entirely (R36), and asking "pick execute mode m/a/m1/self?" after the user said `go`. **Diagnosis: prose rules aren't gates.** A King operating fast in chat will skim past 600 lines of `rules.md` and reach a `cd .worktrees/worker-1 && git commit -m ...` line that looks reasonable in isolation. v0.31.0 turns the load-bearing rules into actual call-site blocks.
