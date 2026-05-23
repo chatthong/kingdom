@@ -1,5 +1,5 @@
 <!--
-kingdom — Multi-agent orchestration kit for Claude Code (a Claude Code plugin).
+kingdom: Multi-agent orchestration kit for Claude Code (a Claude Code plugin).
 Parallel AI coding with git worktrees, native cmux.app integration, audit-first
 design, and human-in-the-loop push gates.
 
@@ -18,7 +18,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
-**🔥 Fire 50–100 PRs a working week — on a single Claude Max plan. 🚀**
+**🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
 ![Version](https://img.shields.io/badge/version-0.31.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
@@ -33,9 +33,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 <br/>
 
-![kingdom running live in cmux.app — a King plus 8 workers, 2 co-workers, and a watchman, each in its own colour-coded workspace](docs/assets/kingdom-cmux-sidebar.png)
+![kingdom running live in cmux.app: a King plus 8 workers, 2 co-workers, and a watchman, each in its own colour-coded workspace](docs/assets/kingdom-cmux-sidebar.png)
 
-<sub>A live kingdom in cmux.app — one King, 8 autonomous workers, 2 paired co-workers, 1 watchman; each lane its own colour-coded workspace, all driven from a single chat with the King.</sub>
+<sub>A live kingdom in cmux.app: one King, 8 autonomous workers, 2 paired co-workers, 1 watchman; each lane its own colour-coded workspace, all driven from a single chat with the King.</sub>
 
 </div>
 
@@ -48,11 +48,11 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
 
-/kingdom:init my-app          # scaffold once — workspace + git worktrees (~90s)
-/kingdom:self-care            # check prereqs once — cmux.app, tmux, jq, gh, git
+/kingdom:init my-app          # scaffold once: workspace + git worktrees (~90s)
+/kingdom:self-care            # check prereqs once: cmux.app, tmux, jq, gh, git
 
-/kingdom:work my-app          # daily — audit, spawn, dispatch, poll
-/kingdom:save my-app          # end of session — snapshot state, close lane workspaces
+/kingdom:work my-app          # daily: audit, spawn, dispatch, poll
+/kingdom:save my-app          # end of session: snapshot state, close lane workspaces
 ```
 
 `/kingdom:work` is the daily ritual. It audits the project, spawns lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches and gates work until something needs your approval. You stay in one chat with the King. At end of day, `/kingdom:save` snapshots lane + task state so the next `/kingdom:work` picks up where you left off.
@@ -90,7 +90,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 | Quick focused session | `worker=2 cap=3` | 2 lanes, hard stop at 3 task-completions |
 | Sustainable weekly cadence | `worker=3 target=30-50/week` | Soft budget; King paces dispatch to hit band |
 
-You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman — each in its own colour-coded workspace, all coordinated through your one chat with the King.
+You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
 
 ```mermaid
 graph TB
@@ -139,14 +139,14 @@ graph TB
 
 A Claude Code plugin that turns one session into a coordinated team: each lane in its own git worktree, each branch isolated until you approve the push. The King gates every commit, writes audit artifacts you can grep next month, and never touches your main checkout. No new runtime, no daemons.
 
-**Domain-agnostic by design.** Anything you version in git — code, research, finance models, scientific notebooks, manuscripts — the kingdom can orchestrate. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
+**Domain-agnostic by design.** Anything you version in git, the kingdom can orchestrate: code, research, finance models, scientific notebooks, manuscripts. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
 
 > [!WARNING]
-> **Spinning up a kingdom isn't instant — but it pays for itself fast.**
+> **Spinning up a kingdom isn't instant, but it pays for itself fast.**
 >
-> - 🥶 **Cold start** (first `/kingdom:work`): **~30–60 min** — create worktrees, spawn lane workspaces, boot each Claude session, run the audit + doc-orientation fan-outs, then the first dispatch.
-> - ♻️ **Resume** (next `/kingdom:work` after a `/kingdom:save`): **~15–30 min** — respawn workspaces from `state.json`, reload context, pick up in-flight tasks.
-> - ⚡ **After that, it's light speed** — lanes run fully parallel, the King gates continuously, and you spend your time reviewing PRs instead of waiting on setup.
+> - 🥶 **Cold start** (first `/kingdom:work`): **~30-60 min** to create worktrees, spawn lane workspaces, boot each Claude session, run the audit + doc-orientation fan-outs, then the first dispatch.
+> - ♻️ **Resume** (next `/kingdom:work` after a `/kingdom:save`): **~15-30 min** to respawn workspaces from `state.json`, reload context, pick up in-flight tasks.
+> - ⚡ **After that, it's light speed.** Lanes run fully parallel, the King gates continuously, and you spend your time reviewing PRs instead of waiting on setup.
 >
 > Budget the warm-up once per session; the sustained throughput (see [What it costs to run](#-what-it-costs-to-run)) is what you're paying that warm-up for.
 
@@ -154,12 +154,12 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 
 ## ✨ Why kingdom?
 
-- **Real parallelism** — 3-10 lanes editing different branches simultaneously, isolated by `git worktree`
-- **One conversation** — you talk to the King; the King talks to the lanes; you never juggle panes
-- **Native cmux.app feel** — every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
-- **Full audit trail** — every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
-- **Zero new runtime** — cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text
-- **Skill-aware** — King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
+- **Real parallelism:** 3-10 lanes editing different branches simultaneously, isolated by `git worktree`
+- **One conversation:** you talk to the King; the King talks to the lanes; you never juggle panes
+- **Native cmux.app feel:** every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
+- **Full audit trail:** every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
+- **Zero new runtime:** cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text
+- **Skill-aware:** King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
 
 ---
 
@@ -173,24 +173,33 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 
 `/kingdom:self-care` tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys) and offers to fix it.
 
+### 🖥 Terminal & workspaces
+
+kingdom drives one terminal workspace per lane. Two supported setups:
+
+- **macOS (primary): [cmux.app](https://github.com/manaflow-ai/cmux).** Download it from [manaflow-ai/cmux](https://github.com/manaflow-ai/cmux). Gives you native, colour-coded workspaces, desktop notifications, and the live sidebar. This is the richest experience; the screenshot above is cmux.app.
+- **Linux and macOS (fallback): tmux + [Ghostty](https://github.com/ghostty-org/ghostty).** Lanes run as tmux windows inside [Ghostty](https://github.com/ghostty-org/ghostty), a fast, GPU-accelerated terminal. No native sidebar, but the full work cycle runs the same.
+
+`/kingdom:self-care` detects which you have and sets things up accordingly.
+
 ---
 
 ## 🛡 The contract (what kingdom won't touch)
 
-- ❌ Your project files outside `.worktrees/<lane>/` — main checkout untouched until you say "push"
-- ❌ `develop` and `main` — read-only; only `feature/<topic>` reaches origin
-- ❌ Pushes — never without your explicit "push?" approval
-- ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks — zero modifications
-- ❌ Your `.gitignore` — kingdom adds ONE line (`.worktrees/`) and stops there
+- ❌ Your project files outside `.worktrees/<lane>/`: main checkout untouched until you say "push"
+- ❌ `develop` and `main`: read-only; only `feature/<topic>` reaches origin
+- ❌ Pushes: never without your explicit "push?" approval
+- ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks: zero modifications
+- ❌ Your `.gitignore`: kingdom adds ONE line (`.worktrees/`) and stops there
 - ✅ `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, branches survive intact
 
 ---
 
 ## 💸 What it costs to run
 
-The kingdom is a fleet of **real Claude Code sessions** — one per lane, each in its own cmux workspace. That's what buys real parallelism, and it spends two real budgets: your Mac's **RAM** and your Claude plan's **tokens**. Both numbers below are measured on a live run (2026-05-23 · macOS · Claude Code v2.1.150 · Opus 4.7).
+The kingdom is a fleet of **real Claude Code sessions**, one per lane, each in its own cmux workspace. That's what buys real parallelism, and it spends two real budgets: your Mac's **RAM** and your Claude plan's **tokens**. Both numbers below are measured on a live run (2026-05-23 · macOS · Claude Code v2.1.150 · Opus 4.7).
 
-### 🧠 RAM — one live session per lane
+### 🧠 RAM: one live session per lane
 
 Each lane is a booted Claude Code session (Claude core + its own MCP servers). Measured with `cmux memory --all`:
 
@@ -200,25 +209,25 @@ Each lane is a booted Claude Code session (Claude core + its own MCP servers). M
 | 👑 King + 8 workers + 2 co-workers + 1 watchman | 12 | ~6.3 GB |
 | 👑 King + 12 workers + 2 co-workers + 1 watchman | 16 | ~7.1 GB |
 
-Rule of thumb: **budget ~0.5 GB per booted lane** — roughly 0.2 GB for a fresh idle worker, more once it loads MCP servers or starts heavy work. A 16-lane kingdom is comfortable on a 16 GB Mac; on 32 GB+ you won't notice it.
+Rule of thumb: **budget ~0.5 GB per booted lane**, roughly 0.2 GB for a fresh idle worker, more once it loads MCP servers or starts heavy work. A 16-lane kingdom is comfortable on a 16 GB Mac; on 32 GB+ you won't notice it.
 
-**Reclaim it with `/kingdom:save`.** End of session, close the workspaces and get the RAM back — worktrees and branches stay on disk (cheap), and the next `/kingdom:work` respawns the sidebar from `state.json`.
+**Reclaim it with `/kingdom:save`.** End of session, close the workspaces and get the RAM back; worktrees and branches stay on disk (cheap), and the next `/kingdom:work` respawns the sidebar from `state.json`.
 
 > [!TIP]
 > ```
-> ╭─ /kingdom:save — close lane workspaces, free Mac RAM ───╮
-> │  Each lane = a live Claude session ≈ 0.2–0.5 GB         │
+> ╭─ /kingdom:save · close lane workspaces, free Mac RAM ───╮
+> │  Each lane = a live Claude session ≈ 0.2-0.5 GB         │
 > │  Measured: closing 11 lanes freed ~5.7 GB               │
 > │           (6.3 GB ▸ 0.6 GB, back to King-only)          │
-> │  .worktrees/* stay  (small — just files)                │
+> │  .worktrees/* stay  (small · just files)                │
 > │  Branches stay      (local + remote)                    │
 > │  Next /kingdom:work respawns the sidebar from state.json│
 > ╰─────────────────────────────────────────────────────────╯
 > ```
 
-### 🔥 Tokens — what a Max plan feeds it
+### 🔥 Tokens: what a Max plan feeds it
 
-On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/day sustains **~250–290M tokens/day** — almost all Opus, almost all cache reads (90%+), which is exactly why a billion-token week stays economical. One real 7-day window (full [`ccusage`](https://github.com/ryoppippi/ccusage) report in [`token-2026-05-23.md`](token-2026-05-23.md)):
+On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/day sustains **~250-290M tokens/day**, almost all Opus, almost all cache reads (90%+), which is exactly why a billion-token week stays economical. One real 7-day window (full [`ccusage`](https://github.com/ryoppippi/ccusage) report in [`token-2026-05-23.md`](token-2026-05-23.md)):
 
 | Day | Total tokens | Equivalent API value |
 |---|---:|---:|
@@ -229,16 +238,16 @@ On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/d
 | Fri | **291.0M** | $203 |
 | **5-day work week** | **~1.27B** | **~$983** |
 
-**🔥 A Claude Max 5× plan — not even the 20× tier — fed nearly 300M Opus tokens in a single day.**
+**🔥 A Claude Max 5× plan (not even the 20× tier) fed nearly 300M Opus tokens in a single day.**
 
-> The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates) — on a Max subscription it's flat-rate, so this is value unlocked, not a bill.
+> The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates). On a Max subscription it's flat-rate, so this is value unlocked, not a bill.
 
 **So you choose how to spend that throughput:**
 
 | Mode | What it looks like |
 |---|---|
-| 🎯 **Quality Max** | Fewer lanes, deep work — exhaustive discovery, Opus design review on every sensitive change, watchman cross-checks. Spend the tokens going *deep*. |
-| 🔥 **Fire PRs like mad** | Many lanes, wide fan-out — a sustained **~50–100 PRs per working week**. Spend the tokens going *wide*. |
+| 🎯 **Quality Max** | Fewer lanes, deep work: exhaustive discovery, Opus design review on every sensitive change, watchman cross-checks. Spend the tokens going *deep*. |
+| 🔥 **Fire PRs like mad** | Many lanes, wide fan-out: a sustained **~50-100 PRs per working week**. Spend the tokens going *wide*. |
 
 Same kit, same plan. Dial `worker=N` and `target=N-M/week` to sit anywhere on that spectrum.
 
@@ -265,7 +274,7 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 | **`/kingdom:work [<project>] [target=N-M/<day\|week\|month>] [cap=N] [worker=N] [co-worker=N] [watchman=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling. Per-session shape overrides via `worker=N` / `co-worker=N` / `watchman=N`. The one command you type every morning. |
 | `/kingdom:init [<project>]` | Workspace + optional project scaffold. See [`docs/configuration.md`](docs/configuration.md) for shape choices. |
 | `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
-| `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes — those go through the normal push-approval gate. |
+| `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes; those go through the normal push-approval gate. |
 
 ---
 
