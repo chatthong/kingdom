@@ -18,6 +18,8 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **One King. N workers. Auditable parallel work, any domain you version with git.**
 
+**🔥 Fire 50–100 PRs a working week — on a single Claude Max plan. 🚀**
+
 ![Version](https://img.shields.io/badge/version-0.31.1-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
@@ -227,7 +229,9 @@ On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/d
 | Fri | **291.0M** | $203 |
 | **5-day work week** | **~1.27B** | **~$983** |
 
-> The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates) — on a Max subscription it's flat-rate, so this is value unlocked, not a bill. The headline: a **5× plan** — not even the 20× tier — fed nearly **300M Opus tokens in a single day**.
+**🔥 A Claude Max 5× plan — not even the 20× tier — fed nearly 300M Opus tokens in a single day.**
+
+> The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates) — on a Max subscription it's flat-rate, so this is value unlocked, not a bill.
 
 **So you choose how to spend that throughput:**
 
