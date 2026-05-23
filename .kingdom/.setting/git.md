@@ -4,13 +4,15 @@ Git workflow for the kingdom. See [`index.md`](index.md) for the entry-point ove
 
 ---
 
-## Four branch tiers (all lane branches + `kingdom` are local-only)
+## Branch tiers (all lane branches + `kingdom` + `story/*` are local-only)
 
 | Branch | Lives in | Role |
 |---|---|---|
 | `worker-1..N` / `co-worker-1..M` / `watchman-1..K` | `.worktrees/<role>-<n>/` | 🏠 **LOCAL-ONLY** lane work surfaces. Never pushed. Persistent identities (e.g., `worker-1` always = worker-1; reset between PR batches). |
+| `story/<id>` (v0.32.0+) | `.worktrees/senior-N/` | 🏠 **LOCAL-ONLY** story integration branch (R46). A Senior merges its pod's `worker-N` tips into it (real merge commits), gates + reviews it as a whole, then it is promoted as ONE PR. Replaces the ephemeral `kingdom` overlay for multi-worker pods. |
 | `kingdom` | primary checkout | 🏠 **LOCAL-ONLY** King-maintained integration view (merge of `develop` + all `worker-N` / `co-worker-N` tips). Never pushed. Advisory only — the user can `git checkout kingdom` for combined state. Does NOT participate in PRs. Watchman branches NOT merged in (they just track develop). |
-| `feature/<topic>` | (ref only, no worktree) | ⬆ **PUSHED.** PR branch — carved fresh from the relevant lane branch tip at PR-open time. Pushed to origin, PR opened, branch deleted after merge. One-shot. |
+| `feature/<topic>` | (ref only, no worktree) | ⬆ **PUSHED.** Solo PR branch — carved fresh from a single lane tip at PR-open time for one-worker tasks. Pushed, PR opened, deleted after merge. One-shot. |
+| `story/<id>` (as PR) | (pushed at PR-open) | ⬆ **PUSHED.** For pod work, the story branch itself is pushed as the PR (`story/<id> -> develop`), carrying all the merged worker contributions in one review. |
 | `main` / `develop` | tracked from origin | ⬇ pulled-from-origin only. the user never pushes. Lead controls. |
 
 **The PR surface is decoupled from the work surface.** Lanes always work on `<role>-<n>` (local, persistent identities, configurable count). PRs always live on `feature/<topic>` (remote, descriptive, one-shot). Separation means lane local history is never polluted by remote-branch hygiene, and `feature/*` names can be chosen per-PR for clarity without disturbing the lane.

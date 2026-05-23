@@ -4,6 +4,27 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.32.0] — 2026-05-24
+
+Story pods. A new **Senior** role (🎓 Opus) plus a **story integration branch** let multiple workers attack one unit of work (story / milestone / issue, configurable) in parallel, get it reviewed as a whole, and ship it as a single PR. Designed for both quality and speed via clean specialization: the King owns cross-story coordination, each Senior owns one story end to end, and review never happens twice on the same code.
+
+### Added
+
+- **`Senior-N` role (`.kingdom/.setting/seniors.md`).** Opus per-story sub-orchestrator and sole within-story reviewer. It owns a worker pod, merges their branches into a local `story/<id>` branch, runs an autonomous review loop (route fixes back to the owning worker, re-review, capped at `integration.reviewLoopCap`), then marks the story push-eligible and hands it to the King. Never pushes, never writes feature code. New cmux color (Teal) and emoji (🎓).
+- **Story integration branch (R46).** A local branch (default `story/<id>`, configurable via `kingdom.json.integration`) with real merge commits, living in the Senior's worktree, branched off `develop`. Only the final `story/<id> -> develop` PR reaches origin. The solo `worker -> feature/<topic>` path remains for one-worker tasks.
+- **Three-tier gate (R47).** worker Tier-1 (lane typecheck) -> story-branch Tier-2 (tests/smoke/lint, run by the Senior) -> Senior review loop -> human push (R1 unchanged).
+- **`kingdom.json.integration` + `shape.seniors` + `seniors[]`.** New config: `enabled`, `unit` (story|milestone|issue), `branchPattern`, `gateOnStory`, `reviewLoopCap`; plus the senior workspace color and the `watchman.duties.crossStoryScan` toggle.
+- **`/kingdom:work` arg additions.** `seniors=N` (per-role) and `lane=N` (total-lane budget the King auto-composes, honoring per-role pins; e.g. `lane=8 watchman=1`). Clarified the counting unit for `cap=` / `target=`: they count things that become a PR (a solo task OR a whole story pod = 1), not sub-tasks and not milestones.
+- **8 helpers in `_primitives.md`:** `create_story_branch`, `spawn_senior_workspace`, `spawn_senior_loop`, `guard_senior_dispatch_scope`, `senior_merge_worker_into_story`, `run_tier2_on_story`, `senior_review_tick`, `watchman_cross_story_scan`.
+- **Watchman Duty 5 — cross-story drift scan (R50).** Per-tick `git merge-tree` across in-flight `story/*` branches, feeding the King a drift signal. Watchman detects; King resolves at push; Senior owns within-story conflicts.
+- **R46-R50** added; **R30 amended** for delegated dispatch (King + Seniors dispatch; Seniors in-pod + visible only, enforced by `guard_senior_dispatch_scope`). Tier-1 count stays 10. Design spec at `docs/superpowers/specs/2026-05-23-senior-story-pods-design.md`.
+
+### Changed
+
+- **`commands/work.md`:** Step 0.4 spawns Seniors; new Step 3.5 partitions stories, creates story branches, and assigns pods to Seniors; Step 4 skips senior lanes; Step 5 routes a Senior's push-eligible story sentinel through the cross-story check and the story-PR push.
+- **`commands/init.md`:** copies `seniors.md`; the scaffold template carries the new `integration` / `seniors` blocks.
+- Role docs updated: `kings.md` (delegation + cross-story), `workers.md` (pod membership), `watchmans.md` (Duty 5), `git.md` (story branch tier), `index.md` (Senior registered across all role tables).
+
 ## [0.31.1] — 2026-05-22
 
 Consumer-test fix release. A 2026-05-21 session running v0.31.0 surfaced two real bugs: (1) when the King spawned `worker-N` / `co-worker-N` / `watchman-N`, the cmux workspaces appeared but Claude REPL didn't start — `cmux new-workspace --command "claude"` turned out to be unreliable across cmux versions, so the King's subsequent `cmux send -- "<dispatch brief>"` landed in a bash prompt instead of a Claude session (the user had to manually ask King to run `claude` first); (2) when a worker closed a task, the King's poll loop was supposed to overlay the lane's diff onto the `kingdom` branch but didn't, because `commands/work.md:555` called `overlay_lane_onto_kingdom` — a function name that didn't exist anywhere (the v0.30.0 helper was named `kingdom_overlay_lane`, the call site was never updated). Bash's silent function-not-found behaviour meant the overlay step ran as a no-op for many releases without anyone noticing, and the subsequent Tier-2 gate fired against an empty kingdom branch.

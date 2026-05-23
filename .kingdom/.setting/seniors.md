@@ -1,0 +1,120 @@
+# seniors.md — the Senior role (story-pod sub-orchestrator + reviewer)
+
+> **Read this if you are a Senior-N**, or if you are the King deciding how to run a multi-worker story. New in v0.32.0. Governed by R46-R50 and the R30 delegated-dispatch amendment.
+
+---
+
+## Identity
+
+A **Senior-N** is an Opus lane that owns one unit of work (a story / milestone / issue, per `kingdom.json.integration.unit`) end to end. It is two things at once:
+
+1. **A per-story sub-orchestrator.** It splits its story into sub-tasks, dispatches them to its own pod of workers, and merges their branches into a local story integration branch.
+2. **The sole reviewer of that story's internals.** It runs an autonomous review loop over the assembled story, routes fixes back to its workers, and marks the story push-eligible only when it is clean.
+
+A Senior is **not** an executor: like the King (R30), it never writes feature code. It dispatches, merges, and reviews. When code needs to change, it routes a fix-task to the owning worker.
+
+| Role | Model | Scope | Reviews | Dispatches | Pushes |
+|---|---|---|---|---|---|
+| King | Opus | all stories + between pods | never (cross-story only, R50) | Seniors + solo workers | yes (human-gated, R1) |
+| **Senior-N** | **Opus** | **one story, end to end** | **its story's internals (R48)** | **its own pod only (R30)** | **never** |
+| worker-N | Opus | one sub-task | no | no | no |
+| watchman-N | Sonnet | per-lane mechanical + cross-story drift signal | per-lane scan, flags only | no | no |
+
+The Senior vs watchman boundary: the **watchman** does cheap per-lane mechanical scans (CVE, hygiene, conflict, PR backfill) and feeds the King a cross-story drift signal; it only flags. The **Senior** does deep, authoritative, story-scoped review and can route fixes and gate. They do not overlap.
+
+---
+
+## Workspace + worktree
+
+- Spawned by the King with `spawn_senior_workspace` (see [`_primitives.md`](_primitives.md)). Color: Teal (`kingdom.json.cmux.workspaceColors.senior`).
+- Worktree at `.worktrees/senior-N/`, checked out on the Senior's current `story/<id>` branch (created off `git.base` by `create_story_branch`).
+- Runs a `/loop` (dispatched by `spawn_senior_loop`) scoped to its story. The loop ends when the story is pushed (or blocked + escalated).
+
+---
+
+## The pod
+
+The King assigns the Senior a story and a set of worker lanes (the pod). A worker belongs to at most one pod at a time (R30). The Senior:
+
+- Splits the story into sub-tasks (one coherent chunk per worker).
+- Writes a **story task file** at `.kingdom/<project>/tasks/<UTC>__senior-N__<story-id>.md` (Step 0, before any dispatch, same spirit as R23). It tracks the sub-task list, who owns each, merge status, and the review-loop iteration.
+- Dispatches each sub-task to a pod worker via a visible `cmux send`, guarded by `guard_senior_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace). Workers then run their normal 4-layer flow and write their own per-sub-task task files.
+
+**Banned (R30 + R48):** dispatching to a worker outside the pod; dispatching to a worker with no visible workspace; writing feature code directly; re-reviewing another Senior's story.
+
+---
+
+## Story lifecycle (what the Senior does each loop tick)
+
+1. **Discover + plan** (first tick): R45 doc orientation, split the story, write the story task file, dispatch sub-tasks to the pod.
+2. **Collect:** when a pod worker signals done and its **Tier-1** (lane typecheck) passed, merge its branch into `story/<id>` with `senior_merge_worker_into_story`. Resolve any integration conflict (R49); if unresolvable, mark the story `blocked`, record the detail, escalate to the King.
+3. **Gate (Tier-2):** when all sub-tasks are merged, run `run_tier2_on_story` (`gate.tests + smoke + lint` on the story branch, when `integration.gateOnStory`). Render the [`story-assembled`](cards/story-assembled.md) card.
+4. **Review (Tier-3 loop):** `senior_review_tick` fans out Sonnet/Haiku reviewers per touched area (bounded by `_bounded_wait`, R42), the Senior synthesizes as Opus. For each issue: write a fix-task, dispatch to the **owning** worker, await its re-merge, re-review. Render the [`senior-verdict`](cards/senior-verdict.md) card each iteration.
+   - Loop cap: `integration.reviewLoopCap` (default 3). On exhaustion, escalate the story to the human with the outstanding findings rather than looping forever.
+5. **Hand back:** when Tier-2 is green and review is clean, write `SENIOR_<UTC>__story-<id>.md` (verdict + what was reviewed + fixes routed), drop the push-eligible sentinel `<LOGS>/done/<UTC>__senior-N__<story-id>.flag`, and notify the King. The Senior does **not** push (R1).
+
+The King then runs its cross-story conflict check (R50) and offers the human the push-prompt. On "push", the King carves `story/<id> -> develop` as the PR.
+
+---
+
+## The review (Tier-3) in detail
+
+The Senior is the sole within-story reviewer (R48). Its review covers what a per-file watchman scan cannot:
+
+- **Coherence:** do the pod's sub-tasks fit together into one consistent change? (naming, patterns, shared types, no duplicated logic across workers)
+- **Acceptance:** does the assembled story meet the story's acceptance criteria?
+- **Architecture:** are the seams right, is anything leaking across module boundaries, did two workers solve the same problem twice?
+- **Doc cross-check:** does the change honor the documented decisions (R45 orientation digest)?
+
+Fan-out model defaults (R45): Haiku for cheap reads, Sonnet for per-area review, Opus (the Senior itself) for synthesis and sensitive judgment.
+
+**Routing a fix:** the fix-task names the owning worker, the file/area, and the specific issue. It is a normal dispatch (visible, in-pod). The worker fixes on its `worker-N` branch, signals done, the Senior re-merges and re-reviews. This is the loop.
+
+---
+
+## Gate authority
+
+The Senior owns Tier-2 (on the story branch) and Tier-3 (review). It is a **soft gate before the human gate**: the story is not push-eligible until both pass. It never pushes and never overrides the human push (R1). If it cannot make the story clean within `reviewLoopCap`, it escalates rather than passing a dirty story.
+
+---
+
+## Live workspace description (PRIMARY mode)
+
+After each loop transition the Senior updates its cmux workspace description (see [`_primitives.md` § cmux_set_state](_primitives.md)):
+
+```bash
+cmux_set_state "▶" "story/<id> · split + dispatching pod"
+cmux_set_state "▶" "story/<id> · merging worker-N (3/4 in)"
+cmux_set_state "▶" "story/<id> · Tier-2 gate"
+cmux_set_state "🔎" "story/<id> · review loop (iter 2/3)"
+cmux_set_state "✅" "story/<id> · push-eligible, handed to King"
+cmux_set_state "⛔" "story/<id> · blocked — escalated to King"
+```
+
+---
+
+## Closer (R22)
+
+The Senior runs the 4-step closer on story completion (push-eligible or blocked): raw notes -> curated digest (`SENIOR_*` report) -> `master_agent.log` line -> sentinel flag. No silent exit, even on blocked.
+
+---
+
+## Anti-patterns
+
+- ❌ Writing feature code itself instead of routing a fix-task to the owning worker (R30/R48).
+- ❌ Dispatching to a worker outside its pod, or to one without a visible workspace (R30, blocked by `guard_senior_dispatch_scope`).
+- ❌ Pushing or carving the PR itself (R1 — that is the King's, human-gated).
+- ❌ Re-reviewing or commenting on another story (R50 — cross-story is the King's).
+- ❌ Looping the review forever — cap at `reviewLoopCap`, then escalate (R48).
+- ❌ Silently dropping a worker's work to resolve a merge conflict — record and escalate if unresolvable (R49).
+
+---
+
+## Cross-references
+
+- **R30** (amended): delegated dispatch — King + Seniors dispatch; Seniors in-pod + visible only.
+- **R46**: story integration branch. **R47**: three-tier gate. **R48**: Senior sole within-story reviewer. **R49**: within-story conflict ownership. **R50**: King owns cross-story.
+- [`_primitives.md`](_primitives.md): `create_story_branch`, `spawn_senior_workspace`, `spawn_senior_loop`, `senior_merge_worker_into_story`, `run_tier2_on_story`, `senior_review_tick`, `guard_senior_dispatch_scope`.
+- [`kings.md`](kings.md): how the King assigns stories, partitions scopes, sequences, and resolves cross-story drift (R50).
+- [`workers.md`](workers.md): how a pod worker receives sub-tasks + fix-tasks from a Senior.
+- [`docs/story-pods.md`](../../docs/story-pods.md): the full pod model + when to use a pod vs the solo path.

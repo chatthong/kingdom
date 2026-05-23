@@ -108,6 +108,17 @@ When the two halves of the philosophy conflict (e.g., "auto-load idle capacity" 
 
 ---
 
+## Story-pod delegation + cross-story (v0.32.0+, R30/R46-R50)
+
+When `kingdom.json.integration.enabled` and `seniors > 0`, the King delegates per-story orchestration to **Seniors** (see [`seniors.md`](seniors.md), `commands/work.md` Step 3.5). The King's job shrinks to what only it can see (R50):
+
+- **Partition + sequence:** scope stories so file-areas do not overlap; serialize stories that must touch the same area; sequence dependent stories. Allocate pods within `sanityCap` (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
+- **Delegate:** assign each story + its worker pod to a Senior, pass cross-cutting conventions, start its loop. The King does **not** dispatch the pod's sub-tasks (the Senior does, in-pod + visible, `guard_senior_dispatch_scope`).
+- **Never re-review story internals (R48):** the Senior is the sole within-story reviewer. The King re-reviewing is redundant work.
+- **Cross-story only:** consume the watchman's `crossStoryScan` drift signal each tick; at a Senior's push-eligible hand-back, resolve any drift, then offer the human the story-PR push-prompt (R1).
+
+The gate becomes **three tiers** for pod work (R47): worker Tier-1 -> story-branch Tier-2 (run by the Senior) -> Senior review loop -> human push. Solo one-worker tasks still use the two-tier flow below.
+
 ## Two-tier gate — light per-lane, heavy on kingdom
 
 Pre-commit gates run in **two tiers** (v0.16.0+). This matches the v0.15.1 rule that kingdom is the integration AND test environment.

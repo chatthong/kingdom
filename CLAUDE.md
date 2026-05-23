@@ -10,9 +10,9 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.31.1 (2026-05-22)
+## Current state — v0.32.0 (2026-05-24)
 
-The plugin is on `main`. Pushed to `origin/main` at `github.com/chatthong/kingdom` through v0.31.0; v0.31.1 staged locally awaiting push approval. All releases since v0.18.0 ship per-release; no separate release branch.
+The plugin is on `main`. v0.32.0 adds story pods: a new **Senior** role (🎓 Opus) + a local **story integration branch** so multiple workers attack one story in parallel, get reviewed as a unit by a Senior, and ship as one PR. King owns cross-story (R50); Senior owns within-story (R48); three-tier gate (R47). Design spec: `docs/superpowers/specs/2026-05-23-senior-story-pods-design.md`. All releases since v0.18.0 ship per-release; no separate release branch.
 
 Recent version history (worth reading the CHANGELOG for full detail):
 
@@ -57,7 +57,7 @@ commands/                  # 4 slash commands
   index.md                 # entry-point router
   rules.md                 # 40 enforceable rules (R1-R41, no R42), Tier 1/2/3
   _primitives.md           # shared bash helpers (cmux_*, kingdom_*, render_card, pick_skills_for_task, etc)
-  kings.md / workers.md / co-workers.md / watchmans.md / git.md / cmux.md   # role specs
+  kings.md / workers.md / co-workers.md / watchmans.md / seniors.md / git.md / cmux.md   # role specs (seniors.md = v0.32.0 story-pod role)
   cards/                   # 22 display templates (welcome, daily-status, task-complete, resume-queue, what-to-work-on, etc) + README
   skill-routing.md         # keyword → skill mapping (v0.23.0+)
 
@@ -69,7 +69,7 @@ README.md                  # slim landing page (210 lines)
 CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 ```
 
-## Key architectural decisions — 27 total (don't re-debate without reading the rationale)
+## Key architectural decisions — 28 total (don't re-debate without reading the rationale)
 
 1. **`kingdom` branch is a working-tree overlay, never commits** (v0.17.0 → R4 + R29). King resets to `origin/develop`, then `git diff worker-N | git apply --3way` per lane. After push, `git restore .` discards. Reviewer sees all in-flight lanes as UNCOMMITTED files in GitHub Desktop's Changes tab. Push approval (R1) requires Tier-2 gate pass on the overlay.
 
@@ -124,6 +124,8 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 26. **Every parallel fan-out uses `_bounded_wait`, never bare `wait`** (R42, v0.30.0). Bare `wait` blocks until every backgrounded subshell exits — if one stalls (`git worktree add` blocked on `.git/index.lock`, `gh pr view` on stale network, `cmux send` to not-yet-ready workspace), the parent script hangs forever and the Claude Code harness auto-pushes the bash call to background. User sees "Job's output is empty and files weren't written." Diagnosed via live cmux audit (2026-05-20): every cmux command itself returns in <0.65s; the perceived hangs across v0.27-v0.29.4 were all downstream subshells. Spec: collect PIDs (`PIDS="$PIDS $!"`), pass to `_bounded_wait <budget> $PIDS`, helper `kill -9`'s survivors and returns 124 on timeout. Helper is pure-bash + portable (macOS lacks GNU `timeout` and `gtimeout`). Default budgets: 5s cosmetic cmux fan-outs, 15s teardown, 45s `parallel_edit_fanout`, 60s lane spawn cycle. Five call sites converted: `commands/work.md` ×2 (King rename + lane spawn), `commands/save.md`, `watchmans.md` PR-backfill, `_primitives.md` `parallel_edit_fanout` self.
 
 27. **Hard gates beat prose; Tier 1 capped at 10** (v0.31.0). Prior versions encoded critical rules as prose in `rules.md` with anti-pattern callouts and "why Tier 1" justifications. The 2026-05-20 morning consumer session showed this has a ceiling: a King operating in real-time chat will pattern-match the surface shape of the task and not re-read 700 lines of `rules.md` between Bash calls. v0.31.0 picks a different lane — keep the rules as documentation, but make load-bearing rules call-site blocks. Five new helpers in `_primitives.md § Hard gates` BLOCK violations: `guard_worker_commit_branch` (R4+R9), `guard_lane_workspace_exists` (R31+R36), `guard_no_king_session_worktree_cd` (R30+R37), `kingdom_overlay_lane` (R15 — correct overlay flow), `spawn_watchman_loop` (R39 — auto-`/loop`). Same release caps Tier 1 at exactly 10 rules (R1, R2, R4, R5, R14, R22, R30, R31, R36, R42) — Tier 1 should mean "violation = kingdom worse than running solo," not "important enough to add a tier marker." 29 prior Tier-1 markers demoted to Tier 2 via a legend at the top of `rules.md` (per-rule heading sweep deferred). Adds R43 (closing actions agent-owned; no "Ter's hand" in briefs) and R44 (after `go`, King executes — no execute-mode follow-up) as Tier 2.
+
+28. **Story pods: Senior role + story integration branch + three-tier gate** (v0.32.0). Multiple workers attack one unit (story/milestone/issue, `kingdom.json.integration.unit`) in parallel, get reviewed as a whole, and ship as one PR. A new **Senior-N** (Opus, `seniors.md`) is a per-story sub-orchestrator and the SOLE within-story reviewer: it owns a worker pod, merges their `worker-N` tips into a local `story/<id>` branch (real merge commits, R46), runs Tier-2 on the story branch, runs an autonomous review loop (route fixes back to the owning worker, re-review, cap `integration.reviewLoopCap`, R48), then marks the story push-eligible. The King delegates per-story orchestration (R30 amended: King + Seniors dispatch; Seniors in-pod + visible only via `guard_senior_dispatch_scope`) and owns ONLY cross-story coordination (partition scopes, sequence dependencies, resolve drift at push, fed by the watchman's `crossStoryScan` duty, R50). Quality + speed via specialization: review never happens twice on the same code (Senior owns within-story depth, King owns cross-story breadth), and the only serial bottleneck is the human push. Gate is three-tier (R47): worker Tier-1 -> story Tier-2 -> Senior review -> human push. Story branch stays local; only the final `story/<id> -> develop` PR reaches origin (solo `worker -> feature/<topic>` path retained for one-worker tasks). Adds R46-R50. Design spec: `docs/superpowers/specs/2026-05-23-senior-story-pods-design.md`.
 
 ## Working conventions for THIS repo
 
@@ -204,4 +206,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-20 after v0.31.0 ship. Update this file when shipping a release that changes architectural decisions (1-27 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-24 after v0.32.0 ship. Update this file when shipping a release that changes architectural decisions (1-28 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

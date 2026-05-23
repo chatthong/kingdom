@@ -394,6 +394,142 @@ case "$WS_REF" in workspace:*) spawn_watchman_loop "$WS_REF" & ;; esac
 
 ---
 
+## Senior + story-pod helpers (v0.32.0+, R46-R50)
+
+Helpers for the story-pod model: a Senior owns a local story integration branch, merges its pod's workers into it, gates and reviews it, and hands it back push-eligible. See [`seniors.md`](seniors.md).
+
+### `create_story_branch` — open a local story integration branch + the Senior's worktree (R46)
+
+```bash
+create_story_branch () {
+  # Inputs: $1 = PROJ, $2 = story id, $3 = base (default develop), $4 = senior lane (default senior-1)
+  # Output: the branch name (story/<id>). The Senior's worktree is left checked out on it.
+  local proj="$1" id="$2" base="${3:-develop}" senior="${4:-senior-1}"
+  local branch="story/$id" wt="$proj/.worktrees/$senior"
+  git -C "$proj" fetch origin "$base" >/dev/null 2>&1
+  if [ -d "$wt" ]; then
+    git -C "$wt" checkout -B "$branch" "origin/$base" >/dev/null 2>&1
+  else
+    git -C "$proj" worktree add -B "$branch" "$wt" "origin/$base" >/dev/null 2>&1
+  fi
+  echo "$branch"
+}
+```
+
+### `spawn_senior_workspace` + `spawn_senior_loop` — bring a Senior online (R30, R39-style)
+
+```bash
+spawn_senior_workspace () {
+  # Inputs: $1 = senior lane (senior-1), $2 = story worktree path, $3 = color (default Teal)
+  # Thin wrapper over spawn_master_workspace (claude boots automatically, v0.31.1+).
+  spawn_master_workspace "🎓 $1" "$2" "${3:-Teal}"
+}
+
+spawn_senior_loop () {
+  # Inputs: $1 = senior workspace ref, $2 = story id
+  # Dispatches the story-scoped autonomous loop to the already-running claude REPL.
+  local ws_ref="$1" id="$2"
+  local surface=$(cmux rpc workspace.list 2>/dev/null \
+    | jq -r ".[] | select(.ref == \"$ws_ref\") | .surfaces[0].ref" 2>/dev/null)
+  [ -z "$surface" ] || [ "$surface" = "null" ] && { echo "❌ spawn_senior_loop: no surface in $ws_ref" >&2; return 1; }
+  local brief="/loop You are ${id%%/*}'s Senior owning story/$id. Read .kingdom/.setting/seniors.md, then run the story lifecycle: doc-orient, split + dispatch your pod, merge each worker branch as its Tier-1 passes, run Tier-2 on the story branch, run the review loop (route fixes back to the owning worker, re-review, cap at reviewLoopCap), then write SENIOR_ verdict + push-eligible sentinel and notify the King. Never push."
+  cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"$brief\n\"}" 2>/dev/null
+}
+```
+
+### `guard_senior_dispatch_scope` — hard gate: Senior dispatches in-pod + visible only (R30 amendment)
+
+This is the safety that lets R30 relax. A Senior may dispatch ONLY to a worker in its own pod that has a live, visible workspace. Refusing otherwise preserves the R31/R36/R37 "no invisible work" property.
+
+```bash
+guard_senior_dispatch_scope () {
+  # Inputs: $1 = senior lane, $2 = target worker lane, $3 = space-separated pod members
+  # Returns: 0 dispatch allowed; 1 refused (out-of-pod or no visible workspace)
+  local senior="$1" target="$2" pod="$3"
+  case " $pod " in
+    *" $target "*) ;;
+    *) echo "❌ R30 VIOLATION: $senior dispatching to $target, not in its pod ($pod). Seniors dispatch in-pod only." >&2; return 1 ;;
+  esac
+  guard_lane_workspace_exists "$target" || { echo "❌ R30/R36: $target has no visible workspace; $senior cannot dispatch into the void." >&2; return 1; }
+  return 0
+}
+```
+
+### `senior_merge_worker_into_story` — merge a pod worker into the story branch (R49)
+
+```bash
+senior_merge_worker_into_story () {
+  # Inputs: $1 = senior worktree (on story/<id>), $2 = worker branch
+  # Returns: 0 merged clean; 1 conflict (Senior resolves per R49; if unresolvable, abort + mark blocked)
+  local wt="$1" wb="$2"
+  local story=$(git -C "$wt" rev-parse --abbrev-ref HEAD)
+  if git -C "$wt" merge --no-ff -m "merge $wb into $story" "$wb" >/dev/null 2>&1; then
+    echo "✅ merged $wb into $story"
+    return 0
+  fi
+  echo "⚠️ conflict merging $wb into $story. Senior resolves (R49); if contradictory worker intents, \`git merge --abort\`, mark story blocked, record detail, escalate to King. No silent overwrite." >&2
+  return 1
+}
+```
+
+### `run_tier2_on_story` — Tier-2 gate on the assembled story branch (R47)
+
+```bash
+run_tier2_on_story () {
+  # Inputs: $1 = senior worktree (story branch checked out), $2 = kingdom.json path
+  # Runs gate.tests + gate.smoke + gate.lint in the story worktree. Returns 0 if all pass.
+  local wt="$1" kjson="$2" ok=1 key cmd
+  for key in tests smoke lint; do
+    while IFS= read -r cmd; do
+      [ -z "$cmd" ] && continue
+      ( cd "$wt" && eval "$cmd" ) || { echo "❌ Tier-2 ($key) failed on story branch: $cmd" >&2; ok=0; }
+    done < <(jq -r ".gate.$key[]?" "$kjson" 2>/dev/null)
+  done
+  [ "$ok" = 1 ] && echo "✅ Tier-2 passed on story branch"
+  return $((1 - ok))
+}
+```
+
+### `senior_review_tick` — the Tier-3 review loop (R48, Senior judgment)
+
+The review itself is Opus judgment, not pure bash. This frames the fan-out the Senior runs each loop iteration:
+
+```bash
+senior_review_tick () {
+  # Inputs: $1 = senior worktree (story branch), $2 = base (default develop)
+  # Outline (the Senior, Opus, executes the judgment):
+  #   1. Touched areas:  git -C "$wt" diff --name-only "origin/$base"
+  #   2. Fan out Sonnet/Haiku reviewers per area, bounded by _bounded_wait (R42):
+  #      coherence across sub-tasks, acceptance criteria, architecture seams, doc cross-check (R45 digest).
+  #   3. Synthesize as Opus. For each issue: route a fix-task to the OWNING worker
+  #      (guard_senior_dispatch_scope), await its re-merge (senior_merge_worker_into_story), re-review.
+  #   4. Cap at kingdom.json.integration.reviewLoopCap. On exhaustion, escalate to the human.
+  # Returns: 0 clean (push-eligible) | 1 fixes routed (loop again) | 2 escalate (cap hit / blocked)
+  : # see seniors.md § "The review (Tier-3) in detail"
+}
+```
+
+### `watchman_cross_story_scan` — cross-story drift signal for the King (R50, watchman duty)
+
+```bash
+watchman_cross_story_scan () {
+  # Inputs: $1 = PROJ. Pairwise git merge-tree across in-flight story branches.
+  # Echoes a drift summary the King consumes at push time. Cheap; runs each watchman tick.
+  local proj="$1" out="" i j
+  local arr=($(git -C "$proj" for-each-ref --format='%(refname:short)' 'refs/heads/story/*'))
+  for ((i=0; i<${#arr[@]}; i++)); do
+    for ((j=i+1; j<${#arr[@]}; j++)); do
+      if git -C "$proj" merge-tree --write-tree "${arr[i]}" "${arr[j]}" 2>/dev/null | grep -qiE '^CONFLICT|<<<<<<<'; then
+        out="$out ${arr[i]}<->${arr[j]}"
+      fi
+    done
+  done
+  [ -n "$out" ] && echo "⚠️ cross-story drift:$out" || echo "✅ no cross-story drift"
+}
+```
+
+---
+
 ## Orientation — Haiku-army doc read (v0.31.1+, R45)
 
 **Every role** (King, worker-N, co-worker-N, watchman-N) calls this when it needs the project's big picture — at session start, at new-task receipt, or any time it's *not sure* about a documented convention. The protocol fans out cheap Haiku reads in parallel so the calling role's own context window stays uncluttered.

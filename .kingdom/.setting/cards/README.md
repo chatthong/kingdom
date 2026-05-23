@@ -12,6 +12,8 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`dispatch-plan.md`](dispatch-plan.md) | `[!NOTE]` | `/kingdom:work` kickoff: lane assignments |
 | [`task-complete.md`](task-complete.md) | `[!TIP]` | Tier-2 gate pass (random pool of 20 lines) |
 | [`push-prompt.md`](push-prompt.md) | `[!IMPORTANT]` | Tier-2 pass, asking for "push" word |
+| [`story-assembled.md`](story-assembled.md) | `[!NOTE]` | Senior merged all pod sub-tasks + ran Tier-2 (v0.32.0) |
+| [`senior-verdict.md`](senior-verdict.md) | `[!NOTE]` | Senior review-loop result: clean / fixes-routed / escalated (v0.32.0) |
 | [`gate-fail.md`](gate-fail.md) | `[!CAUTION]` | Tier-1 or Tier-2 gate fails |
 | [`end-of-day.md`](end-of-day.md) | `[!TIP]` | `/kingdom:save` or cap/target hit |
 | [`blocked-lane.md`](blocked-lane.md) | `[!WARNING]` | Watchman detects permission prompt |

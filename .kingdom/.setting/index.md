@@ -13,8 +13,9 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`kings.md`](kings.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`workers.md`](workers.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-workers.md`](co-workers.md) | Co-worker (user-paired) interactive protocol |
-| [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, lifecycle, dual-view layout |
-| [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, PR conventions |
+| [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, cross-story drift scan, lifecycle, dual-view layout |
+| [`seniors.md`](seniors.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
+| [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
 | [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
 | [`_primitives.md`](_primitives.md) | **Shared bash helpers** (v0.19.0+) — canonical implementations of every helper the role docs reference (`cmux_set_state`, `attach_or_create_worktree`, `spawn_master_workspace`, `spawn_pool_slot`, `kingdom_*`, `carve_and_push_feature`, `generate_pr_body_from_task_file`, `pattern_grep_fanout`, `fetch_weather_line`, `render_card`, `pick_skills_for_task`, etc). Single source of truth for shared bash. |
 | [`cards/`](cards/) | **Card display library** (v0.22.0+) — 19 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
@@ -27,7 +28,8 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | Role | Writes | Reads | Spawns | Pushes | Edits code | Plans (task files) |
 |---|---|---|---|---|---|---|
 | 👑 King | claims, test reports, push log lines, own task files (for planning sessions) | everything | sub-agents (any model), lane masters via `claude-teams` | ✅ sole pusher | ❌ never | ✅ for own planning sessions |
-| 👷 Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
+| 🎓 Senior | story task file, `SENIOR_*` reports, push-eligible sentinel, story-branch merges | everything (its story + pod) | its pod's workers (in-pod, visible only) + sub-agents (review fan-out) | ❌ (marks push-eligible; King pushes) | ❌ never (routes fixes to workers) | ✅ writes the story task file; assigns sub-tasks |
+| 👷 Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King or its Senior per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
 | 🧑‍💼 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (the user often dictates the brief) |
 | 🕵️ Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchmans.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
 | 🐱 Sub-agent | own raw + curated + log + flag (4-step closer) | logs, tasks (for context from parent lane master) | none (one-shot leaf) | ❌ | ✅ via Edit/Write tools when assigned | ❌ executes against the task file its parent wrote |
@@ -39,6 +41,7 @@ If any role file's procedural section contradicts this table, **this table wins.
 | Role | Emoji | Used in |
 |---|---|---|
 | King | 👑 | cmux/tmux tab title (`👑 King`); chat replies relaying King decisions; dispatch templates; log line prefixes |
+| Senior | 🎓 | cmux/tmux tab title (`🎓 senior-1`); `SENIOR_*.md` report headers (filenames stay ASCII); story-pod chat |
 | Worker | 👷 | cmux/tmux tab title (`👷 worker-1`); dispatch templates; chat status when describing worker activity |
 | Co-worker | 🧑‍💼 | cmux/tmux tab title (`🧑‍💼 co-worker-1`); dispatch templates; paired-work chat |
 | Watchman | 🕵️ | cmux/tmux tab title (`🕵️ watchman-1`); `WATCH_*.md` report headers (filenames stay ASCII); alert chat |
@@ -195,7 +198,8 @@ Model selection in the kingdom is a two-tier decision:
 
 | Role | Default model | Rationale |
 |---|---|---|
-| King | Opus | Orchestrator; plans, reviews, gates. |
+| King | Opus | Orchestrator; plans, reviews cross-story, gates, pushes. |
+| Senior | Opus | Per-story sub-orchestrator + sole within-story reviewer; deep judgment needs the heavy model. |
 | Worker | Opus | Autonomous task work; quality over speed. |
 | Co-worker | Opus | user-paired interactive work; same quality bar. |
 | Watchman | Sonnet | Passive monitor only; lighter model is fine. |
@@ -287,7 +291,8 @@ Workspace project registry. Keep current — agents read it to know which projec
 
 | Role | Tool / spawn mechanism | What it does | Detail |
 |---|---|---|---|
-| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds the user's conversation; runs pre-commit gate; SOLE PUSHER. | [`kings.md`](kings.md) |
+| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds the user's conversation; runs pre-commit gate; cross-story coordination; SOLE PUSHER. | [`kings.md`](kings.md) |
+| **Senior (Opus)** | Long-lived Claude session in `.worktrees/senior-N/` on its `story/<id>` branch; runs a story-scoped `/loop`. | Per-story sub-orchestrator: owns a worker pod, merges into the story branch, sole within-story reviewer, marks push-eligible. Never pushes, never writes feature code. | [`seniors.md`](seniors.md) |
 | **Worker (Opus)** | Long-lived Claude teammate in `.worktrees/worker-N/`, spawned via `cmux claude-teams` (primary) or raw tmux (fallback); worktree created via `git worktree add`. | Autonomous task work; 4-step closer per task; spawns own sub-agents (no eco cap). | [`workers.md`](workers.md) |
 | **Co-worker (Opus)** | Same spawn as worker, in `.worktrees/co-worker-N/`; worktree created via `git worktree add`. | user-paired interactive work; dormant by default. | [`co-workers.md`](co-workers.md) |
 | **Watchman (Sonnet)** | Long-lived Claude session in `.worktrees/watchman-N/`, worktree via `git worktree add`; runs `/loop` continuously. | Passive monitor — smoke + PR babysitting; writes WATCH_*.md; no edits, no push. | [`watchmans.md`](watchmans.md) |

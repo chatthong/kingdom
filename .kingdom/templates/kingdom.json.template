@@ -5,6 +5,7 @@
     "workers": 3,
     "co-workers": 1,
     "watchman": 1,
+    "seniors": 1,
     "sanityCap": 10
   },
 
@@ -13,6 +14,15 @@
     "integrationBranch": "kingdom",
     "pushPolicy": "always-ask",
     "branchNamingPattern": "feature/<topic>"
+  },
+
+  "integration": {
+    "_comment": "Story-pod model (v0.32.0+). When enabled and a unit needs >1 worker, the King opens a local story integration branch owned by a Senior; pod workers merge into it; the Senior reviews it as a whole; only the final story->develop PR reaches origin. Single-worker quick tasks still use the solo worker->feature path. Set enabled=false to keep the classic per-worker flow.",
+    "enabled": true,
+    "unit": "story",
+    "branchPattern": "story/<id>",
+    "gateOnStory": true,
+    "reviewLoopCap": 3
   },
 
   "workers": [
@@ -27,6 +37,10 @@
 
   "watchmen": [
     { "slug": "watchman-1", "model": "sonnet", "cadence": "dynamic", "docsAudit": true }
+  ],
+
+  "seniors": [
+    { "_comment": "Senior-N (v0.32.0+): Opus per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges their branches into the story branch, runs the review loop, hands a push-eligible story to the King. Counts against sanityCap.", "slug": "senior-1", "model": "opus" }
   ],
 
   "gate": {
@@ -48,7 +62,8 @@
       "king":     "Amber",
       "worker":   "Purple",
       "coworker": "Blue",
-      "watchman": "Rose"
+      "watchman": "Rose",
+      "senior":   "Teal"
     },
     "subAgentSpawnByModel": {
       "_comment": "Model-tiered default spawn mode. v0.28.0+: ALL models default to 'tab' per R38 (visible sub-agent work). Background (in-process Agent()) is opt-in per-model — set explicitly when you want a hidden fan-out (rare). Tab spawns are slower (~10-20s boot) but observable, cancellable, audit-trail-clean. The compressed 'local agent' indicator in cmux is banned for kingdom work.",
@@ -82,7 +97,8 @@
       "codeReview": true,
       "cveScan": true,
       "conflictScan": true,
-      "gitHygiene": true
+      "gitHygiene": true,
+      "crossStoryScan": true
     }
   }
 }

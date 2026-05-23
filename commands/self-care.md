@@ -331,6 +331,28 @@ On `N` → warning: stale files left in place. King may misbehave if it referenc
 
 ---
 
+## Check 10 — story-pod config present (v0.32.0+, informational)
+
+If a project's `kingdom.json` predates v0.32.0 it will lack the `integration` block, `shape.seniors`, and the `seniors[]` array. Story pods stay off until those exist. This check is informational: report it, offer to re-run `/kingdom:init <project>` (idempotent) to merge the new keys, or note the project keeps the classic per-worker flow.
+
+```bash
+for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
+  [ -f "$KJSON" ] || continue
+  proj=$(basename "$(dirname "$KJSON")")
+  has_integ=$(jq -r 'has("integration")' "$KJSON" 2>/dev/null)
+  has_seniors=$(jq -r '.shape | has("seniors")' "$KJSON" 2>/dev/null)
+  if [ "$has_integ" = "true" ] && [ "$has_seniors" = "true" ]; then
+    echo "  ✓ $proj: story-pod config present (seniors=$(jq -r '.shape.seniors // 0' "$KJSON"), unit=$(jq -r '.integration.unit // "story"' "$KJSON"))"
+  else
+    echo "  ⓘ $proj: pre-v0.32.0 config (no integration/seniors keys). Story pods OFF; classic per-worker flow active. Re-run /kingdom:init $proj to add them."
+  fi
+done
+```
+
+This is never a hard fail: a project without the keys simply runs the classic flow. No auto-patch.
+
+---
+
 ## Final summary
 
 After all 9 checks (including any patch outcomes for Check 6 + import outcomes for Check 9), collect results. Use these result symbols:

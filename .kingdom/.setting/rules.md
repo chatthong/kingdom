@@ -26,7 +26,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 
 **Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
 
-Tier 1 = 10. Tier 2 ≈ 28. Tier 3 = 5. Total = 43 rules.
+Tier 1 = 10. Tier 2 ≈ 33. Tier 3 = 5. Total = 48 rules (R46-R50 added in v0.32.0 for story pods).
 
 ---
 
@@ -143,6 +143,15 @@ Sentinel exists + no matching test report exists → King auto-fires the gate wi
 **Incident that motivated this rule (2026-05-19):** a King session spent ~1m48s "Crunched" drafting a 9-batch execution plan for `FE-P0-FOUND.5` in chat — files to touch, scope decisions (admin in/out), AC flip targets, verification steps — instead of dispatching to worker-1. Zero tasks completed in the session. Cause: King was acting as worker. Fix: this rule, plus R31 (verify lanes exist before dispatch) and R32 (workers don't "wait").
 
 **Hard time budget:** from `/kingdom:work` Step 4 reaching auto-dispatch, **no more than 60 seconds** elapses before the first `cmux send` fires to a worker. If King exceeds 60s of "planning in chat" between audit-done and first dispatch, that's a violation — re-read this rule and dispatch with whatever plan exists.
+
+**Delegated dispatch (v0.32.0+).** The orchestrator-only principle now also governs **Seniors** (see [`seniors.md`](seniors.md), R46-R50). For a story pod, the King delegates per-story orchestration to a Senior-N. Both roles are orchestrators, not executors: neither writes feature code. The dispatch chain becomes:
+
+- The King dispatches to **Seniors** (assigns a story) and to **solo workers** (non-pod tasks).
+- A **Senior** dispatches only to the workers in **its own pod**, and only through a **visible** lane workspace, enforced by `guard_senior_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace, preserving the R31/R36/R37 visibility guarantees this rule depends on).
+- A Senior additionally **merges** worker branches into the story branch and **reviews** the assembled story (R48/R49). Merge + review are integration/review work, not feature execution, so they do not violate orchestrator-only.
+- **Workers never dispatch.** A worker belongs to at most one pod at a time.
+
+This relaxes the "King is the sole dispatcher" reading while keeping the property R30 exists to protect: no work happens invisibly outside a tracked, visible workspace. Tier 1 count stays 10 (R30 amended in place, no new Tier-1 rule).
 
 ### R31. Lane infrastructure MUST be spawned + verified BEFORE any dispatch — Tier 1 (v0.24.0+, expanded v0.25.0)
 
@@ -786,6 +795,43 @@ The user's `go` collapses ALL remaining branch points into the kingdom's default
 **Why Tier 2 (not Tier 1):** advisory orientation. Skipping it produces *worse* output, not corrupted state — so demoting an iron-clad signature isn't warranted. But the cost of skipping is high enough across all roles that it earns the strong-default tier.
 
 **Cross-references:** R8 (pattern grep before implementation — R45 is the documentation analogue), R14 (King's session-start context read — R45 extends this to ALL roles), R28 (parallel by default for scans — Haiku fan-out IS the canonical implementation), R40 (Haiku cap is shared with watchman's per-tick cap; R45's cap is per-call, not per-tick), R42 (bounded wait around every fan-out).
+
+### R46. Story integration branch — Tier 2 (v0.32.0+)
+
+When `kingdom.json.integration.enabled` is true and a unit of work (the configurable `integration.unit`: story, milestone, or issue) needs more than one worker, the King opens a **story integration branch** instead of the solo `worker -> feature/<topic>` path.
+
+- The branch is named per `integration.branchPattern` (default `story/<id>`), branched off `git.base` (`develop`), and lives in the owning Senior's worktree (`.worktrees/senior-N/`).
+- It is a **real local branch with real merge commits**: each pod worker's branch is merged into it by the Senior (not `git apply` overlay).
+- It stays **local**. Only the final `story/<id> -> develop` PR reaches origin (R6 still holds for lane branches; the story branch is the single thing promoted per unit).
+- Single-worker quick tasks may still use the solo `worker -> feature/<topic>` path. Not every task is a pod.
+
+### R47. Three-tier gate — Tier 2 (v0.32.0+)
+
+With story pods, the gate has three tiers before the human push (R1):
+
+1. **Tier 1 (worker):** lane typecheck inside each worker's worktree (`gate.typecheck`), unchanged.
+2. **Tier 2 (story):** `gate.tests + smoke + lint` run on the assembled `story/<id>` branch when `integration.gateOnStory` is true (replaces the ephemeral kingdom-overlay Tier-2 for pod work).
+3. **Tier 3 (Senior review loop):** the Senior's deep review of the assembled story (see R48).
+
+Only after all three pass does the King offer the push-prompt. The human push (R1) remains the final, single, irreversible gate.
+
+### R48. Senior is the SOLE within-story reviewer; King never re-reviews story internals — Tier 2 (v0.32.0+)
+
+The Senior-N that owns a story is the **only** role that reviews that story's code internals. It runs an autonomous review loop: fan out Sonnet/Haiku reviewers per touched area, synthesize as Opus, route any fix back to the owning worker, re-merge, re-review. The loop is capped at `integration.reviewLoopCap` (default 3); on exhaustion the Senior escalates the story to the human with outstanding findings rather than looping forever.
+
+The King MUST NOT re-review the story's internals. Re-review is redundant work that adds latency and creates a "someone else caught it" gap. The King's quality concern is cross-story only (R50). This specialization is what makes pods both fast (no double-review) and high-quality (no unowned concern).
+
+### R49. Senior owns within-story integration-conflict resolution — Tier 2 (v0.32.0+)
+
+When merging a pod worker's branch into the story branch produces a conflict, the owning Senior resolves it (it has full context on its story). If a conflict is genuinely unresolvable (contradictory worker intents), the Senior marks the story `blocked`, writes the conflict detail, and escalates to the King/human. No silent skip, no overwrite of one worker's work without recording why.
+
+### R50. King owns cross-story coordination — Tier 2 (v0.32.0+)
+
+The King owns everything a Senior structurally cannot see (one Senior knows only its own story). Three duties, no path-locks:
+
+1. **Prevent at assignment:** scope stories so their likely file-areas do not overlap; serialize two stories that must touch the same area (one pod there at a time); sequence dependent stories.
+2. **Detect continuously:** consume the watchman's per-tick cross-story `git merge-tree` drift signal (the watchman scans across in-flight story branches, not just per-lane).
+3. **Resolve at push:** when a Senior hands back a push-eligible story, check the drift signal and coordinate a rebase / re-merge of the story branch before opening the PR.
 
 ---
 

@@ -16,11 +16,11 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 ### Multi-agent orchestration kit for Claude Code
 
-**One King. N workers. Auditable parallel work, any domain you version with git.**
+**One King. N workers in Senior-led story pods. Auditable parallel work, any domain you version with git.**
 
 **🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
-![Version](https://img.shields.io/badge/version-0.31.1-success)
+![Version](https://img.shields.io/badge/version-0.32.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -61,8 +61,8 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 # ── default daily ────────────────────────────────────────────────
 /kingdom:work my-app                          # use kingdom.json shape
 
-# ── caps + targets (pace control) ────────────────────────────────
-/kingdom:work my-app cap=5                    # hard stop at 5 task-completions today
+# ── caps + targets (pace control) ─ count PRs (a task OR a whole story pod = 1), not sub-tasks ─
+/kingdom:work my-app cap=5                    # hard stop after 5 PRs today (a 3-worker pod = 1, not 3)
 /kingdom:work my-app target=30-50/week        # soft budget; auto-splits to ~6-10/day
 /kingdom:work my-app target=30-50/day         # heavy pace; auto-splits to ~150-250/week
 
@@ -72,6 +72,16 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 /kingdom:work my-app worker=0 co-worker=2     # pair-programming day, no auto work
 /kingdom:work my-app worker=5 watchman=2      # unattended overnight, heavy monitoring
 /kingdom:work my-app worker=1 co-worker=0 watchman=0   # quick session, no overhead
+
+# ── story pods (v0.32.0): Senior-led, reviewed as a unit, one PR per story ─
+/kingdom:work my-app worker=6 seniors=2       # 2 pods of 3 workers; each story reviewed as a whole
+/kingdom:work my-app worker=3 seniors=1       # 1 pod: 3 workers on one story, one Senior reviews
+
+# ── lane=N (v0.32.0): total-lane budget, King auto-composes the split (pins honored) ─
+/kingdom:work my-app lane=8                   # King picks 8 lanes (workers + 1 watchman) for you
+/kingdom:work my-app lane=8 watchman=1        # 1 watchman pinned + 7 lanes the King fills
+/kingdom:work my-app lane=12 seniors=2        # 2 Senior pods + the rest workers, 12 lanes total
+/kingdom:work my-app lane=12 cap=5            # 12 lanes, hard stop after 5 PRs
 
 # ── combined: shape + cap + target ───────────────────────────────
 /kingdom:work my-app worker=3 co-worker=1 cap=8                   # full day, capped
@@ -89,8 +99,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 | Heavy autonomous batch | `worker=5 co-worker=0 watchman=2` | Maximum parallelism; double watchmen for safety |
 | Quick focused session | `worker=2 cap=3` | 2 lanes, hard stop at 3 task-completions |
 | Sustainable weekly cadence | `worker=3 target=30-50/week` | Soft budget; King paces dispatch to hit band |
+| Parallel story (pod) | `worker=6 seniors=2` | 2 Senior-led pods; each story reviewed as a unit, shipped as one PR |
 
-You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
+You now have, in cmux.app's sidebar: 👑 King, 🎓 1 senior (leads a story pod), 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
 
 ```mermaid
 graph TB
@@ -141,6 +152,36 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 
 **Domain-agnostic by design.** Anything you version in git, the kingdom can orchestrate: code, research, finance models, scientific notebooks, manuscripts. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
 
+### 🎓 Story pods (v0.32.0)
+
+For a unit of work that needs several workers, the King assigns it to a **Senior** (🎓 Opus). The Senior owns the story end to end: it splits the work across its pod, merges each worker's branch into a local `story/<id>` branch, reviews the assembled story in an autonomous loop (routing fixes back to the owning worker), then hands it to the King as **one** push-eligible PR.
+
+```mermaid
+graph TB
+    K(["👑 King<br/>partitions, sequences, pushes"])
+    K ==>|"assigns story A"| S1(["🎓 Senior-1<br/>owns, reviews story A"])
+    K ==>|"assigns story B"| S2(["🎓 Senior-2<br/>owns, reviews story B"])
+    S1 -->|"sub-task"| A1(["👷 worker-1"])
+    S1 -->|"sub-task"| A2(["👷 worker-2"])
+    S2 -->|"sub-task"| A3(["👷 worker-3"])
+    A1 -.->|"merge"| ST1[("story A")]
+    A2 -.-> ST1
+    A3 -.->|"merge"| ST2[("story B")]
+    ST1 -.->|"reviewed, one PR"| DEV[("develop")]
+    ST2 -.-> DEV
+
+    classDef king fill:#fef3c7,stroke:#f59e0b,stroke-width:3px,color:#78350f
+    classDef senior stroke:#14b8a6,stroke-width:2px
+    classDef worker stroke:#a78bfa,stroke-width:1.5px
+    classDef store fill:#fca5a5,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
+    class K king
+    class S1,S2 senior
+    class A1,A2,A3 worker
+    class ST1,ST2,DEV store
+```
+
+Quality and speed come from clean specialization: the **King** owns cross-story coordination (partition scopes, sequence dependencies, resolve drift at push), each **Senior** owns within-story review, and review never happens twice on the same code. Gate is three-tier: worker typecheck, story-branch tests, Senior review, then your push. Story branches stay local; only the final `story/<id> -> develop` PR reaches origin. Full details: [`docs/story-pods.md`](docs/story-pods.md).
+
 > [!WARNING]
 > **Spinning up a kingdom isn't instant, but it pays for itself fast.**
 >
@@ -155,6 +196,7 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 ## ✨ Why kingdom?
 
 - **Real parallelism:** 3-10 lanes editing different branches simultaneously, isolated by `git worktree`
+- **Story pods (v0.32.0):** several workers on one story, merged + reviewed as a unit by a Senior, shipped as one PR. King owns cross-story; Senior owns within-story; review never happens twice
 - **One conversation:** you talk to the King; the King talks to the lanes; you never juggle panes
 - **Native cmux.app feel:** every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
 - **Full audit trail:** every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
@@ -257,8 +299,9 @@ Same kit, same plan. Dial `worker=N` and `target=N-M/week` to sit anywhere on th
 
 | Role | Model | What it does | Spec |
 |---|---|---|---|
-| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Never edits files. | [`kings.md`](.kingdom/.setting/kings.md) |
-| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks. Spawns own sub-agents (no eco cap). | [`workers.md`](.kingdom/.setting/workers.md) |
+| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Owns cross-story coordination. Never edits files. | [`kings.md`](.kingdom/.setting/kings.md) |
+| 🎓 **Senior** | Opus | Per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into a story branch, reviews in a loop, marks push-eligible. Never pushes, never edits. | [`seniors.md`](.kingdom/.setting/seniors.md) |
+| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents (no eco cap). | [`workers.md`](.kingdom/.setting/workers.md) |
 | 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-workers.md`](.kingdom/.setting/co-workers.md) |
 | 🕵️ **Watchman** | Sonnet | Passive monitor (`/loop`, 5-15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchmans.md`](.kingdom/.setting/watchmans.md) |
 | 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`workers.md`](.kingdom/.setting/workers.md) |
@@ -271,7 +314,7 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
 | Command | What it does |
 |---|---|
-| **`/kingdom:work [<project>] [target=N-M/<day\|week\|month>] [cap=N] [worker=N] [co-worker=N] [watchman=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling. Per-session shape overrides via `worker=N` / `co-worker=N` / `watchman=N`. The one command you type every morning. |
+| **`/kingdom:work [<project>] [target=N-M/<day\|week\|month>] [cap=N] [lane=N] [worker=N] [co-worker=N] [watchman=N] [seniors=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling (counts PRs: a task or a whole story pod = 1, not sub-tasks). Shape: either per-role (`worker=` / `co-worker=` / `watchman=` / `seniors=`) or `lane=N` for a total budget the King auto-composes (v0.32.0). The one command you type every morning. |
 | `/kingdom:init [<project>]` | Workspace + optional project scaffold. See [`docs/configuration.md`](docs/configuration.md) for shape choices. |
 | `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
 | `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes; those go through the normal push-approval gate. |
@@ -286,6 +329,7 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 | Configuration: project shapes, `kingdom.json`, `gate.*` keys | [`docs/configuration.md`](docs/configuration.md) |
 | Roles: King, workers, co-workers, watchmen, sub-agents | [`docs/roles.md`](docs/roles.md) |
 | Branch model: lifecycle, overlay, two-tier gate, three rules | [`docs/branch-model.md`](docs/branch-model.md) |
+| Story pods: Senior role, story branch, three-tier gate (v0.32.0) | [`docs/story-pods.md`](docs/story-pods.md) |
 | cmux.app integration: sidebar, notifications, three-tier hierarchy | [`docs/cmux-integration.md`](docs/cmux-integration.md) |
 | How it works: King's role, lane mechanics, 4-step closer | [`docs/how-it-works.md`](docs/how-it-works.md) |
 | Why: the problem kingdom solves | [`docs/why.md`](docs/why.md) |

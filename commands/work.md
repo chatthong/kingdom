@@ -11,25 +11,43 @@ You are running the kingdom's **full daily work cycle** as one orchestrated flow
 
 | Form | Behaviour |
 |---|---|
-| `/kingdom:work <project> [target=...] [cap=...] [worker=N] [co-worker=N] [watchman=N]` | Standard: explicit project + optional budget + optional shape overrides. Skip to Step 0.1. |
+| `/kingdom:work <project> [target=...] [cap=...] [worker=N] [co-worker=N] [watchman=N] [seniors=N] [lane=N]` | Standard: explicit project + optional budget + optional shape overrides. `lane=N` sets a total-lane budget the King auto-composes (v0.32.0). Skip to Step 0.1. |
 | `/kingdom:work <project>` | Standard: explicit project, no caps, no overrides. Skip to Step 0.1. |
 | `/kingdom:work` *(no args)* | **Interactive mode:** King asks "What do you want to work on today?", waits for natural-language reply, auto-parses project + task scope. See Step 0.0 below. |
 
 ### Shape overrides (per-session)
 
-`worker=N`, `co-worker=N`, and `watchman=N` are PER-SESSION overrides that take precedence over `kingdom.json.shape` for this run only. They do NOT rewrite `kingdom.json`; the file stays unchanged. Example: `/kingdom:work bfg-swt worker=5 co-worker=2 watchman=1` runs 5 workers for today regardless of what the JSON says.
+Two ways to set the shape for this run (neither rewrites `kingdom.json`):
+
+1. **Per-role:** `worker=N`, `co-worker=N`, `watchman=N`, `seniors=N` set each role explicitly. Example: `/kingdom:work bfg-swt worker=5 co-worker=2 watchman=1 seniors=1`.
+2. **Total budget (v0.32.0):** `lane=N` sets the TOTAL number of lanes (workers + co-workers + watchmen + seniors; the King is separate). The King auto-composes the split to fill the budget. Any per-role flag becomes a PIN that the King honors and fills the rest around. Examples: `/kingdom:work my-app lane=8` (King picks 8 lanes), `/kingdom:work my-app lane=8 watchman=1` (1 watchman pinned + 7 auto), `/kingdom:work my-app lane=12 seniors=2` (2 Senior-led pods + the rest workers), `/kingdom:work my-app lane=12 cap=5`.
 
 ```bash
 # Effective shape resolution (per-session override wins over JSON):
-WORKERS=$([ -n "$ARG_WORKER" ] && echo "$ARG_WORKER" \
-  || jq -r '.shape.workers // 3' "$KJSON")
-COWORKERS=$([ -n "$ARG_COWORKER" ] && echo "$ARG_COWORKER" \
-  || jq -r '.shape["co-workers"] // 1' "$KJSON")
-WATCHMEN=$([ -n "$ARG_WATCHMAN" ] && echo "$ARG_WATCHMAN" \
-  || jq -r '.shape.watchman // 1' "$KJSON")
+if [ -n "$ARG_LANE" ]; then
+  # lane=N: total-lane budget; King auto-composes, honoring per-role pins.
+  CAPV=$(jq -r '.shape.sanityCap // 10' "$KJSON")
+  LANE_BUDGET="$ARG_LANE"
+  if [ "$LANE_BUDGET" -gt "$CAPV" ]; then
+    echo "⚠️ lane=$LANE_BUDGET exceeds sanityCap=$CAPV; capping to $CAPV"; LANE_BUDGET="$CAPV"
+  fi
+  # Pins (explicit role flags) are fixed; defaults: 1 watchman if budget >= 2, pods opt-in (seniors only if pinned).
+  WATCHMEN=${ARG_WATCHMAN:-$([ "$LANE_BUDGET" -ge 2 ] && echo 1 || echo 0)}
+  SENIORS=${ARG_SENIOR:-0}
+  COWORKERS=${ARG_COWORKER:-0}
+  USED=$((WATCHMEN + SENIORS + COWORKERS))
+  WORKERS=${ARG_WORKER:-$(( LANE_BUDGET - USED ))}
+  [ "$WORKERS" -lt 0 ] && WORKERS=0
+  echo "👑 lane=$LANE_BUDGET → workers=$WORKERS co-workers=$COWORKERS watchman=$WATCHMEN seniors=$SENIORS (King's composition; pins honored)"
+else
+  WORKERS=$([ -n "$ARG_WORKER" ] && echo "$ARG_WORKER" || jq -r '.shape.workers // 3' "$KJSON")
+  COWORKERS=$([ -n "$ARG_COWORKER" ] && echo "$ARG_COWORKER" || jq -r '.shape["co-workers"] // 1' "$KJSON")
+  WATCHMEN=$([ -n "$ARG_WATCHMAN" ] && echo "$ARG_WATCHMAN" || jq -r '.shape.watchman // 1' "$KJSON")
+  SENIORS=$([ -n "$ARG_SENIOR" ] && echo "$ARG_SENIOR" || jq -r '.shape.seniors // 0' "$KJSON")
+fi
 ```
 
-If a per-session override exceeds `sanityCap`, print a warning and cap to `sanityCap` — never silently accept a huge shape.
+If a per-session override (or `lane=N`) exceeds `sanityCap`, print a warning and cap to `sanityCap` — never silently accept a huge shape. With `lane=N`, the King composes within the budget at audit time; pinning `seniors=K` is how you ask for `K` story pods.
 
 ### Step 0.0 — Interactive mode (no-args invocation only)
 
@@ -150,13 +168,14 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 
 | Unit | Counted? |
 |---|---|
-| **Task file** + sentinel | Yes — THE unit |
-| **TODO Story / heading** (e.g. `FE-P0-FOUND.7`) | Yes — usually 1:1 with a task file |
-| **Sub-task / AC bullet** (one `- [x]` under a Story) | No — flips inside one task file |
-| **PR** (`feature/<topic>`) | Yes — usually 1:1; a follow-up cleanup PR adds 1 |
+| **Task file** + sentinel (solo worker) | Yes — THE unit |
+| **Story pod** (v0.32.0: a Senior + workers → one `story/<id>` PR) | Yes — the whole pod counts as **1** (it ships one PR) |
+| **TODO Story / heading** (e.g. `FE-P0-FOUND.7`) | Yes — usually 1:1 with a task file or one pod |
+| **Sub-task / AC bullet** (one `- [x]` under a Story, or one worker's slice of a pod) | **No** — flips inside one task file / pod |
+| **PR** (`feature/<topic>` or `story/<id>`) | Yes — usually 1:1; a follow-up cleanup PR adds 1 |
 | **Milestone** (`M01-M20`) | No — spans many tasks |
 
-So `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week.
+So `cap=5` and `target=30-50/week` count **things that become a PR** (a solo task or a whole story pod), **not** the sub-tasks inside them and **not** milestones. `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. A 3-worker pod that ships one story PR counts as **1** toward `cap`, not 3.
 
 ### Step 0.3.5 — Skill check (R41 · MANDATORY)
 
@@ -214,14 +233,20 @@ REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
 WORKER_COLOR=$(jq -r '.cmux.workspaceColors.worker // "violet"' "$KJSON")
 COWORKER_COLOR=$(jq -r '.cmux.workspaceColors.coworker // "blue"' "$KJSON")
 WATCHMAN_COLOR=$(jq -r '.cmux.workspaceColors.watchman // "rose"' "$KJSON")
+SENIOR_COLOR=$(jq -r '.cmux.workspaceColors.senior // "Teal"' "$KJSON")
+# Effective senior count (v0.32.0+): already resolved in Step 0 (lane=N composition or
+# per-role/JSON). Fall back to JSON only if Step 0 didn't set it.
+SENIORS=${SENIORS:-$([ -n "$ARG_SENIOR" ] && echo "$ARG_SENIOR" || jq -r '.shape.seniors // 0' "$KJSON")}
 mkdir -p "$(dirname "$REFS_FILE")"
 
-# Build lane list from effective shape
+# Build lane list from effective shape (seniors spawn empty on base; a story branch
+# is checked out into the senior worktree at assignment time — Step 3.5).
 LANES_EXPECTED=$(
   (
     for I in $(seq 1 "$WORKERS");   do echo "worker-$I";    done
     for I in $(seq 1 "$COWORKERS"); do echo "co-worker-$I"; done
     for I in $(seq 1 "$WATCHMEN");  do echo "watchman-$I";  done
+    for I in $(seq 1 "$SENIORS");   do echo "senior-$I";    done
   )
 )
 BASE=$(jq -r '.git.base // "develop"' "$KJSON")
@@ -239,6 +264,7 @@ for lane in $LANES_EXPECTED; do
       git -C "$PROJ" worktree add -b "$lane" ".worktrees/$lane" "origin/$BASE" 2>/dev/null
     # Pick color + label
     case "$lane" in
+      senior-*)    color="$SENIOR_COLOR";   emoji="🎓" ;;
       worker-*)    color="$WORKER_COLOR";   emoji="👷" ;;
       co-worker-*) color="$COWORKER_COLOR"; emoji="🧑‍💼" ;;
       watchman-*)  color="$WATCHMAN_COLOR"; emoji="🕵️" ;;
@@ -458,6 +484,44 @@ Other cards fired later in the cycle:
 - `cards/conflict-detected.md` — `git merge-tree` finds drift at push time
 - `cards/resume-queue.md` — in-flight tasks from prior session
 
+## Step 3.5 — Story-pod assignment (R46/R50, when `integration.enabled` and `seniors > 0`)
+
+If `kingdom.json.integration.enabled` is true and `SENIORS > 0`, the King runs the **pod path** for multi-worker units before the solo Step 4. The King owns cross-story only (R50); each Senior owns its story end-to-end (R48).
+
+```bash
+INTEG_ON=$(jq -r '.integration.enabled // false' "$KJSON")
+UNIT=$(jq -r '.integration.unit // "story"' "$KJSON")
+
+if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
+  # 1. PARTITION (R50): pick units from the task-ledger, scope them so file-areas
+  #    do not overlap, sequence dependencies. The King decides pod count + size
+  #    within sanityCap (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
+  #    Output: a list of "story-id : worker-1 worker-2 ..." pod assignments.
+
+  S=0
+  for POD in $POD_ASSIGNMENTS; do            # each POD = "<story-id>=<worker-a,worker-b,...>"
+    S=$((S + 1)); SENIOR="senior-$S"
+    [ "$S" -gt "$SENIORS" ] && { echo "queued (no free Senior): $POD"; continue; }
+    STORY_ID="${POD%%=*}"; PODWORKERS=$(echo "${POD#*=}" | tr ',' ' ')
+
+    # 2. Create the local story branch in the Senior's worktree (R46)
+    BRANCH=$(create_story_branch "$PROJ" "$STORY_ID" "$BASE" "$SENIOR")
+
+    # 3. Assign the pod to the Senior + hand cross-cutting conventions, then start
+    #    its autonomous loop. guard_senior_dispatch_scope (called inside the Senior)
+    #    keeps the Senior in-pod + visible-only (R30 amendment).
+    SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" | cut -d= -f2)
+    guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
+    cmux send --workspace "$SENIOR_WS" -- \
+      "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read seniors.md and run the story lifecycle. Mark push-eligible when clean; never push."
+    spawn_senior_loop "$SENIOR_WS" "$STORY_ID"
+    echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
+  done
+fi
+```
+
+Pods now run autonomously and in parallel. The King does NOT re-review their internals (R48). Solo (non-pod) tasks still flow through Step 4 below; lanes already claimed by a pod are skipped there.
+
 ## Step 4 — Auto-dispatch (within cap/target) — HARD 60s TIME BUDGET (R30)
 
 **Skill resolution (R41 + R23):** `pick_skills_for_task` consults `skill-routing.md` for each lane before building the dispatch-brief. `${SUGGESTED_SKILLS}` in the brief carries the result. R41 governs discovery (system-reminder fallback when routing table returns 0 matches); R23 governs injection into the brief.
@@ -473,6 +537,8 @@ for lane in $LANES_EXPECTED; do
   [[ "$lane" == co-worker-* ]] && continue
   # Skip watchmen (always running /loop, never task-dispatched)
   [[ "$lane" == watchman-* ]] && continue
+  # Skip seniors (v0.32.0: driven by their own story loop via Step 3.5, not solo dispatch)
+  [[ "$lane" == senior-* ]] && continue
 
   # Resume queue: in-flight lanes get resume brief first
   RESUME_ENTRY=$(echo "$RESUME_QUEUE" | grep "^${lane}|" | head -1)
@@ -543,6 +609,28 @@ while true; do
     # git-base var ($BASE = develop/main from line 227). The shadow silently
     # broke kingdom_overlay_lane and the N_MODIFIED count for every push-prompt.
     FLAG_BASE=$(basename "$FLAG" .flag)
+
+    # 5a-pre (v0.32.0): a Senior push-eligible story flag (<UTC>__senior-N__<story-id>)
+    # skips the per-worker overlay path. The Senior already ran Tier-2 + the review
+    # loop (R47/R48); the King's only job is the cross-story check (R50) + the push.
+    if echo "$FLAG_BASE" | grep -q '__senior-[0-9]\+__'; then
+      STORY_ID=$(echo "$FLAG_BASE" | sed 's/.*__senior-[0-9]*__//')
+      SENIOR=$(echo "$FLAG_BASE" | sed 's/.*__\(senior-[0-9]*\)__.*/\1/')
+      ls "$PWD/${project}/docs/test-reports/KING_"*"__${SENIOR}__${STORY_ID}.md" >/dev/null 2>&1 && continue
+      # Cross-story drift check (R50): consume the watchman's signal across story branches
+      DRIFT=$(watchman_cross_story_scan "$PROJ")
+      echo "$DRIFT" | grep -q 'drift:' && echo "⚠️ ${DRIFT} — King coordinates rebase of story/${STORY_ID} before PR"
+      # NO re-review of internals (R48). Show the Senior's clean verdict, then the
+      # story-PR push-prompt, and wait (R1).
+      export LANE="$SENIOR" TASK_ID="$STORY_ID" TOPIC="$STORY_ID" STORY_ID
+      render_card "senior-verdict"   # reads the SENIOR_ report for the clean verdict
+      render_card "push-prompt"
+      cmux notify --workspace "$KING_WS" --title "👑 King · story review ready" \
+        --subtitle "story/${STORY_ID}" --body "Senior cleared it. Reply 'push' to open the PR."
+      wait_for_ter_decision   # on "push": carve story/${STORY_ID} → develop PR (Step 6)
+      continue
+    fi
+
     LANE=$(echo "$FLAG_BASE" | sed 's/^[0-9-]*T[0-9]*Z__[a-z]*-//;s/__.*//')
     SUBTASK_ID=$(echo "$FLAG_BASE" | sed 's/.*__//')
 

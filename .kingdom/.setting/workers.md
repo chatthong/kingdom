@@ -149,6 +149,14 @@ echo "worker-1 | $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOGS/claims/$SUBTASK_ID.lan
 
 Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt — see [`kings.md`](kings.md) → "Dispatch brief schema" for what King sends to each worker.
 
+### Pod membership (v0.32.0+, R46/R48)
+
+A worker may be assigned to a **Senior's story pod**. When it is:
+
+- Its sub-tasks (and any fix-tasks) come from its **Senior**, not the King (the King delegated the story per R30's delegated-dispatch amendment). The work is identical: do the sub-task on `worker-N`, pass Tier-1, signal done.
+- It does **not** merge its own branch. The Senior merges `worker-N` into the story branch (R49) and runs the review. If the Senior routes a fix-task back, fix on the same `worker-N` branch and signal done again; the Senior re-merges and re-reviews.
+- A worker belongs to at most one pod at a time. See [`seniors.md`](seniors.md).
+
 ---
 
 ## Task-artifact naming — strict (every artifact carries the lane)

@@ -458,6 +458,12 @@ At the END of each `/loop` tick (after all four fan-out duties complete and thei
 ```markdown
 # Watchman tick summary — <UTC>
 
+### Duty 5 — Cross-story drift scan (v0.32.0+, R50)
+
+When `kingdom.json.watchman.duties.crossStoryScan` is true and story pods are in flight, the watchman runs `watchman_cross_story_scan "$PROJ"` (see [`_primitives.md`](_primitives.md)) each tick. It does a pairwise `git merge-tree` across all `story/*` branches and emits a drift summary.
+
+This is the King's cross-story signal (R50): the watchman only **detects and reports** drift (it never resolves). The King consumes the latest drift line at push time and coordinates a rebase / re-merge of the affected story branch before opening its PR. The boundary with the Senior holds: the Senior owns *within-story* conflicts (R49); the watchman flags *between-story* drift; the King resolves it. Output severity: `warn` (a documented-decision contradiction across stories may be `urgent`).
+
 ## TL;DR
 - Develop SHA: <sha> (moved | unchanged)
 - Smoke: pass | fail | skipped

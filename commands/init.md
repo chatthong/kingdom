@@ -66,6 +66,7 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/kings.md"      "$PWD/.kingdom/.setti
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/workers.md"    "$PWD/.kingdom/.setting/workers.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/co-workers.md" "$PWD/.kingdom/.setting/co-workers.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/watchmans.md"  "$PWD/.kingdom/.setting/watchmans.md"
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/seniors.md"   "$PWD/.kingdom/.setting/seniors.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md"        "$PWD/.kingdom/.setting/git.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cmux.md"       "$PWD/.kingdom/.setting/cmux.md"
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/_primitives.md" "$PWD/.kingdom/.setting/_primitives.md"

@@ -35,6 +35,7 @@ KJSON="$PWD/.kingdom/${project}/kingdom.json"
 WORKERS=$(jq -r '.shape.workers // 3' "$KJSON")
 COWORKERS=$(jq -r '.shape["co-workers"] // 1' "$KJSON")
 WATCHMEN=$(jq -r '.shape.watchman // 1' "$KJSON")
+SENIORS=$(jq -r '.shape.seniors // 0' "$KJSON")
 BASE=$(jq -r '.git.base // "develop"' "$KJSON")
 PROJ="$PWD/${project}"
 ```
@@ -112,6 +113,13 @@ for I in $(seq 1 "$COWORKERS"); do
 done
 for I in $(seq 1 "$WATCHMEN"); do
   STATE=$(collect_lane_state "watchman-$I")
+  LANE_STATES=$(echo "$LANE_STATES" | jq ". + [$STATE]")
+done
+# v0.32.0: senior lanes — a senior worktree is checked out on its story/<id> branch,
+# so collect_lane_state records the story branch + its merged state. The story branch
+# is local; the next /kingdom:work respawns the senior and re-checks-out the branch.
+for I in $(seq 1 "$SENIORS"); do
+  STATE=$(collect_lane_state "senior-$I")
   LANE_STATES=$(echo "$LANE_STATES" | jq ". + [$STATE]")
 done
 ```

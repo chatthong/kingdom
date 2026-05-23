@@ -456,9 +456,12 @@ Kingdom's default mapping (in `kingdom.json.cmux.workspaceColors`):
 | Role | Color |
 |---|---|
 | 👑 King | `Amber` |
+| 🎓 Senior | `Teal` |
 | 👷 Worker | `Purple` |
 | 🧑‍💼 Co-worker | `Blue` |
 | 🕵️ Watchman | `Rose` |
+
+> **Senior worktree (v0.32.0+):** a `senior-N` workspace's worktree is checked out on its `story/<id>` branch (created by `create_story_branch`), not on a plain lane branch. Its pod's `worker-N` workspaces are ordinary worker lanes; the Senior merges their tips into the story branch.
 
 > **Color name pitfall:** `violet` is NOT in cmux's named-color set — use `Purple` instead. Prior versions of the template used `"violet"` and required runtime substitution by the King. Fixed in v0.14.13.
 
