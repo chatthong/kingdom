@@ -1,6 +1,6 @@
 ---
 description: Scaffold the kingdom — workspace role docs (always), workspace .claude/settings.json permissions (if missing/incomplete), and optionally a per-project kingdom.json
-argument-hint: [project] [workers=N] [co-workers=M] [watchman=K] [base=<branch>]
+argument-hint: [project]
 ---
 
 You are scaffolding the kingdom. **One command, two modes:**
@@ -17,15 +17,12 @@ Follow every step in order. Show planned changes and ask for confirmation before
 From `$ARGUMENTS`, extract:
 
 - `project` — the first positional argument (optional). If present, run BOTH workspace scaffold AND project scaffold. If absent, run workspace scaffold only.
-- `workers` — value from `workers=N` (default: `3`) — only used when `project` is given
-- `co-workers` — value from `co-workers=M` (default: `1`) — only used when `project` is given
-- `watchman` — value from `watchman=K` (default: `1`) — only used when `project` is given
-- `base` — value from `base=<branch>` (default: `develop`) — only used when `project` is given
+
+**`init` takes no shape flags (v0.33.0).** It only scaffolds: it does not read the task-ledger, decide work, or spawn anything. The project's `kingdom.json` is written from the template with its **defaults** (workers=3, co-worker=1, watchman=1, senior=1, base=develop). Tune the shape per-session at `/kingdom:work` time (`worker=N`, `lane=N`, `senior=N`, …) or by editing `kingdom.json` once. `git.base` lives in the file (default `develop`); edit that one line if your repo differs.
 
 Examples:
 - `/kingdom:init` → workspace only
-- `/kingdom:init bfg-swt` → workspace (if needed) + project `bfg-swt` with defaults
-- `/kingdom:init bfg-swt workers=5 co-workers=2 watchman=1 base=main` → workspace + custom project shape
+- `/kingdom:init bfg-swt` → workspace (if needed) + project `bfg-swt` scaffolded with defaults
 
 ## Step 1 — Verify this is a workspace root (not a git repo)
 
@@ -158,28 +155,17 @@ Then ask:
 
 Wait for confirmation before continuing. If `JSON_MISSING`, continue without asking.
 
-### Step 4.2 — Build the project config from the template
+### Step 4.2 — Show the project config (template defaults)
 
-Substitute the parsed argument values into the template:
+`init` writes the template **as-is** (no flag substitution, v0.33.0). Show the user what will be written:
 
 ```bash
-jq \
-  --argjson workers    "${workers}" \
-  --argjson coworkers  "${co-workers}" \
-  --argjson watchman   "${watchman}" \
-  --arg     base       "${base}" \
-  '
-    .shape.workers       = $workers   |
-    .shape["co-workers"] = $coworkers |
-    .shape.watchman      = $watchman  |
-    .git.base            = $base
-  ' \
-  "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template"
+jq '.' "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template"
 ```
 
-Show the resulting JSON to the user. Then ask:
+Then ask:
 
-> Will write the JSON above to `.kingdom/<project>/kingdom.json`. Proceed? (yes/no)
+> Will write the default `kingdom.json` above to `.kingdom/<project>/kingdom.json`. Tune the shape later at `/kingdom:work` time or by editing this file. Proceed? (yes/no)
 
 Wait for confirmation.
 
@@ -189,18 +175,8 @@ Wait for confirmation.
 mkdir -p "$PWD/.kingdom/${project}/tasks"
 mkdir -p "$PWD/.kingdom/${project}/logs"
 
-jq \
-  --argjson workers    "${workers}" \
-  --argjson coworkers  "${co-workers}" \
-  --argjson watchman   "${watchman}" \
-  --arg     base       "${base}" \
-  '
-    .shape.workers       = $workers   |
-    .shape["co-workers"] = $coworkers |
-    .shape.watchman      = $watchman  |
-    .git.base            = $base
-  ' \
-  "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template" \
+# Copy the template verbatim (defaults). Edit kingdom.json afterward to change shape/base.
+jq '.' "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template" \
   > "$PWD/.kingdom/${project}/kingdom.json"
 ```
 
@@ -219,7 +195,7 @@ N_ROLE_DOCS=$(ls -1 "$PWD/.kingdom/.setting/"*.md 2>/dev/null | wc -l | tr -d ' 
 
 if [ -n "$project" ]; then
   # Project mode
-  export PROJECT="$project" N_ROLE_DOCS WORKERS COWORKERS WATCHMAN BASE
+  export PROJECT="$project" N_ROLE_DOCS
   render_card "scaffold-success"
 else
   # Workspace-only mode — uses the slimmer variant in cards/scaffold-success.md

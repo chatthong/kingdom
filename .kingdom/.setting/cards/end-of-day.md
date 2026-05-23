@@ -1,6 +1,6 @@
 # end-of-day
 
-**Fires when:** `/kingdom:save` runs, OR `cap=N` hit + no in-flight gates pending, OR all lanes idle + no pending work + no in-flight PRs.
+**Fires when:** `/kingdom:save` runs, OR `pr-limit=N` / `pod-limit=N` hit + no in-flight gates pending, OR all lanes idle + no pending work + no in-flight PRs.
 **Used by:** [`commands/save.md`](../../../commands/save.md); [`commands/work.md`](../../../commands/work.md) Step 5 stopping conditions.
 
 ## Template
@@ -49,5 +49,5 @@
 ## Notes
 
 - When invoked by `/kingdom:save`, the `${EXIT_HINT}` says "Lanes closed. Conversation kept alive." (or "King workspace closed too" if `--include-king`).
-- When invoked by `cap=N` hit, `${EXIT_HINT}` says "Cap reached. Reply 'cap=10' (or any number) to raise; or run /kingdom:save."
+- When invoked by `pr-limit=N` / `pod-limit=N` hit, `${EXIT_HINT}` says "Limit reached. Reply 'pr-limit=10' (or 'pod-limit=N') to raise; or run /kingdom:save."
 - When invoked by all-idle, `${EXIT_HINT}` says "No pending work. Run /kingdom:save when done, or queue more tasks."

@@ -9,10 +9,10 @@
 > [!NOTE]
 > ```
 > ╭─ Daily ritual · ${PROJECT} ────────────────────────────╮
-> │  Counting unit: 1 task = 1 task file = 1 sentinel ≈ 1 PR
+> │  Counting unit: 1 pod (task/story) = 1 sentinel ≈ 1 PR
 > │                                                         │
-> │  Target: ${TARGET} → today's budget ${BUDGET_TODAY} tasks
-> │         (this week: ${DONE_THIS_WEEK} done · ${IN_FLIGHT} in-flight · cap=${CAP})
+> │  Limits: pr-limit=${PR_LIMIT} · pod-limit=${POD_LIMIT}  │
+> │         (this week: ${DONE_THIS_WEEK} done · ${IN_FLIGHT} in-flight)
 > │                                                         │
 > │  Context: rules.md · CLAUDE.md · README.md · docs/      │
 > │           MEMORY.md · TER.md · watchman state           │
@@ -28,11 +28,10 @@
 | Var | Source | Example |
 |---|---|---|
 | `${PROJECT}` | `$ARGUMENTS` resolved project | `bfg-swt` |
-| `${TARGET}` | `target=` arg, or `(none)` | `30-50/week` |
-| `${BUDGET_TODAY}` | `parse_target` daily band, or `unbounded` | `6-10` |
+| `${PR_LIMIT}` | `pr-limit=` arg, or `none` | `5` |
+| `${POD_LIMIT}` | `pod-limit=` arg, or `none` | `none` |
 | `${DONE_THIS_WEEK}` | count of sentinels in `<LOGS>/done/` for the ISO week | `3` |
 | `${IN_FLIGHT}` | task files with Status ∈ `planning|executing|verifying` | `5` |
-| `${CAP}` | `cap=` arg, or `none` | `none` |
 | `${DEV_STATUS}` | from `watchman_state.json` (`green` / `red` / `yellow`) | `green` |
 | `${LAST_TICK}` | watchman last `/loop` tick timestamp in local TZ | `11:24 +07` |
 | `${N_OPEN}` | `gh pr list --state open --json number \| jq length` | `4` |
@@ -64,5 +63,5 @@ This split is load-bearing: putting co-workers in the same table as workers hist
 ## Notes
 
 - The counting-unit line is hardcoded (not a variable) because rules.md R23 + R25 fix the unit definition. Per kingdom contract: 1 sentinel = 1 task.
-- `${BUDGET_TODAY}` ranges respect both `cap` (hard) and `target` (soft). If both passed, `cap` wins; the line reflects whichever is more restrictive.
+- `pr-limit` and `pod-limit` are independent hard ceilings; the line shows both (`none` when unset). Dispatch stops when either is reached.
 - **v0.31.0 split:** worker / watchman lanes go in the dispatch table; co-workers go in the paired-sessions block. Visual separation enforces R32 + the new R43 — co-workers are NEVER dispatch candidates.

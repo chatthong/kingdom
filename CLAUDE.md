@@ -10,9 +10,9 @@ This file orients future Claude sessions to the project so work can continue acr
 
 **Domain-agnostic by design.** Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit works for code, research, finance models, manuscripts, anything you version with git.
 
-## Current state — v0.32.0 (2026-05-24)
+## Current state — v0.33.0 (2026-05-24)
 
-The plugin is on `main`. v0.32.0 adds story pods: a new **Senior** role (🎓 Opus) + a local **story integration branch** so multiple workers attack one story in parallel, get reviewed as a unit by a Senior, and ship as one PR. King owns cross-story (R50); Senior owns within-story (R48); three-tier gate (R47). Design spec: `docs/superpowers/specs/2026-05-23-senior-story-pods-design.md`. All releases since v0.18.0 ship per-release; no separate release branch.
+The plugin is on `main`. **v0.33.0** is a command-surface cleanup (breaking): `/kingdom:init` takes no flags (scaffold only); `/kingdom:work` shape is per-role (`worker=`/`co-worker=`/`watchman=`/`senior=`, plural accepted) or `lane=N` (King auto-composes a total budget); pacing is two plain ceilings `pr-limit=N` + `pod-limit=N` (`cap` renamed, `target` removed); the `cap-reached` card became `limit-reached`; pods now explicitly persist `logs/` + `tasks/` like every lane. **v0.32.0** added story pods: the **Senior** role (🎓 Opus) + local **story integration branch** (King owns cross-story R50; Senior owns within-story R48; three-tier gate R47). Spec: `docs/superpowers/specs/2026-05-23-senior-story-pods-design.md`. All releases since v0.18.0 ship per-release; no separate release branch.
 
 Recent version history (worth reading the CHANGELOG for full detail):
 
@@ -206,4 +206,4 @@ CHANGELOG.md               # Keep-a-Changelog format; entries from v0.5.0 onward
 
 ---
 
-*Last updated: 2026-05-24 after v0.32.0 ship. Update this file when shipping a release that changes architectural decisions (1-28 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*
+*Last updated: 2026-05-24 after v0.33.0 ship (command-surface cleanup). Update this file when shipping a release that changes architectural decisions (1-28 above), adds new directories under `.kingdom/.setting/`, or shifts the open-threads list materially.*

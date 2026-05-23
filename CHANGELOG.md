@@ -4,6 +4,27 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.33.0] — 2026-05-24
+
+Command-surface cleanup for consistency and simplicity. **Breaking** for the `/kingdom:work` and `/kingdom:init` argument surfaces.
+
+### Changed (BREAKING)
+
+- **`/kingdom:init` takes no flags.** It only scaffolds (workspace `.setting/` + project `kingdom.json` from template defaults + `tasks/` + `logs/`); it no longer reads the task-ledger, decides work, or spawns anything. The old `workers=` / `co-workers=` / `watchman=` / `base=` init flags are removed: shape is chosen per-session at `/kingdom:work` or by editing `kingdom.json` (`git.base` lives in the file, default `develop`).
+- **`cap=N` renamed to `pr-limit=N`** (hard ceiling on PRs opened) and a new **`pod-limit=N`** added (hard ceiling on pods = units of work: story / task / milestone / issue). They are independent; dispatch stops when either is hit. A 3-worker story pod that ships one PR counts as 1 toward each, never 3.
+- **`target=N-M/<period>` removed.** The soft-budget auto-split (Step 0.1 `parse_target`) is gone in favour of the two plain ceilings above.
+- **Role flags shown as singular** (`worker=` `co-worker=` `watchman=` `senior=`) to match lane identities; the parser still accepts the plural forms (`workers=`, `seniors=`, `watchmen=`, `co-workers=`, `lanes=`). `seniors=` (introduced in v0.32.0) is now canonically `senior=`.
+- Card `cap-reached` renamed to **`limit-reached`** (covers both `pr-limit` and `pod-limit`).
+
+### Added
+
+- **`lane=N` total-lane budget** (from v0.32.0, now first-class): the King auto-composes worker/co-worker/watchman/senior to fill N, honoring any per-role pin. `lane=8 watchman=1` pins 1 watchman and fills 7; `lane=12 senior=2` makes 2 story pods plus workers.
+- **Pods persist `logs/` + `tasks/` like every lane.** `seniors.md` now documents the full artifact set a pod writes: the Senior's story task file in `tasks/`, each worker's sub-task file in `tasks/`, and the Senior's 4-step closer (raw → curated → `master_agent.log` → sentinel) in `logs/`, plus the `SENIOR_*` review report. Nothing about a pod skips the audit trail.
+
+### Migration
+
+`cap=N` → `pr-limit=N`. `target=…` → drop it (use `pr-limit` / `pod-limit`). `/kingdom:init my-app workers=5 …` → `/kingdom:init my-app` then `/kingdom:work my-app worker=5 …` (or edit `kingdom.json.shape`). Existing `kingdom.json` files keep working; the shape is read from them as before.
+
 ## [0.32.0] — 2026-05-24
 
 Story pods. A new **Senior** role (🎓 Opus) plus a **story integration branch** let multiple workers attack one unit of work (story / milestone / issue, configurable) in parallel, get it reviewed as a whole, and ship it as a single PR. Designed for both quality and speed via clean specialization: the King owns cross-story coordination, each Senior owns one story end to end, and review never happens twice on the same code.

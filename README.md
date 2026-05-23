@@ -20,7 +20,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
-![Version](https://img.shields.io/badge/version-0.32.0-success)
+![Version](https://img.shields.io/badge/version-0.33.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -61,32 +61,25 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 # ── default daily ────────────────────────────────────────────────
 /kingdom:work my-app                          # use kingdom.json shape
 
-# ── caps + targets (pace control) ─ count PRs (a task OR a whole story pod = 1), not sub-tasks ─
-/kingdom:work my-app cap=5                    # hard stop after 5 PRs today (a 3-worker pod = 1, not 3)
-/kingdom:work my-app target=30-50/week        # soft budget; auto-splits to ~6-10/day
-/kingdom:work my-app target=30-50/day         # heavy pace; auto-splits to ~150-250/week
-
-# ── shape overrides (per-session, not persisted to kingdom.json) ─
+# ── shape: per-role (singular; plural like workers= also accepted) ─
 /kingdom:work my-app worker=1                 # solo prototype: 1 autonomous worker
 /kingdom:work my-app worker=2 co-worker=1     # mixed: 2 autonomous + 1 paired
 /kingdom:work my-app worker=0 co-worker=2     # pair-programming day, no auto work
 /kingdom:work my-app worker=5 watchman=2      # unattended overnight, heavy monitoring
-/kingdom:work my-app worker=1 co-worker=0 watchman=0   # quick session, no overhead
 
-# ── story pods (v0.32.0): Senior-led, reviewed as a unit, one PR per story ─
-/kingdom:work my-app worker=6 seniors=2       # 2 pods of 3 workers; each story reviewed as a whole
-/kingdom:work my-app worker=3 seniors=1       # 1 pod: 3 workers on one story, one Senior reviews
-
-# ── lane=N (v0.32.0): total-lane budget, King auto-composes the split (pins honored) ─
-/kingdom:work my-app lane=8                   # King picks 8 lanes (workers + 1 watchman) for you
+# ── shape: total budget (King auto-composes the split; pins honored) ─
+/kingdom:work my-app lane=8                   # King picks 8 lanes (workers + 1 watchman)
 /kingdom:work my-app lane=8 watchman=1        # 1 watchman pinned + 7 lanes the King fills
-/kingdom:work my-app lane=12 seniors=2        # 2 Senior pods + the rest workers, 12 lanes total
-/kingdom:work my-app lane=12 cap=5            # 12 lanes, hard stop after 5 PRs
+/kingdom:work my-app lane=12 senior=2         # 2 Senior-led story pods + the rest workers
 
-# ── combined: shape + cap + target ───────────────────────────────
-/kingdom:work my-app worker=3 co-worker=1 cap=8                   # full day, capped
-/kingdom:work my-app worker=5 watchman=2 target=40-60/day         # heavy auto, weekly visible
-/kingdom:work my-app worker=2 co-worker=1 target=30-50/week       # standard pace
+# ── story pods: Senior-led, reviewed as a unit, one PR per story ──
+/kingdom:work my-app worker=6 senior=2        # 2 pods of 3 workers; each story reviewed as a whole
+/kingdom:work my-app worker=3 senior=1        # 1 pod: 3 workers on one story, one Senior reviews
+
+# ── limits: independent hard ceilings (count PRs/pods, not sub-tasks) ─
+/kingdom:work my-app pr-limit=5               # stop after 5 PRs (a 3-worker pod = 1, not 3)
+/kingdom:work my-app pod-limit=3              # stop after 3 pods (stories/tasks/issues)
+/kingdom:work my-app lane=12 pr-limit=5       # 12 lanes, stop after 5 PRs
 ```
 
 **Pick a shape by situation:**
@@ -97,9 +90,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 | Standard day (default) | `worker=3 co-worker=1 watchman=1` | 3 autonomous + 1 paired + monitoring |
 | UI/design session | `worker=0 co-worker=2 watchman=1` | All paired with you; watchman covers `develop` |
 | Heavy autonomous batch | `worker=5 co-worker=0 watchman=2` | Maximum parallelism; double watchmen for safety |
-| Quick focused session | `worker=2 cap=3` | 2 lanes, hard stop at 3 task-completions |
-| Sustainable weekly cadence | `worker=3 target=30-50/week` | Soft budget; King paces dispatch to hit band |
-| Parallel story (pod) | `worker=6 seniors=2` | 2 Senior-led pods; each story reviewed as a unit, shipped as one PR |
+| Quick focused session | `worker=2 pr-limit=3` | 2 lanes, stop after 3 PRs |
+| Let the King decide | `lane=8` | King composes 8 lanes for you (workers + 1 watchman) |
+| Parallel story (pod) | `worker=6 senior=2` | 2 Senior-led pods; each story reviewed as a unit, shipped as one PR |
 
 You now have, in cmux.app's sidebar: 👑 King, 🎓 1 senior (leads a story pod), 3× 👷 workers, 1× 🧑‍💼 co-worker, 1× 🕵️ watchman, each in its own colour-coded workspace, all coordinated through your one chat with the King.
 
@@ -291,7 +284,7 @@ On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/d
 | 🎯 **Quality Max** | Fewer lanes, deep work: exhaustive discovery, Opus design review on every sensitive change, watchman cross-checks. Spend the tokens going *deep*. |
 | 🔥 **Fire PRs like mad** | Many lanes, wide fan-out: a sustained **~50-100 PRs per working week**. Spend the tokens going *wide*. |
 
-Same kit, same plan. Dial `worker=N` and `target=N-M/week` to sit anywhere on that spectrum.
+Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere on that spectrum.
 
 ---
 
@@ -314,8 +307,8 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
 | Command | What it does |
 |---|---|
-| **`/kingdom:work [<project>] [target=N-M/<day\|week\|month>] [cap=N] [lane=N] [worker=N] [co-worker=N] [watchman=N] [seniors=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. `target=` is a soft budget; `cap=` is a hard daily ceiling (counts PRs: a task or a whole story pod = 1, not sub-tasks). Shape: either per-role (`worker=` / `co-worker=` / `watchman=` / `seniors=`) or `lane=N` for a total budget the King auto-composes (v0.32.0). The one command you type every morning. |
-| `/kingdom:init [<project>]` | Workspace + optional project scaffold. See [`docs/configuration.md`](docs/configuration.md) for shape choices. |
+| **`/kingdom:work [<project>] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. **Shape:** either per-role (`worker=` / `co-worker=` / `watchman=` / `senior=`, plural also accepted) or `lane=N` for a total budget the King auto-composes. **Limits:** `pr-limit=N` (stop after N PRs) and `pod-limit=N` (stop after N pods = units of work); both count things that become a PR, not sub-tasks. The one command you type every morning. |
+| `/kingdom:init [<project>]` | **Scaffold only, no flags.** Creates the workspace + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later at `/kingdom:work` or by editing `kingdom.json`. See [`docs/configuration.md`](docs/configuration.md). |
 | `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
 | `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes; those go through the normal push-approval gate. |
 

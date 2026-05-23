@@ -23,13 +23,13 @@ Detail on shape choices: [`configuration.md`](configuration.md).
 
 ```bash
 /kingdom:work my-app                        # the one command, every morning
-/kingdom:work my-app cap=5                  # cap today's task-completions at 5
-/kingdom:work my-app target=30-50/week      # soft weekly budget; auto-splits to daily/monthly
+/kingdom:work my-app pr-limit=5             # stop after 5 PRs today
+/kingdom:work my-app lane=8 pod-limit=3     # King composes 8 lanes; stop after 3 pods (stories)
 ```
 
 Monday morning. One command. Kingdom runs an audit (refresh project state), spawns the lanes (idempotent, resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per [rules.md R1](../.kingdom/.setting/rules.md#r1-push-approval-is-single-shot--pr-specific)).
 
-Tuesday morning. Same command. The audit re-runs (cheap, parallel fan-out). The kickoff brief reflects yesterday's progress against your target. Nothing to remember.
+Tuesday morning. Same command. The audit re-runs (cheap, parallel fan-out). The kickoff brief reflects yesterday's progress against your limits. Nothing to remember.
 
 End of session: `/kingdom:save my-app` snapshots state and closes lanes gracefully; your conversation stays alive.
 
@@ -39,17 +39,16 @@ That's the whole routine. **It replaces the daily overhead of "what was I doing"
 
 Before dispatch, King + lanes resolve a skill set via `pick_skills_for_task` against [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md). Domain-routed: Next.js work invokes `nextjs-best-practices`, Prisma work invokes `prisma-cli`/`prisma-client-api`/etc, Supabase work invokes `supabase:supabase`. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) invoke directly when relevant. Per [R41](../.kingdom/.setting/rules.md#r41-auto-discover-and-use-the-right-skill-before-any-work-tier-1-v0293).
 
-## `target=` and `cap=` argument surface
+## `pr-limit` and `pod-limit` (v0.33.0)
 
-`target=N-M/<period>` is a soft budget; King paces dispatch to hit the daily band. Auto-splits across timeframes (assumes 5 working days per week, 4 weeks per month):
+Two independent hard ceilings; pass either or both. Dispatch stops when the first one is reached, and idle lanes wait.
 
-| You pass | Daily view | Weekly view | Monthly view |
-|---|---|---|---|
-| `target=30-50/week` | ~6-10/day | 30-50/week | ~120-200/month |
-| `target=5-10/day` | 5-10/day | ~25-50/week | ~100-200/month |
-| `target=120-200/month` | ~6-10/day | ~30-50/week | 120-200/month |
+| Param | Counts | Example |
+|---|---|---|
+| `pr-limit=N` | PRs opened today (a solo task or a whole story pod each = 1; a follow-up cleanup PR adds 1) | `pr-limit=5` → stop after 5 PRs |
+| `pod-limit=N` | pods today (one unit of work: story / task / milestone / issue, regardless of how many workers or sub-tasks) | `pod-limit=3` → stop after 3 pods |
 
-`cap=N` is a hard daily ceiling. King stops dispatching after `N` task-completions today; idle lanes wait. Overrides `target` for the day.
+Neither counts sub-tasks, and neither counts milestones as a whole. A 3-worker pod that ships one story PR counts as **1** toward each. (`cap` and `target` from earlier versions are gone — `cap` became `pr-limit`; `target`'s soft-budget auto-split was removed in favour of these two plain ceilings.)
 
 Parsing is forgiving and echoed back before the loop fires, so you can correct typos.
 

@@ -68,9 +68,9 @@ After the card is rendered, King waits for the user's reply (next chat message).
 | `continue worker-1 PDPA` | `project=<inferred>`, `task_hint="resume worker-1 FE-P0-FOUND.5"` (fuzzy-matched) |
 | `review PR 257` | `project=<inferred from PR>`, `task_hint="address lead comments on PR #257"` |
 | `pair on co-worker-1 for the wireframe` | `project=<inferred>`, `task_hint="pair on co-worker-1, scope: wireframe"` |
-| `5 tasks today, bfg-swt` | `project=bfg-swt`, `cap=5` |
-| `30-50 per week on cert-site` | `project=cert-site`, `target=30-50/week` |
-| `till lunch` | `project=<current>`, soft hint (no cap, King decides) |
+| `5 PRs today, bfg-swt` | `project=bfg-swt`, `pr-limit=5` |
+| `3 stories on cert-site` | `project=cert-site`, `pod-limit=3` |
+| `till lunch` | `project=<current>`, soft hint (no limit, King decides) |
 | `cancel` / `nvm` / `forget it` | Exit without starting the kingdom. |
 | `hi` / `what's up` / a question | Treat as conversational, NOT a kingdom invocation. Reply normally; user can re-run `/kingdom:work` when ready. |
 

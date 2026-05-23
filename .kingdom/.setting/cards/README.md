@@ -18,7 +18,7 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`end-of-day.md`](end-of-day.md) | `[!TIP]` | `/kingdom:save` or cap/target hit |
 | [`blocked-lane.md`](blocked-lane.md) | `[!WARNING]` | Watchman detects permission prompt |
 | [`conflict-detected.md`](conflict-detected.md) | `[!WARNING]` | `git merge-tree` finds drift at push time |
-| [`cap-reached.md`](cap-reached.md) | `[!WARNING]` | `cap=N` hit |
+| [`limit-reached.md`](limit-reached.md) | `[!WARNING]` | `pr-limit=N` or `pod-limit=N` hit (v0.33.0) |
 | [`pr-merged.md`](pr-merged.md) | `[!NOTE]` | `gh pr view` flips to `MERGED` (triggers R26) |
 | [`scaffold-success.md`](scaffold-success.md) | `[!IMPORTANT]` | `/kingdom:init` completes |
 | [`spawn-complete.md`](spawn-complete.md) | `[!IMPORTANT]` | `/kingdom:work` spawn phase completes |

@@ -2,71 +2,72 @@
 
 > Part of the [kingdom](../README.md) docs.
 
-## `/kingdom:init <project>`, pick your shape
+## Pick your shape, at `/kingdom:work` (not `init`)
 
-```bash
-/kingdom:init <project> [workers=N] [co-workers=M] [watchman=K]
-```
+`/kingdom:init <project>` takes **no shape flags** (v0.33.0): it just scaffolds `kingdom.json` with defaults. You choose the shape **per session** at `/kingdom:work`, or change the persistent default by editing `kingdom.json.shape`. Two ways to set it on a run:
 
-Each parameter is independent. Set what you need, the rest fall to defaults.
+- **per-role:** `worker=N co-worker=N watchman=N senior=N` (singular shown; plural like `workers=` is also accepted)
+- **total budget:** `lane=N` — the King auto-composes the split (workers + 1 watchman; story pods when `senior=K` is pinned)
 
 ### 🏢 Mid-size project, the default
 
 ```bash
-/kingdom:init my-app
+/kingdom:work my-app
 ```
 
-Equivalent to `workers=3 co-workers=1 watchman=1`. One worker per component (backend / frontend / ops), one paired lane reserved for you, one watchman over everything. **Start here unless you have a specific reason not to.**
+Uses the `kingdom.json` defaults (`worker=3 co-worker=1 watchman=1 senior=1`). One worker per component (backend / frontend / ops), one paired lane reserved for you, one watchman over everything, one Senior available to lead a story pod. **Start here unless you have a specific reason not to.**
 
-### 🏭 Large project, specialised workers
+### 🏭 Large project, more lanes
 
 ```bash
-/kingdom:init my-app workers=5 co-workers=2 watchman=1
+/kingdom:work my-app worker=5 co-worker=2 watchman=1
 ```
 
-Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two paired tracks (e.g., design exploration + content review), one watchman. Useful when one developer is steering many concurrent threads.
+Five autonomous workers (e.g., backend / frontend / mobile / infra / docs), two paired tracks, one watchman. Useful when one developer is steering many concurrent threads.
 
 ### 🚀 Solo side-project, single autonomous lane
 
 ```bash
-/kingdom:init my-app workers=1 co-workers=0 watchman=0
+/kingdom:work my-app worker=1 co-worker=0 watchman=0
 ```
 
-One worker, no monitoring, no paired track. Best for rapid prototypes or one-person repos where parallelism + audit overhead isn't worth it.
+One worker, no monitoring, no paired track. Best for rapid prototypes or one-person repos.
 
 ### 🎨 UI-heavy day, everything paired
 
 ```bash
-/kingdom:init my-app workers=0 co-workers=2 watchman=1
+/kingdom:work my-app worker=0 co-worker=2 watchman=1
 ```
 
-No autonomous work. Every lane is paired with you (e.g., redesigning the navbar in `co-worker-1` while iterating on the checkout flow in `co-worker-2`). One watchman keeps you informed of anything moving on `develop`.
+No autonomous work. Every lane is paired with you. One watchman keeps you informed of anything moving on `develop`.
 
-### 🌙 Unattended overnight, autonomous + heavy monitoring
+### 🎓 Parallel story pods, let the King compose
 
 ```bash
-/kingdom:init my-app workers=3 co-workers=0 watchman=2
+/kingdom:work my-app lane=12 senior=2
 ```
 
-Three workers grinding a sub-task queue; two watchmen (one on backend smoke, one on frontend smoke). No paired track, you're not at the keyboard. `WATCH_*.md` reports give you the morning recap.
+A total budget of 12 lanes; the King pins 2 Seniors (2 story pods) and fills the rest with workers. Each pod's story is reviewed as a unit and ships as one PR. (`/kingdom:work my-app lane=8` with no pins lets the King pick everything.)
 
-## What each parameter does
+## What each shape parameter does
 
 | Param | Role | Default | What it spawns |
 |---|---|---|---|
-| `workers=N` | Autonomous task lanes | `3` | `worker-1` … `worker-N`, each picks a sub-task and works it without your involvement |
-| `co-workers=M` | Paired lanes for hands-on work | `1` | `co-worker-1` … `co-worker-M`, dormant by default; activate with *"pair on co-worker-1"* |
-| `watchman=K` | Continuous monitors | `1` | `watchman-1` … `watchman-K`, each runs `/loop` to track `origin/develop` + babysit open PRs |
+| `worker=N` | Autonomous task lanes | `3` | `worker-1` … `worker-N`, each picks a sub-task and works it without your involvement |
+| `co-worker=N` | Paired lanes for hands-on work | `1` | `co-worker-1` … , dormant by default; activate with *"pair on co-worker-1"* |
+| `watchman=N` | Continuous monitors | `1` | `watchman-1` … , each runs `/loop` to track `origin/develop` + babysit open PRs |
+| `senior=N` | Per-story sub-orchestrator + reviewer | `1` | `senior-1` … , each owns a worker pod on one `story/<id>` branch and reviews it as a unit |
+| `lane=N` | Total-lane budget | — | the King auto-composes worker/co-worker/watchman/senior to fill N, honoring any pin |
 
-Soft cap: total lanes ≤ `sanityCap` (default `10`). Past 10 the UI gets cramped and the King has too much to juggle. Override in `kingdom.json`.
+Plural forms (`workers=`, `seniors=`, …) are accepted; the docs show singular. Soft cap: total lanes ≤ `sanityCap` (default `10`). To make a shape the persistent default, edit `kingdom.json.shape`.
 
 ## What happens when you run `/kingdom:init <project>`
 
-1. **Creates** `.kingdom/<project>/kingdom.json` from the template, shape pre-filled.
+1. **Creates** `.kingdom/<project>/kingdom.json` from the template, with default shape (no flags, v0.33.0).
 2. **Creates** `.kingdom/<project>/{logs,tasks}/` directories, the audit-trail homes.
 3. **Prints** the resulting JSON for you to review.
 
-**Declare ≠ launch.** `/kingdom:init <project>` only *declares* the shape. Before running `/kingdom:work my-app`, open the generated `kingdom.json` and customise:
+**Scaffold ≠ launch.** `/kingdom:init <project>` only scaffolds; it never reads tasks or spawns lanes. Before running `/kingdom:work my-app`, open the generated `kingdom.json` and customise:
 
 - `gate.*` command lists: what King runs before every push. Keys are arbitrary. Dev stacks use `typecheck`/`tests`/`smoke`/`lint`; finance work might use `validate`/`audit`; science work might use `reproduce`/`peer-review`. Rename / add / remove freely.
 - `git.base`: your PR target branch (default `develop`; many repos use `main`).

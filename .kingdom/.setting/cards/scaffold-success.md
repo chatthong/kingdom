@@ -15,11 +15,11 @@
 > │    .kingdom/${PROJECT}/{tasks,logs}/                    │
 > │    .claude/settings.json  (permissions patched)         │
 > │                                                         │
-> │  Shape: workers=${WORKERS} co-workers=${COWORKERS}      │
-> │         watchman=${WATCHMAN} base=${BASE}               │
+> │  Shape: kingdom.json defaults (tune at /kingdom:work)   │
 > │                                                         │
 > │  Next:                                                  │
 > │    1. Edit .kingdom/${PROJECT}/kingdom.json → gate.*    │
+> │       (and git.base if your repo isn't 'develop')       │
 > │    2. Run /kingdom:self-care to verify deps             │
 > │    3. Run /kingdom:work ${PROJECT} to start your day    │
 > ╰────────────────────────────────────────────────────────╯
@@ -32,10 +32,8 @@
 |---|---|---|
 | `${PROJECT}` | first positional arg | `bfg-swt` |
 | `${N_ROLE_DOCS}` | count of `.md` files in `.kingdom/.setting/` excluding `cards/` | `8` |
-| `${WORKERS}` | `workers=` arg or default | `3` |
-| `${COWORKERS}` | `co-workers=` arg or default | `1` |
-| `${WATCHMAN}` | `watchman=` arg or default | `1` |
-| `${BASE}` | `base=` arg or default | `develop` |
+
+`init` no longer takes shape flags (v0.33.0): the project is scaffolded with `kingdom.json` defaults. Shape is chosen per-session at `/kingdom:work` (`worker=N`, `lane=N`, `senior=N`, …) or by editing `kingdom.json`.
 
 ## Workspace-only variant
 

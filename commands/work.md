@@ -1,6 +1,6 @@
 ---
 description: Daily work cycle. Audit + spawn lanes + dispatch + poll. Shape overrides per-session. Interactive when no args.
-argument-hint: [project] [target=N-M/<day|week|month>] [cap=N] [worker=N] [co-worker=N] [watchman=N]
+argument-hint: [project] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]
 ---
 
 You are running the kingdom's **full daily work cycle** as one orchestrated flow. The user typed ONE command and expects the kingdom to "just run the day": audit the project state, spawn the lanes, brief the user with the local date+time and a suggested next task, then auto-dispatch + auto-gate until something needs a human decision. Block ONLY on genuine human-decision points.
@@ -11,43 +11,47 @@ You are running the kingdom's **full daily work cycle** as one orchestrated flow
 
 | Form | Behaviour |
 |---|---|
-| `/kingdom:work <project> [target=...] [cap=...] [worker=N] [co-worker=N] [watchman=N] [seniors=N] [lane=N]` | Standard: explicit project + optional budget + optional shape overrides. `lane=N` sets a total-lane budget the King auto-composes (v0.32.0). Skip to Step 0.1. |
+| `/kingdom:work <project> [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]` | Standard: explicit project + optional shape + optional limits. `lane=N` sets a total-lane budget the King auto-composes. Skip to Step 0.1. |
 | `/kingdom:work <project>` | Standard: explicit project, no caps, no overrides. Skip to Step 0.1. |
 | `/kingdom:work` *(no args)* | **Interactive mode:** King asks "What do you want to work on today?", waits for natural-language reply, auto-parses project + task scope. See Step 0.0 below. |
 
-### Shape overrides (per-session)
+### Parameters (per-session; none rewrite `kingdom.json`)
 
-Two ways to set the shape for this run (neither rewrites `kingdom.json`):
+**Shape (choose one style):**
+- `lane=N` — total lanes; the King auto-composes the split (workers + 1 watchman; story pods when `senior=K` is pinned), honoring any per-role pin.
+- per-role: `worker=N`, `co-worker=N`, `watchman=N`, `senior=N`.
 
-1. **Per-role:** `worker=N`, `co-worker=N`, `watchman=N`, `seniors=N` set each role explicitly. Example: `/kingdom:work bfg-swt worker=5 co-worker=2 watchman=1 seniors=1`.
-2. **Total budget (v0.32.0):** `lane=N` sets the TOTAL number of lanes (workers + co-workers + watchmen + seniors; the King is separate). The King auto-composes the split to fill the budget. Any per-role flag becomes a PIN that the King honors and fills the rest around. Examples: `/kingdom:work my-app lane=8` (King picks 8 lanes), `/kingdom:work my-app lane=8 watchman=1` (1 watchman pinned + 7 auto), `/kingdom:work my-app lane=12 seniors=2` (2 Senior-led pods + the rest workers), `/kingdom:work my-app lane=12 cap=5`.
+**Limits (independent hard ceilings; both optional):**
+- `pr-limit=N` — stop after **N PRs** opened today.
+- `pod-limit=N` — stop after **N pods** today (a pod = one unit of work: milestone / story / task / issue).
+
+**Parsing is forgiving:** singular OR plural is accepted (`worker=`/`workers=`, `senior=`/`seniors=`, `watchman=`/`watchmen=`, `co-worker=`/`co-workers=`, `lane=`/`lanes=`). This doc and the argument hint always show the **singular** form.
 
 ```bash
-# Effective shape resolution (per-session override wins over JSON):
+# Normalize args — accept singular or plural; canonical form is singular.
+arg () { echo " $ARGUMENTS" | grep -oE "(^| )$1=[^ ]+" | tail -1 | cut -d= -f2; }
+ARG_WORKER=$(arg 'workers?');     ARG_COWORKER=$(arg 'co-workers?')
+ARG_WATCHMAN=$(arg 'watch(man|men)'); ARG_SENIOR=$(arg 'seniors?')
+ARG_LANE=$(arg 'lanes?');          PR_LIMIT=$(arg 'pr-limit'); POD_LIMIT=$(arg 'pod-limit')
+
+# Effective shape resolution (lane=N auto-composes; else per-role override wins over JSON):
 if [ -n "$ARG_LANE" ]; then
-  # lane=N: total-lane budget; King auto-composes, honoring per-role pins.
-  CAPV=$(jq -r '.shape.sanityCap // 10' "$KJSON")
-  LANE_BUDGET="$ARG_LANE"
-  if [ "$LANE_BUDGET" -gt "$CAPV" ]; then
-    echo "⚠️ lane=$LANE_BUDGET exceeds sanityCap=$CAPV; capping to $CAPV"; LANE_BUDGET="$CAPV"
-  fi
-  # Pins (explicit role flags) are fixed; defaults: 1 watchman if budget >= 2, pods opt-in (seniors only if pinned).
+  CAPV=$(jq -r '.shape.sanityCap // 10' "$KJSON"); LANE_BUDGET="$ARG_LANE"
+  [ "$LANE_BUDGET" -gt "$CAPV" ] && { echo "⚠️ lane=$LANE_BUDGET exceeds sanityCap=$CAPV; capping to $CAPV"; LANE_BUDGET="$CAPV"; }
   WATCHMEN=${ARG_WATCHMAN:-$([ "$LANE_BUDGET" -ge 2 ] && echo 1 || echo 0)}
-  SENIORS=${ARG_SENIOR:-0}
-  COWORKERS=${ARG_COWORKER:-0}
-  USED=$((WATCHMEN + SENIORS + COWORKERS))
-  WORKERS=${ARG_WORKER:-$(( LANE_BUDGET - USED ))}
+  SENIORS=${ARG_SENIOR:-0}; COWORKERS=${ARG_COWORKER:-0}
+  WORKERS=${ARG_WORKER:-$(( LANE_BUDGET - WATCHMEN - SENIORS - COWORKERS ))}
   [ "$WORKERS" -lt 0 ] && WORKERS=0
-  echo "👑 lane=$LANE_BUDGET → workers=$WORKERS co-workers=$COWORKERS watchman=$WATCHMEN seniors=$SENIORS (King's composition; pins honored)"
+  echo "👑 lane=$LANE_BUDGET → worker=$WORKERS co-worker=$COWORKERS watchman=$WATCHMEN senior=$SENIORS (King's composition; pins honored)"
 else
-  WORKERS=$([ -n "$ARG_WORKER" ] && echo "$ARG_WORKER" || jq -r '.shape.workers // 3' "$KJSON")
-  COWORKERS=$([ -n "$ARG_COWORKER" ] && echo "$ARG_COWORKER" || jq -r '.shape["co-workers"] // 1' "$KJSON")
-  WATCHMEN=$([ -n "$ARG_WATCHMAN" ] && echo "$ARG_WATCHMAN" || jq -r '.shape.watchman // 1' "$KJSON")
-  SENIORS=$([ -n "$ARG_SENIOR" ] && echo "$ARG_SENIOR" || jq -r '.shape.seniors // 0' "$KJSON")
+  WORKERS=${ARG_WORKER:-$(jq -r '.shape.workers // 3' "$KJSON")}
+  COWORKERS=${ARG_COWORKER:-$(jq -r '.shape["co-workers"] // 1' "$KJSON")}
+  WATCHMEN=${ARG_WATCHMAN:-$(jq -r '.shape.watchman // 1' "$KJSON")}
+  SENIORS=${ARG_SENIOR:-$(jq -r '.shape.seniors // 0' "$KJSON")}
 fi
 ```
 
-If a per-session override (or `lane=N`) exceeds `sanityCap`, print a warning and cap to `sanityCap` — never silently accept a huge shape. With `lane=N`, the King composes within the budget at audit time; pinning `seniors=K` is how you ask for `K` story pods.
+Any shape value (or `lane=N`) over `sanityCap` is warned + capped. `pr-limit` and `pod-limit` are independent: whichever the run hits first stops dispatch. Pinning `senior=K` is how you ask for K story pods.
 
 ### Step 0.0 — Interactive mode (no-args invocation only)
 
@@ -68,28 +72,28 @@ The card lists what's actionable RIGHT NOW (open PRs awaiting review, in-flight 
 
 1. **Project name** — match against `${AVAILABLE_PROJECTS}` whitelist. Examples: `"bfg-swt"`, `"work on bfg-swt"`, `"the cert site"` — resolved by fuzzy substring match.
 2. **Task scope** — everything else in the reply. Examples: `"fix login bug"`, `"continue worker-1's PDPA task"`, `"review PR 257"`.
-3. **Inline caps/targets** — `"5 tasks today"` → `cap=5`; `"30-50 per week"` → `target=30-50/week`.
-4. **Shape overrides** — `"5 workers"` → `worker=5`.
+3. **Inline limits** — `"5 PRs today"` → `pr-limit=5`; `"3 stories"` → `pod-limit=3`.
+4. **Shape** — `"5 workers"` → `worker=5`; `"8 lanes"` → `lane=8`.
 
 Resolve into normalised args:
 
 ```bash
 project="<matched-project-name>"
 task_hint="<free-form scope, OR empty>"
-cap="<parsed N, or empty>"
-target="<parsed N-M/<period>, or empty>"
-worker="<parsed N, or empty>"
+PR_LIMIT="<parsed N, or empty>"
+POD_LIMIT="<parsed N, or empty>"
+ARG_WORKER="<parsed N, or empty>"   # or ARG_LANE for a total budget
 ```
 
-If the parse is ambiguous, King prints back the interpretation and asks for confirmation BEFORE proceeding to Step 0.1:
+If the parse is ambiguous, King prints back the interpretation and asks for confirmation BEFORE proceeding:
 
 ```text
 👑 Parsed:
-   project   = bfg-swt
-   task      = continue worker-1 PDPA (matched FE-P0-FOUND.5 task file)
-   cap       = (none)
-   target    = (none)
-   shape     = worker=3 co-worker=1 watchman=1  (from kingdom.json)
+   project    = bfg-swt
+   task       = continue worker-1 PDPA (matched FE-P0-FOUND.5 task file)
+   pr-limit   = (none)
+   pod-limit  = (none)
+   shape      = worker=3 co-worker=1 watchman=1 senior=1  (from kingdom.json)
 
    Proceed? Or correct the parse.
 ```
@@ -99,66 +103,24 @@ If the user types something unparseable (e.g. only `"hi"`, or a question), King 
 **Resolved args from Step 0 or Step 0.0:**
 
 - `project` — explicit positional OR fuzzy-matched from interactive reply. Verify `.kingdom/${project}/` exists; if missing, tell the user to run `/kingdom:init ${project}` first and stop.
-- `target=N-M/<period>` — soft dispatch budget; auto-split in Step 0.1.
-- `cap=N` — hard daily ceiling.
+- `PR_LIMIT` — hard ceiling on PRs opened today (optional).
+- `POD_LIMIT` — hard ceiling on pods (units of work) today (optional).
 - `task_hint` (interactive-mode only) — natural-language scope; King uses it as a strong prior in Step 0.6 resume-scan and `suggested-task` card synthesis.
-- `WORKERS`, `COWORKERS`, `WATCHMEN` — effective shape for this session (override or from JSON).
+- `WORKERS`, `COWORKERS`, `WATCHMEN`, `SENIORS` — effective shape for this session (override or from JSON).
 
-### Step 0.1 — Auto-split `target` across timeframes
-
-If `target=N-M/<period>` was passed, compute the daily / weekly / monthly views (assumes 5 working days per week, 4 weeks per month):
-
-```bash
-parse_target () {
-  local raw="$1"                              # e.g. "30-50/week"
-  local range="${raw%/*}"                     # "30-50"
-  local period="${raw##*/}"                   # "week"
-  local lo="${range%-*}"                      # "30"
-  local hi="${range#*-}"                      # "50"
-
-  local day_lo day_hi week_lo week_hi month_lo month_hi
-  case "$period" in
-    day)
-      day_lo=$lo;   day_hi=$hi
-      week_lo=$((lo*5));  week_hi=$((hi*5))
-      month_lo=$((lo*20)); month_hi=$((hi*20))
-      ;;
-    week)
-      week_lo=$lo;  week_hi=$hi
-      day_lo=$((lo/5));   day_hi=$((hi/5))
-      month_lo=$((lo*4)); month_hi=$((hi*4))
-      ;;
-    month)
-      month_lo=$lo; month_hi=$hi
-      week_lo=$((lo/4));  week_hi=$((hi/4))
-      day_lo=$((lo/20));  day_hi=$((hi/20))
-      ;;
-    *)
-      echo "Unknown period: $period. Use day, week, or month." >&2
-      return 1
-      ;;
-  esac
-  echo "TARGET_DAY_LO=$day_lo TARGET_DAY_HI=$day_hi"
-  echo "TARGET_WEEK_LO=$week_lo TARGET_WEEK_HI=$week_hi"
-  echo "TARGET_MONTH_LO=$month_lo TARGET_MONTH_HI=$month_hi"
-}
-```
-
-King prints the interpreted budget in the kickoff brief so the user can correct before the loop fires.
-
-### Step 0.2 — Print parse summary BEFORE acting
+### Step 0.1 — Print parse summary BEFORE acting
 
 ```text
 👑 Parsed arguments:
-   project = bfg-swt
-   target  = 30-50/week  → today's budget 6-10 · week 30-50 · month 120-200
-   cap     = (none)
-   shape   = worker=3 co-worker=1 watchman=1  (from kingdom.json)
+   project    = bfg-swt
+   shape      = worker=3 co-worker=1 watchman=1 senior=1  (from kingdom.json)
+   pr-limit   = (none)
+   pod-limit  = 5
 
 Proceeding to resume-scan + spawn + kickoff...
 ```
 
-If the parse is ambiguous (unknown period, malformed range), print the issue and stop.
+If the parse is ambiguous (malformed value), print the issue and stop.
 
 ### Step 0.3 — The counting unit
 
@@ -175,7 +137,12 @@ The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merg
 | **PR** (`feature/<topic>` or `story/<id>`) | Yes — usually 1:1; a follow-up cleanup PR adds 1 |
 | **Milestone** (`M01-M20`) | No — spans many tasks |
 
-So `cap=5` and `target=30-50/week` count **things that become a PR** (a solo task or a whole story pod), **not** the sub-tasks inside them and **not** milestones. `target=30-50/week` ≈ 30-50 PRs/week ≈ 30-50 Stories closed per week. A 3-worker pod that ships one story PR counts as **1** toward `cap`, not 3.
+So the two limits count **things that become a PR**, not the sub-tasks inside them and not milestones:
+
+- `pr-limit=N` counts **PRs opened** (a solo task or a whole story pod each open one PR; a follow-up cleanup PR adds 1).
+- `pod-limit=N` counts **pods** (units of work: one story / task / milestone / issue = 1, regardless of how many workers or sub-tasks it contains).
+
+A 3-worker pod that ships one story PR counts as **1** toward both `pr-limit` and `pod-limit`, never 3. The two are independent ceilings; dispatch stops when either is reached.
 
 ### Step 0.3.5 — Skill check (R41 · MANDATORY)
 
@@ -478,7 +445,7 @@ Other cards fired later in the cycle:
 - `cards/task-complete.md` — Tier-2 gate pass (~20 random congratulatory lines)
 - `cards/push-prompt.md` — Tier-2 passed, awaiting "push" word (R1 approval)
 - `cards/gate-fail.md` — Tier-1 or Tier-2 fail
-- `cards/cap-reached.md` — `cap=N` hit
+- `cards/limit-reached.md` — `pr-limit=N` or `pod-limit=N` hit
 - `cards/end-of-day.md` — day stops (exit / cap reached / all idle)
 - `cards/pr-merged.md` — PR flips MERGED (triggers R26 resync)
 - `cards/conflict-detected.md` — `git merge-tree` finds drift at push time
@@ -531,6 +498,8 @@ Pods now run autonomously and in parallel. The King does NOT re-review their int
 ```bash
 DISPATCH_START=$(date +%s)
 TASKS_DISPATCHED_TODAY=0
+PRS_OPENED_TODAY=0      # incremented at Step 6 (gh pr create)
+PODS_DONE_TODAY=0      # incremented when a pod's story PR opens or a solo task ships
 
 for lane in $LANES_EXPECTED; do
   # Skip co-workers (R32 — co-workers wait for explicit pair-on signal)
@@ -580,13 +549,17 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
     echo "R30: dispatch budget exceeded (${ELAPSED}s). Continuing remaining dispatches."
   fi
 
-  # Cap enforcement
-  if [ -n "$CAP" ] && [ "$TASKS_DISPATCHED_TODAY" -ge "$CAP" ]; then
-    render_card "cap-reached"
-    break
+  # Limit enforcement (independent ceilings; whichever hits first stops dispatch)
+  if [ -n "$PR_LIMIT" ] && [ "$PRS_OPENED_TODAY" -ge "$PR_LIMIT" ]; then
+    LIMIT_KIND="pr-limit" LIMIT_VAL="$PR_LIMIT" render_card "limit-reached"; break
+  fi
+  if [ -n "$POD_LIMIT" ] && [ "$PODS_DONE_TODAY" -ge "$POD_LIMIT" ]; then
+    LIMIT_KIND="pod-limit" LIMIT_VAL="$POD_LIMIT" render_card "limit-reached"; break
   fi
 done
 ```
+
+`PRS_OPENED_TODAY` increments at Step 6 (each `gh pr create`); `PODS_DONE_TODAY` increments when a pod's story PR opens or a solo task ships. Both counters live across the Step 5 poll loop so the limits hold for the whole session.
 
 Workers begin work in parallel (per R28 parallel-by-default).
 
@@ -723,7 +696,8 @@ git clean -fd
 
 cmux_set_state "" "Pushed feature/${TOPIC}"
 cmux workspace-action --action mark-read --workspace "$KING_WS"
-TASKS_DISPATCHED_TODAY=$((TASKS_DISPATCHED_TODAY + 1))
+PRS_OPENED_TODAY=$((PRS_OPENED_TODAY + 1))     # toward pr-limit
+PODS_DONE_TODAY=$((PODS_DONE_TODAY + 1))       # this PR completed one unit (solo task or story pod)
 ```
 
 After push, King returns to Step 5's poll loop.
@@ -733,13 +707,13 @@ After push, King returns to Step 5's poll loop.
 The day stops on any of:
 
 - User says "stop" or "hold" in chat (King exits the auto-loop; lanes stay alive)
-- `cap=N` reached + no in-flight gates pending (King exits loop, waits for next-day instruction)
+- `pr-limit=N` or `pod-limit=N` reached + no in-flight gates pending (King exits loop, waits for next-day instruction)
 - All lanes idle AND no pending work AND no in-flight PRs (King exits loop, says "Day complete; run `/kingdom:save` to snapshot, or `/kingdom:work` again tomorrow.")
 
 ## Conventions
 
 - **`/kingdom:work <project>` is THE canonical daily entry point.** Use it every morning. Composes resume-scan + spawn + kickoff + auto-gate-poll loop + per-push approval gates.
 - **Blocks only on human decisions.** Review approval, push approval, blocked-lane resolution. Everything else flows autonomously per kingdom rules.
-- **Argument parsing is forgiving.** `target=30-50/week` and `cap=5` are interpreted then echoed back in Step 0.2 so the user can correct typos before the loop fires.
+- **Argument parsing is forgiving.** Singular or plural role flags are accepted (`worker=`/`workers=`, etc.); `pr-limit=` and `pod-limit=` are interpreted then echoed back in Step 0.1 so the user can correct typos before the loop fires.
 - **Per-session shape overrides** are reflected in the sidebar immediately — the overridden lane count spawns in Step 0.4, not the JSON count.
 - **R14 session-start read** (rules.md → workspace + project CLAUDE.md → README → docs/ → MEMORY.md) happens between Step 0 parse and Step 1 audit.

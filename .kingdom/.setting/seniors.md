@@ -93,9 +93,25 @@ cmux_set_state "⛔" "story/<id> · blocked — escalated to King"
 
 ---
 
+## Artifacts — a pod persists `logs/` + `tasks/` like every other lane (R22, R23)
+
+A story pod is fully auditable: it writes the same artifact set as any worker, just at the story level. Every path is under the workspace `.kingdom/<project>/`:
+
+| Artifact | Path | Writer |
+|---|---|---|
+| Story task file | `tasks/<UTC>__senior-N__<story-id>.md` | the Senior |
+| Each sub-task's task file | `tasks/<UTC>__worker-N__<sub-id>.md` | each pod worker |
+| Senior raw notes | `logs/raw/<UTC>__senior-N__<story-id>.md` | the Senior |
+| Senior curated digest | `logs/<UTC>__senior-N__<story-id>.md` (TL;DR top) | the Senior |
+| `master_agent.log` line | `logs/master_agent.log` (append) | the Senior + each worker |
+| Push-eligible sentinel | `logs/done/<UTC>__senior-N__<story-id>.flag` | the Senior |
+| Review report | `<project>/docs/test-reports/SENIOR_<UTC>__story-<id>.md` | the Senior |
+
+So `tasks/` ends with one Senior task file + one per pod worker; `logs/` ends with the Senior's raw + curated + log line + sentinel, plus each worker's own closer set. Nothing about a pod skips the audit trail.
+
 ## Closer (R22)
 
-The Senior runs the 4-step closer on story completion (push-eligible or blocked): raw notes -> curated digest (`SENIOR_*` report) -> `master_agent.log` line -> sentinel flag. No silent exit, even on blocked.
+The Senior runs the 4-step closer on story completion (push-eligible or blocked), exactly like a worker: raw notes (`logs/raw/`) -> curated digest (`logs/<UTC>__senior-N__<story-id>.md`) -> `master_agent.log` line -> sentinel flag (`logs/done/`). The `SENIOR_*` review report is an additional artifact, not a substitute for the closer. No silent exit, even on blocked.
 
 ---
 
