@@ -27,7 +27,13 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 ![Multi-Agent](https://img.shields.io/badge/multi--agent-orchestration-9333ea)
 ![cmux.app](https://img.shields.io/badge/cmux.app-native-f59e0b)
 
-[Quick start](#-quick-start) · [Install](#-install) · [Contract](#-the-contract) · [Slash commands](#-slash-commands) · [Docs](#-docs)
+[Quick start](#-quick-start) · [Install](#-install) · [Contract](#-the-contract) · [Cost](#-what-it-costs-to-run) · [Slash commands](#-slash-commands) · [Docs](#-docs)
+
+<br/>
+
+![kingdom running live in cmux.app — a King plus 8 workers, 2 co-workers, and a watchman, each in its own colour-coded workspace](docs/assets/kingdom-cmux-sidebar.png)
+
+<sub>A live kingdom in cmux.app — one King, 8 autonomous workers, 2 paired co-workers, 1 watchman; each lane its own colour-coded workspace, all driven from a single chat with the King.</sub>
 
 </div>
 
@@ -86,35 +92,44 @@ You now have **5 AI agents** in cmux.app's sidebar: 👑 King, 3× 👷 workers,
 
 ```mermaid
 graph TB
-    K([👑 King · Opus<br/>your conversation, your gates])
+    K(["👑 King · Opus<br/>your conversation, your gates"])
 
-    K ==>|cmux send| W1([👷 worker-1 · Opus<br/>backend])
-    K ==>|cmux send| W2([👷 worker-2 · Opus<br/>frontend])
-    K ==>|tmux send-keys| W3([👷 worker-3 · Opus<br/>ops])
-    K ==>|tmux send-keys| CW([🧑‍💼 co-worker-1 · Opus<br/>you-paired])
-    K ==>|claude -p| WM([🕵️ watchman-1 · Sonnet<br/>/loop monitor])
+    K ==>|"cmux send"| W1(["👷 worker-1 · Opus<br/>backend"])
+    K ==>|"cmux send"| W2(["👷 worker-2 · Opus<br/>frontend"])
+    K ==>|"tmux send-keys"| W3(["👷 worker-3 · Opus<br/>ops"])
+    K ==>|"tmux send-keys"| CW(["🧑‍💼 co-worker-1 · Opus<br/>you-paired"])
+    K ==>|"claude -p"| WM(["🕵️ watchman-1 · Sonnet<br/>loop monitor"])
 
-    W1 -->|Agent| SA1([🐱 sub · Sonnet<br/>code])
-    W1 -->|Agent| SA2([🐱 sub · Haiku<br/>doc digest])
-    W1 -->|Agent| SA3([🐱 sub · Sonnet<br/>test])
-    W2 -->|Agent| SA4([🐱 sub · Sonnet<br/>code])
-    W2 -->|Agent| SA5([🐱 sub · Sonnet<br/>storybook])
-    CW -->|Agent| SA6([🐱 sub · Opus<br/>auth review])
+    W1 -->|"Agent"| SA1(["🐱 sub · Sonnet<br/>code"])
+    W1 -->|"Agent"| SA2(["🐱 sub · Haiku<br/>doc digest"])
+    W2 -->|"Agent"| SA4(["🐱 sub · Sonnet<br/>code"])
+    W3 -->|"Agent"| SA7(["🐱 sub · Sonnet<br/>deploy"])
+    CW -->|"Agent"| SA6(["🐱 sub · Opus<br/>auth review"])
+    WM -->|"Agent"| SA8(["🐱 sub · Haiku<br/>PR review"])
 
-    SA1 & SA2 & SA3 & SA4 & SA5 & SA6 & W3 & WM -.->|"4-step closer"| LOG[(.kingdom/project/logs/)]
-    W1 & W2 & W3 & CW -.->|"task file"| TSK[(.kingdom/project/tasks/)]
+    SA1 -.->|"4-step closer"| LOG[("logs/")]
+    SA2 -.-> LOG
+    SA4 -.-> LOG
+    SA6 -.-> LOG
+    SA7 -.-> LOG
+    SA8 -.-> LOG
+
+    W1 -.->|"task file"| TSK[("tasks/")]
+    W2 -.-> TSK
+    W3 -.-> TSK
+    CW -.-> TSK
 
     classDef king fill:#fef3c7,stroke:#f59e0b,stroke-width:3px,color:#78350f
     classDef opus stroke:#a78bfa,stroke-width:2px
     classDef sonnet stroke:#60a5fa,stroke-width:1.5px
     classDef haiku stroke:#34d399,stroke-width:1.5px
     classDef monitor stroke:#fb7185,stroke-width:1.5px
-    classDef store fill:none,stroke:#94a3b8,stroke-width:1px
+    classDef store fill:#fca5a5,stroke:#dc2626,stroke-width:2px,color:#7f1d1d
 
     class K king
     class W1,W2,W3,CW opus
-    class SA1,SA3,SA4,SA5 sonnet
-    class SA2 haiku
+    class SA1,SA4,SA7 sonnet
+    class SA2,SA8 haiku
     class SA6 opus
     class WM monitor
     class LOG,TSK store
@@ -123,6 +138,15 @@ graph TB
 A Claude Code plugin that turns one session into a coordinated team: each lane in its own git worktree, each branch isolated until you approve the push. The King gates every commit, writes audit artifacts you can grep next month, and never touches your main checkout. No new runtime, no daemons.
 
 **Domain-agnostic by design.** Anything you version in git — code, research, finance models, scientific notebooks, manuscripts — the kingdom can orchestrate. Workers are generic capacity; `gate.*` commands are arbitrary bash. Same kit whether your "tests" run `pytest`, `Rscript`, or `pandoc --validate`.
+
+> [!WARNING]
+> **Spinning up a kingdom isn't instant — but it pays for itself fast.**
+>
+> - 🥶 **Cold start** (first `/kingdom:work`): **~30–60 min** — create worktrees, spawn lane workspaces, boot each Claude session, run the audit + doc-orientation fan-outs, then the first dispatch.
+> - ♻️ **Resume** (next `/kingdom:work` after a `/kingdom:save`): **~15–30 min** — respawn workspaces from `state.json`, reload context, pick up in-flight tasks.
+> - ⚡ **After that, it's light speed** — lanes run fully parallel, the King gates continuously, and you spend your time reviewing PRs instead of waiting on setup.
+>
+> Budget the warm-up once per session; the sustained throughput (see [What it costs to run](#-what-it-costs-to-run)) is what you're paying that warm-up for.
 
 ---
 
@@ -157,6 +181,62 @@ A Claude Code plugin that turns one session into a coordinated team: each lane i
 - ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks — zero modifications
 - ❌ Your `.gitignore` — kingdom adds ONE line (`.worktrees/`) and stops there
 - ✅ `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, branches survive intact
+
+---
+
+## 💸 What it costs to run
+
+The kingdom is a fleet of **real Claude Code sessions** — one per lane, each in its own cmux workspace. That's what buys real parallelism, and it spends two real budgets: your Mac's **RAM** and your Claude plan's **tokens**. Both numbers below are measured on a live run (2026-05-23 · macOS · Claude Code v2.1.150 · Opus 4.7).
+
+### 🧠 RAM — one live session per lane
+
+Each lane is a booted Claude Code session (Claude core + its own MCP servers). Measured with `cmux memory --all`:
+
+| Shape | Live sessions | RAM (child RSS) |
+|---|---:|---:|
+| 👑 King only (all lanes closed) | 1 | ~0.6 GB |
+| 👑 King + 8 workers + 2 co-workers + 1 watchman | 12 | ~6.3 GB |
+| 👑 King + 12 workers + 2 co-workers + 1 watchman | 16 | ~7.1 GB |
+
+Rule of thumb: **budget ~0.5 GB per booted lane** — roughly 0.2 GB for a fresh idle worker, more once it loads MCP servers or starts heavy work. A 16-lane kingdom is comfortable on a 16 GB Mac; on 32 GB+ you won't notice it.
+
+**Reclaim it with `/kingdom:save`.** End of session, close the workspaces and get the RAM back — worktrees and branches stay on disk (cheap), and the next `/kingdom:work` respawns the sidebar from `state.json`.
+
+> [!TIP]
+> ```
+> ╭─ /kingdom:save — close lane workspaces, free Mac RAM ───╮
+> │  Each lane = a live Claude session ≈ 0.2–0.5 GB         │
+> │  Measured: closing 11 lanes freed ~5.7 GB               │
+> │           (6.3 GB ▸ 0.6 GB, back to King-only)          │
+> │  .worktrees/* stay  (small — just files)                │
+> │  Branches stay      (local + remote)                    │
+> │  Next /kingdom:work respawns the sidebar from state.json│
+> ╰─────────────────────────────────────────────────────────╯
+> ```
+
+### 🔥 Tokens — what a Max plan feeds it
+
+On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/day sustains **~250–290M tokens/day** — almost all Opus, almost all cache reads (90%+), which is exactly why a billion-token week stays economical. One real 7-day window (full [`ccusage`](https://github.com/ryoppippi/ccusage) report in [`token-2026-05-23.md`](token-2026-05-23.md)):
+
+| Day | Total tokens | Equivalent API value |
+|---|---:|---:|
+| Mon | 245.6M | $209 |
+| Tue | 257.3M | $220 |
+| Wed | 192.5M | $153 |
+| Thu | 282.5M | $198 |
+| Fri | **291.0M** | $203 |
+| **5-day work week** | **~1.27B** | **~$983** |
+
+> The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates) — on a Max subscription it's flat-rate, so this is value unlocked, not a bill. The headline: a **5× plan** — not even the 20× tier — fed nearly **300M Opus tokens in a single day**.
+
+**So you choose how to spend that throughput:**
+
+| Mode | What it looks like |
+|---|---|
+| 🎯 **Quality Max** | Fewer lanes, deep work — exhaustive discovery, Opus design review on every sensitive change, watchman cross-checks. Spend the tokens going *deep*. |
+| 🔥 **Fire PRs like mad** | Many lanes, wide fan-out — a sustained **~50–100 PRs per working week**. Spend the tokens going *wide*. |
+
+Same kit, same plan. Dial `worker=N` and `target=N-M/week` to sit anywhere on that spectrum.
 
 ---
 
