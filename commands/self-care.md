@@ -355,15 +355,28 @@ This is never a hard fail: a project without the keys simply runs the classic fl
 
 ## Check 11 — modular structure lint (v0.35.0+, informational)
 
-The kit is now many small files (`rules/`, `functions/`, `roles/`, `reference/`). This lint keeps that structure from rotting as it grows: every function parses, every rule is registered, every internal link resolves.
+The kit is now many small files (`rules/`, `functions/` + backend subfolders like `functions/cmux/`, `roles/`, `reference/`). This lint keeps that structure from rotting as it grows: every function parses, every rule is registered, every manifest feature's functions resolve to a file, and every internal link resolves.
 
 ```bash
 SET="${CLAUDE_PLUGIN_ROOT:-$PWD}/.kingdom/.setting"; bad=0
-# (a) every function .sh is syntactically valid
-for f in "$SET"/functions/*.sh; do [ "$(basename "$f")" = "_load.sh" ] && continue; bash -n "$f" 2>/dev/null || { echo "  ✗ syntax: $(basename "$f")"; bad=1; }; done
+# Collect every function file once (flat + one level of backend subfolders), via find so an
+# absent subfolder can't trip glob-nomatch. PRESENT = space-padded set of bare function names.
+PRESENT=" $(find "$SET/functions" -maxdepth 2 -name '*.sh' ! -name '_load.sh' -exec basename {} .sh \; 2>/dev/null | tr '\n' ' ') "
+# (a) every function .sh parses — flat AND backend subfolders (cmux/, future tmux/)
+while IFS= read -r f; do
+  bash -n "$f" 2>/dev/null || { echo "  ✗ syntax: ${f#$SET/}"; bad=1; }
+done < <(find "$SET/functions" -maxdepth 2 -name '*.sh' ! -name '_load.sh' 2>/dev/null)
 # (b) every rule file is listed in rules/index.md
 for r in "$SET"/rules/R*.md; do id=$(basename "$r" | grep -oE '^R[0-9]+'); grep -q "\b$id\b" "$SET/rules/index.md" || { echo "  ✗ $id missing from rules/index.md"; bad=1; }; done
-# (c) every local .md link under .setting resolves
+# (c) every function named in manifest.json resolves to a file (flat OR a backend subfolder).
+#     Catches a partial scaffold — e.g. /kingdom:init failing to copy functions/cmux/ (the whole
+#     cmux + browser backend), which silently breaks load_feature cmux/core at runtime.
+if command -v jq >/dev/null 2>&1; then
+  for fn in $(jq -r '.features[].functions[]?' "$SET/manifest.json" 2>/dev/null | sort -u); do
+    case "$PRESENT" in *" $fn "*) : ;; *) echo "  ✗ manifest fn '$fn' has no .sh file (backend subfolder not scaffolded?)"; bad=1 ;; esac
+  done
+fi
+# (d) every local .md link under .setting resolves
 python3 - "$SET" <<'PY'
 import io,os,re,sys
 root=sys.argv[1]; lr=re.compile(r'\]\(([^)]+\.md)(#[^)]*)?\)')

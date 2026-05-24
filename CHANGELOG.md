@@ -4,6 +4,14 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.36.2] — 2026-05-25
+
+### Added
+
+- **`/kingdom:self-care` Check 11 now verifies the backend is fully scaffolded.** It syntax-checks function files in backend subfolders (`functions/cmux/`), not just flat files, and asserts every function named in `manifest.json` resolves to a `.sh` (flat or subfolder). This catches a partial scaffold — e.g. the v0.36.0 init bug where `functions/cmux/` (30 wrappers) wasn't copied — before it breaks `load_feature` at runtime. Implemented with `find` + a name-set membership test, so an absent subfolder can't trip glob-nomatch.
+
+---
+
 ## [0.36.1] — 2026-05-25
 
 ### Fixed
