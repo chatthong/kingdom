@@ -21,7 +21,7 @@ guard_lane_workspace_exists () {
     return 0  # FALLBACK/AGENT mode — worktree existence is enough
   fi
 
-  local ws_list=$(cmux list-workspaces 2>/dev/null)
+  local ws_list=$(cmux_list_workspaces)
   if [ -z "$ws_list" ]; then
     return 0  # cmux not running; not PRIMARY mode
   fi

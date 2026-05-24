@@ -28,14 +28,14 @@ See [`index.md`](../index.md) for the entry-point overview, [`worker.md`](worker
 
 The King updates its own cmux workspace description on every state transition so the sidebar reads at a glance:
 
-> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux_set_state.sh). King's usage patterns below.
+> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux/cmux_set_state.sh). King's usage patterns below.
 
 ```bash
 # Idle (default after spawn / resume)
-cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active"
+cmux_set_state "$KING_WS" "🐾" "Idle · $N_ACTIVE lanes active"
 
 # Auto-gate in progress (per Auto-gate on completion §)
-cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
+cmux_set_state "$KING_WS" "▶" "Gating $LANE · $SUBTASK_ID"
 
 # Gate pass — King MUST overlay lane's changes onto kingdom's working
 # tree (NOT commit) for Ter's review BEFORE asking "push?". See
@@ -47,23 +47,23 @@ cmux_set_state "▶" "Gating $LANE · $SUBTASK_ID"
 #   4) ▶ Carving feature/<topic> + pushing
 #   5) ▶ Discarding kingdom overlay (git restore)
 #   6) ✅ Pushed feature/<topic>
-cmux_set_state "▶" "Overlaying $LANE changes onto kingdom · $SUBTASK_ID"
+cmux_set_state "$KING_WS" "▶" "Overlaying $LANE changes onto kingdom · $SUBTASK_ID"
 
 # (after overlay succeeds + review surface printed)
-cmux_set_state "⚠" "Review live diff · $LANE · $SUBTASK_ID"
-cmux workspace-action --action mark-unread --workspace "$KING_WS" 2>/dev/null
+cmux_set_state "$KING_WS" "⚠" "Review live diff · $LANE · $SUBTASK_ID"
+cmux_workspace_action "$KING_WS" mark-unread
 
 # Gate fail — mark the ORIGINATING lane's workspace unread (not King's;
 # the lane needs the fix-task awareness)
-cmux_set_state "❌" "Gate FAIL · $LANE · $SUBTASK_ID"
-cmux workspace-action --action mark-unread --workspace "$LANE_WS" 2>/dev/null
+cmux_set_state "$KING_WS" "❌" "Gate FAIL · $LANE · $SUBTASK_ID"
+cmux_workspace_action "$LANE_WS" mark-unread
 
 # After push — clear the "push?" attention marker
-cmux_set_state "✅" "Pushed feature/$TOPIC · $(date -u +%Y-%m-%dT%H%MZ)"
-cmux workspace-action --action mark-read --workspace "$KING_WS" 2>/dev/null
+cmux_set_state "$KING_WS" "✅" "Pushed feature/$TOPIC · $(date -u +%Y-%m-%dT%H%MZ)"
+cmux_workspace_action "$KING_WS" mark-read
 
 # Holds the pushed state for ~5 min, then reverts to Idle
-sleep 300 && cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active" &
+sleep 300 && cmux_set_state "$KING_WS" "🐾" "Idle · $N_ACTIVE lanes active" &
 ```
 
 Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](../reference/cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
@@ -236,10 +236,8 @@ guard_lane_workspace_exists "worker-1" || { echo "❌ worker-1 not spawned"; exi
 guard_lane_workspace_exists "worker-2" || { echo "❌ worker-2 not spawned"; exit 1; }
 
 # Dispatch in parallel
-cmux send --workspace "$WORKER_WS_1" -- "$DISPATCH_A_BRIEF"
-cmux send --workspace "$WORKER_WS_1" Enter
-cmux send --workspace "$WORKER_WS_2" -- "$DISPATCH_B_BRIEF"
-cmux send --workspace "$WORKER_WS_2" Enter
+cmux_send "$WORKER_WS_1" "$DISPATCH_A_BRIEF"
+cmux_send "$WORKER_WS_2" "$DISPATCH_B_BRIEF"
 
 # Task file naming reflects the variant (lane is still in segment 2 per v0.15.2)
 # tasks/<UTC>__worker-1__<sub-task-id>-A.md
@@ -484,7 +482,7 @@ See [`index.md`](../index.md) → Session start for the detection logic that pic
 
 ## Dispatching a task to a lane
 
-How the King sends a task brief to a lane across all three host modes — `cmux send --workspace` (primary), `tmux send-keys -l` (fallback), `claude -p` (headless) — plus the R31+R36 `guard_lane_workspace_exists` gate and file-based completion polling. Same 4-step closer artifact protocol in all modes.
+How the King sends a task brief to a lane across all three host modes — `cmux_send` (primary), `tmux send-keys -l` (fallback), `claude -p` (headless) — plus the R31+R36 `guard_lane_workspace_exists` gate and file-based completion polling. Same 4-step closer artifact protocol in all modes.
 
 **Full mechanics moved to [`king-dispatch.md`](king-dispatch.md)** (v0.35.0 modular reorg).
 
@@ -524,19 +522,15 @@ If any check fails: King writes the failure to the test report (below), does NOT
 
 ```bash
 source "$LOGS/workspace-refs.env"   # exposes $WORKER_WS_N etc.
-cmux notify --workspace "$WORKER_WS_1" \
-  --title "👑 King · gate FAIL" \
-  --subtitle "<lane> · <sub-task-id>" \
-  --body "<which check failed in one line — typecheck / tests / dry-merge / overlap>"
+cmux_notify "$WORKER_WS_1" "👑 King · gate FAIL" "<lane> · <sub-task-id>" \
+  "<which check failed in one line — typecheck / tests / dry-merge / overlap>"
 ```
 
 If the gate PASSES and King is about to ask the user "push?", fire a notification to the King's own workspace so the user sees the prompt even when looking at a different workspace:
 
 ```bash
-cmux notify --workspace "$KING_WS" \
-  --title "👑 King · gate pass · push?" \
-  --subtitle "<lane> · <sub-task-id>" \
-  --body "All gates green. Reply 'push' in King chat to publish feature/<topic>."
+cmux_notify "$KING_WS" "👑 King · gate pass · push?" "<lane> · <sub-task-id>" \
+  "All gates green. Reply 'push' in King chat to publish feature/<topic>."
 ```
 
 See [`cmux.md`](../reference/cmux.md) → § Notification system for `--surface` vs `--workspace` targeting (blue ring vs sidebar badge vs bell-panel entry).
@@ -860,7 +854,7 @@ flowchart TB
 |---|---|---|
 | **Spawn** | More independent work appears | cmux.app (primary): split new pane + `git worktree add -b <slug> "$PROJ/.worktrees/<slug>" "origin/$BASE"`. AGENT mode (no cmux/tmux): `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<slug> && ...")` per R31. Headless: `claude -p` against new worktree. |
 | **Shutdown / close** | Finished + nothing left to do | Tmux/cmux.app: `tmux send-keys -t <pane> "/exit" Enter; sleep 1; tmux kill-pane`. Then `git worktree remove "$PROJ/.worktrees/<slug>" --force; git branch -D <slug> 2>/dev/null || true`. Standalone Agent: already returned. |
-| **Compact / reuse** | Keep pane + worktree, free Claude's context before next task | Inside the lane pane: `cmux send --pane <handle> "/compact"`. Wait for context% to drop, then send next task. **Mandatory between tasks in the same lane** — without it, lane context accumulates and pollutes later work. |
+| **Compact / reuse** | Keep pane + worktree, free Claude's context before next task | Inside the lane pane: `cmux_send "<pane-handle>" "/compact"`. Wait for context% to drop, then send next task. **Mandatory between tasks in the same lane** — without it, lane context accumulates and pollutes later work. |
 
 **Forbidden:**
 - ❌ Sleep / idle "in case we need it later" — close + respawn instead. Exception: the kingdom's persistent lane panes are *expected* to stay up across tasks (recycled via `/compact`).

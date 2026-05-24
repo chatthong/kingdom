@@ -16,7 +16,7 @@
 > │       ${WATCHMAN_ROSTER}                                │
 > │                                                         │
 > │  All ${TOTAL_LANES} Claude sessions running.            │
-> │  cmux send dispatch active.                             │
+> │  cmux_send dispatch active.                             │
 > │  Watchman /loop scheduled (5-15 min).                   │
 > │                                                         │
 > │  ${MODE_NOTE}                                           │

@@ -230,10 +230,10 @@ done
 
 CLOSE_PIDS=""
 for ws in $LANE_WSes; do
-  cmux close-workspace --workspace "$ws" 2>/dev/null &
+  cmux_close_workspace "$ws" &
   CLOSE_PIDS="$CLOSE_PIDS $!"
 done
-# R42: bounded wait — cmux close-workspace usually <0.05s but can stall if a workspace
+# R42: bounded wait — cmux_close_workspace usually <0.05s but can stall if a workspace
 # is mid-spawn or has unresponsive surface; 15s budget is generous.
 _bounded_wait 15 $CLOSE_PIDS || echo "⚠️ teardown hit 15s budget; survivors killed (next /kingdom:work will rebuild)"
 

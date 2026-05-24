@@ -11,7 +11,7 @@ spawn_watchman_loop () {
 
   # Find the surface inside this workspace (claude REPL is the receiver — already
   # launched by spawn_master_workspace Step 1b)
-  local surface=$(cmux rpc workspace.list 2>/dev/null \
+  local surface=$(cmux_rpc workspace.list \
     | jq -r ".[] | select(.ref == \"$ws_ref\") | .surfaces[0].ref" 2>/dev/null)
 
   if [ -z "$surface" ] || [ "$surface" = "null" ]; then
@@ -24,7 +24,7 @@ spawn_watchman_loop () {
   # spawn_master_workspace's job. Sending /loop here while claude is still
   # booting is safe because cmux buffers surface input until the receiver is
   # ready (Step 1b's 1.5s sleep gives the REPL time to attach).
-  cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"/loop\n\"}" 2>/dev/null
+  cmux_rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"/loop\n\"}"
 
   return 0
 }

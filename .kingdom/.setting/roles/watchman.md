@@ -28,7 +28,7 @@ Three rules govern Watchman's relationship with the rest of the kingdom — keep
 - Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet.
 - Reads `kingdom.json.gate.smoke` + `gate.tests` for the smoke command list to run on each develop advance.
 - Writes `WATCH_*.md` reports to `<project>/docs/test-reports/` (separate prefix from King's `KING_*.md` gate reports).
-- Posts `cmux notify` when something needs the King's or the user's attention.
+- Posts `cmux_notify` when something needs the King's or the user's attention.
 
 ---
 
@@ -44,11 +44,11 @@ flowchart TB
     T4["Run gate.smoke\n+ gate.tests"]
     T5{{"Smoke\npass?"}}
     T6["Write WATCH_…_develop_green.md\n(heartbeat)"]
-    T7["Write WATCH_…_develop_RED_….md\ncmux notify 'develop RED'"]
+    T7["Write WATCH_…_develop_RED_….md\ncmux_notify 'develop RED'"]
     T8["4. gh pr list --state open\ncompare to previous snapshot"]
     T9["5. Write WATCH_*.md\nfor each state change"]
-    T10["6. cmux notify\n(CI fail → King, ready-to-merge → Ter)"]
-    T11["7. cmux set-status\n'develop: green|RED | PRs: N'"]
+    T10["6. cmux_notify\n(CI fail → King, ready-to-merge → Ter)"]
+    T11["7. cmux_set_state\n'develop: green|RED | PRs: N'"]
     T12["8. Write watchman_state.json\n(sha, smoke_ts, pr_states)"]
     PACE{{"Any transition\nthis tick?"}}
     WAIT5["Schedule next tick\n5 min"]
@@ -115,10 +115,8 @@ if [ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] || [ daily_smoke_overdue ]; the
     - Failing: <which command(s)>
     - **Next action:** King investigates; lanes paused until develop is green again.
     EOF
-    cmux notify --workspace "$KING_WS" \
-      --title "🕵️ watchman-$WI" \
-      --subtitle "develop RED" \
-      --body "Smoke broke on origin/develop ${NEW_DEVELOP_SHA:0:8}. Lanes paused pending King review."
+    cmux_notify "$KING_WS" "🕵️ watchman-$WI" "develop RED" \
+      "Smoke broke on origin/develop ${NEW_DEVELOP_SHA:0:8}. Lanes paused pending King review."
   fi
 fi
 
@@ -130,27 +128,24 @@ gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,merg
 # (5) Write WATCH_*.md for any state change
 # e.g., WATCH_<UTC>__pr-<N>_CI_failed.md, WATCH_<UTC>__pr-<N>_ready_to_merge.md, …
 
-# (6) cmux notify on alert-worthy transitions (target $KING_WS so the
+# (6) fire cmux_notify on alert-worthy transitions (target $KING_WS so the
 #     sidebar gets a badge + bell-icon panel logs the alert).
-# All watchman alerts use this schema:
-#   --title    "🕵️ watchman-N"
-#   --subtitle "<event class>"  e.g. "CI failed · PR #234"
-#   --body     "<one-line context>"
+# All watchman alerts use the same positional schema:
+#   cmux_notify "$KING_WS" "🕵️ watchman-N" "<event class>" "<one-line context>"
+#     event class e.g. "CI failed · PR #234"
 #
 # Cases:
-#   - CI just failed     → cmux notify --workspace "$KING_WS" \
-#                            --title "🕵️ watchman-$WI" \
-#                            --subtitle "CI failed · PR #$N" \
-#                            --body "$(gh pr view $N --json statusCheckRollup -q '.statusCheckRollup[0].name')"
+#   - CI just failed     → cmux_notify "$KING_WS" "🕵️ watchman-$WI" \
+#                            "CI failed · PR #$N" \
+#                            "$(gh pr view $N --json statusCheckRollup -q '.statusCheckRollup[0].name')"
 #   - PR mergeable +
 #     green + approved +
-#     idle ≥30 min       → cmux notify --workspace "$KING_WS" \
-#                            --title "🕵️ watchman-$WI" \
-#                            --subtitle "Ready to merge · PR #$N" \
-#                            --body "All checks pass, lead approved, idle 30m+. Ter to merge."
+#     idle ≥30 min       → cmux_notify "$KING_WS" "🕵️ watchman-$WI" \
+#                            "Ready to merge · PR #$N" \
+#                            "All checks pass, lead approved, idle 30m+. Ter to merge."
 
 # (7) Update sidebar status
-cmux set-status --pane <self> "develop: <green|RED> | open PRs: <n> (<g> green, <r> red)"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "develop: <green|RED> | open PRs: <n> (<g> green, <r> red)"
 
 # (8) Write new snapshot + schedule next tick
 jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
@@ -164,7 +159,7 @@ jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
 
 ## Autonomous Haiku fan-out (v0.29.0+, per rules.md R39 + R40)
 
-Each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10) across five parallel surveillance duties — **Duty 1** senior-dev review with doc cross-check (R31), **Duty 2** CVE scan, **Duty 3** cross-lane conflict scan, **Duty 4** git hygiene scan, **Duty 5** cross-story drift scan (R50) — then writes a `WATCH_TICK_<UTC>.md` aggregation and fires `cmux notify` on any `severity: urgent` finding. All duties are advisory (Tier 2): they inform, never block.
+Each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10) across five parallel surveillance duties — **Duty 1** senior-dev review with doc cross-check (R31), **Duty 2** CVE scan, **Duty 3** cross-lane conflict scan, **Duty 4** git hygiene scan, **Duty 5** cross-story drift scan (R50) — then writes a `WATCH_TICK_<UTC>.md` aggregation and fires `cmux_notify` on any `severity: urgent` finding. All duties are advisory (Tier 2): they inform, never block.
 
 → Full duty specs, Haiku prompts, `haiku_cap_per_tick` enforcement, and the tick-aggregation schema: [`watchman-duties.md`](watchman-duties.md).
 
@@ -172,10 +167,10 @@ Each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku s
 
 ## Dispatch (King spawns this once at kingdom startup)
 
-Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux send` (or `tmux send-keys -l` in fallback mode):
+Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux_send` (or `tmux send-keys -l` in fallback mode):
 
 ```bash
-HANDLE=$(cmux list-panes --workspace "$WS_ID" --json | jq -r '.[] | select(.title=="watchman-1") | .id')
+HANDLE=$(cmux_list_panes "$WS_ID" | jq -r '.[] | select(.title=="watchman-1") | .id')
 
 LANE_WATCHMAN_PROMPT="You are the Watchman for project <project>. Run /loop with this body
 every 5-15 min (dynamic pacing) until I tell you to stop. Each tick:
@@ -187,21 +182,21 @@ every 5-15 min (dynamic pacing) until I tell you to stop. Each tick:
    git reset --hard origin/develop
 3. If NEW_DEVELOP_SHA != PREV_DEVELOP_SHA OR no prior smoke today:
      Run <kingdom.json.gate.smoke + gate.tests command list>.
-     On fail: write WATCH_<UTC>__develop_RED__<reason>.md + cmux notify 'develop RED: <reason>'
+     On fail: write WATCH_<UTC>__develop_RED__<reason>.md + cmux_notify 'develop RED: <reason>'
      On pass: write WATCH_<UTC>__develop_green.md (TL;DR only)
 4. gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,mergeable > /tmp/prs.json
    Compare to previous snapshot in $LOGS/watchman_state.json:
-     CI just failed     → WATCH_<UTC>__pr-<N>_CI_failed.md + cmux notify King
+     CI just failed     → WATCH_<UTC>__pr-<N>_CI_failed.md + cmux_notify King
      CI just passed     → WATCH_<UTC>__pr-<N>_CI_green.md (log only)
-     lead approved      → cmux notify Ter 'PR #<N> approved'
-     mergeable + green + approved + idle 30min → cmux notify Ter 'PR #<N> ready to merge'
-5. cmux set-status --pane <self> \"develop: <green|RED> | open PRs: <n> (<g> green, <r> red)\"
+     lead approved      → cmux_notify Ter 'PR #<N> approved'
+     mergeable + green + approved + idle 30min → cmux_notify Ter 'PR #<N> ready to merge'
+5. cmux_set_state \"<self>\" \"▶\" \"develop: <green|RED> | open PRs: <n> (<g> green, <r> red)\"
 6. Write new snapshot to $LOGS/watchman_state.json (develop_sha, last_smoke_ts, pr_states)
 7. Schedule next tick via /loop dynamic pacing (5 min if any transition, 15 min if quiet)
 
 You DO NOT edit code, claim TODO tasks, or push anything. Read-only + test runner + alerter."
 
-cmux send --pane "$HANDLE" "$LANE_WATCHMAN_PROMPT"
+cmux_send "$HANDLE" "$LANE_WATCHMAN_PROMPT"
 ```
 
 ---
@@ -251,13 +246,13 @@ stateDiagram-v2
     CI_green --> pending : new commit pushed\n(CI re-runs)
 
     note right of CI_failed
-        cmux notify King\n"CI failed on PR #N"
+        cmux_notify King\n"CI failed on PR #N"
     end note
     note right of approved
-        cmux notify Ter\n"PR #N approved"
+        cmux_notify Ter\n"PR #N approved"
     end note
     note right of ready_to_merge
-        cmux notify Ter\n"PR #N ready to merge"
+        cmux_notify Ter\n"PR #N ready to merge"
     end note
 ```
 
@@ -301,10 +296,10 @@ The two complement: **King keeps push-time freshness; Watchman keeps develop-wid
 
 | Action | Trigger | How |
 |---|---|---|
-| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `cmux send --pane <self> "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
-| **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux send --pane <self> "/loop cancel"` |
+| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `cmux_send "<self>" "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
+| **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux_send "<self>" "/loop cancel"` |
 | **Resume** | The user says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
-| **Teardown** | Kingdom close | `cmux send --pane <self> "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
+| **Teardown** | Kingdom close | `cmux_send "<self>" "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
 
 The watchman's worktree + branch + state file persist across pauses; only the `/loop` schedule is suspended.
 
@@ -337,7 +332,7 @@ Watchman MAY read task files at `<workspace>/.kingdom/<project>/tasks/*.md` for 
 - When alerting the King about a develop break, watchman can check whether any in-flight lane's task file is affected (e.g., lane currently editing the broken module).
 - When detecting a PR ready-to-merge, watchman can include in its notification: "PR #N (from `worker-1`, task `BE-P0-CICD.1`) is mergeable + green + idle for 30m." — pulled from the task file's brief.
 
-Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux notify` events, sidebar status pills. It never writes to task files, raw artifacts, master_agent.log, or anything outside its own WATCH_ namespace.
+Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux_notify` events, sidebar status pills. It never writes to task files, raw artifacts, master_agent.log, or anything outside its own WATCH_ namespace.
 
 ---
 
@@ -351,7 +346,7 @@ Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number 
 
 ## Orphan-tab sweep (every tick)
 
-Sub-agent tabs in master workspaces are SUPPOSED to auto-close via the 5-step closer Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`). When that fails (cmux unreachable, killed process, etc.), tabs persist after their sentinel was written — clutter that the master can't clean up on its own.
+Sub-agent tabs in master workspaces are SUPPOSED to auto-close via the 5-step closer Step 5 (`cmux_tab_action close --surface "$CMUX_SURFACE_ID"`). When that fails (cmux unreachable, killed process, etc.), tabs persist after their sentinel was written — clutter that the master can't clean up on its own.
 
 Watchman sweeps for these every `/loop` tick. Logic:
 
@@ -361,7 +356,7 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER)_WS_[0-9]+' | cut -d= -f1); do
   WS_REF=$(eval echo "\$$WS_VAR")
 
   # List all surfaces in this workspace
-  SURFACES=$(cmux list-pane-surfaces --workspace "$WS_REF" --json 2>/dev/null)
+  SURFACES=$(cmux_list_pane_surfaces --workspace "$WS_REF" --json)
 
   # For each surface that LOOKS like a sub-agent tab (name starts with "🐱 sub")
   echo "$SURFACES" | jq -r '.surfaces[] | select(.title | startswith("🐱 sub")) | .ref' | while read SURF; do
@@ -369,7 +364,7 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER)_WS_[0-9]+' | cut -d= -f1); do
     # Was its sentinel written more than 5 minutes ago?
     # We don't know the ID directly from the surface name — but we can
     # check the surface's idle time + last-written log line.
-    OUTPUT=$(cmux capture-pane --workspace "$WS_REF" --surface "$SURF" --lines 5 2>/dev/null)
+    OUTPUT=$(cmux_capture_pane "$WS_REF" 5)
 
     # If the recent output mentions "closer complete" or "sentinel written"
     # AND the surface has been idle (no new content) for ≥5 min, it's orphan.
@@ -377,7 +372,7 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER)_WS_[0-9]+' | cut -d= -f1); do
       AGE=$(jq -r ".surface_idle_ts[\"$SURF\"] // 0" "$LOGS/watchman_state.json")
       NOW=$(date -u +%s)
       if [ $((NOW - AGE)) -gt 300 ]; then
-        cmux tab-action --action close --surface "$SURF" 2>/dev/null
+        cmux_tab_action close --surface "$SURF" 2>/dev/null
         echo "[$(date -u +%Y-%m-%dT%H%MZ)] 🕵️ watchman swept orphan tab $SURF in $WS_VAR" \
           >> "$LOGS/master_agent.log"
       fi
@@ -462,11 +457,8 @@ $OUTPUT_BUFFER
 \`\`\`
 EOF
 
-  # Notify King via cmux notify (badge on King's workspace)
-  cmux notify --workspace "$KING_WS" \
-    --title "🕵️ watchman-$WI" \
-    --subtitle "Verification $STATUS · $REQ_SLUG" \
-    --body "Report: $REPORT"
+  # Notify King via cmux_notify (badge on King's workspace)
+  cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Verification $STATUS · $REQ_SLUG" "Report: $REPORT"
 done
 ```
 
@@ -505,7 +497,7 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= 
   LANE_LABEL=$(echo "$WS_VAR" | sed 's/_WS_/ /' | tr 'A-Z' 'a-z')   # e.g. "worker 1"
 
   # Grab the recent surface output
-  OUTPUT=$(cmux capture-pane --workspace "$WS_REF" --lines 30 2>/dev/null)
+  OUTPUT=$(cmux_capture_pane "$WS_REF" 30)
 
   # Patterns that indicate a blocked lane
   if echo "$OUTPUT" | grep -qE '(Do you want to proceed\?|Esc to cancel|\[y/N\]|allow .* during this session|Press Enter)'; then
@@ -514,18 +506,12 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= 
     if [ "$PREV_BLOCKED" != "true" ]; then
       # 3-layer state override: badge + description + notify (cmux's auto-state
       # may still say "Running" but our three signals tell the truth)
-      cmux workspace-action --action mark-unread --workspace "$WS_REF" 2>/dev/null
-      cmux workspace-action --action set-description \
-        --workspace "$WS_REF" \
-        --description "⚠ Blocked · permission prompt" 2>/dev/null
-      cmux notify --surface "$WS_REF" \
-        --title "🕵️ watchman-$WI" \
-        --subtitle "Lane blocked · $LANE_LABEL" \
-        --body "Permission prompt or input requested. Click workspace to approve."
-      cmux notify --workspace "$KING_WS" \
-        --title "🕵️ watchman-$WI" \
-        --subtitle "Lane blocked · $LANE_LABEL" \
-        --body "$LANE_LABEL is waiting on a permission prompt. Click its workspace to resolve."
+      cmux_workspace_action "$WS_REF" mark-unread
+      cmux_set_state "$WS_REF" "⚠" "Blocked · permission prompt"
+      cmux_notify "" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
+        "Permission prompt or input requested. Click workspace to approve." "$WS_REF"
+      cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
+        "$LANE_LABEL is waiting on a permission prompt. Click its workspace to resolve."
       # Mark as notified
       jq ".blocked_lanes[\"$WS_VAR\"] = true" "$LOGS/watchman_state.json" \
         > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
@@ -534,7 +520,7 @@ for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= 
     # Lane no longer blocked — clear unread marker + restore description + clear state
     PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
     if [ "$PREV_BLOCKED" = "true" ]; then
-      cmux workspace-action --action mark-read --workspace "$WS_REF" 2>/dev/null
+      cmux_workspace_action "$WS_REF" mark-read
       # Description restored by the lane itself on its next state transition;
       # watchman doesn't second-guess what the lane should display normally.
     fi
@@ -574,8 +560,8 @@ When `/loop` is otherwise quiet (no PRs to babysit, no `develop` movement, no sm
 - Run smoke / typecheck / test commands from `kingdom.json.gate.*`.
 - Query `gh pr list` / `gh pr view` / `gh pr checks`.
 - Write `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md`.
-- Call `cmux notify` to alert King / the user.
-- Update `cmux set-status` for sidebar visibility.
+- Call `cmux_notify` to alert King / the user.
+- Update `cmux_set_state` for sidebar visibility.
 - Maintain `<LOGS>/watchman_state.json`.
 - Read task files (`<workspace>/.kingdom/<project>/tasks/`) for situational awareness when issuing alerts.
 - Apply **low-risk** fixes to `tasks/` + `logs/` during idle docs audit (see [`watchman-docs-audit.md`](watchman-docs-audit.md)).

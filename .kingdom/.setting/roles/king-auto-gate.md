@@ -39,8 +39,8 @@ When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate withou
 
 Then — per § "Kingdom as review staging — MANDATORY before any push" — gate-pass flows directly into kingdom merge:
 
-- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to the user). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?" --subtitle "<lane> · <sub-task-id>"` and asks the user in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
-- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
+- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to the user). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux_notify "$KING_WS" "👑 King · review on kingdom?" "<lane> · <sub-task-id>"` and asks the user in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
+- **Gate FAIL** → King fires `cmux_notify "<lane-ws>" "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
 
 Push only happens after the user explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
 
@@ -55,7 +55,7 @@ This eliminates two failure modes:
 | **Session resume** (first message after `/kingdom:work`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
 | **Pre-user-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
 | **Post-dispatch polling** (King dispatched a task and is polling for its sentinel) | Standard in-session flow — sentinel detected → continue to gate |
-| **Watchman notify** (cmux notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
+| **Watchman notify** (cmux_notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
 
 ### Daily kickoff additions (Step 0.5)
 

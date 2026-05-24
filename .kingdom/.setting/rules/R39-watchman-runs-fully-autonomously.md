@@ -17,7 +17,7 @@ Watchman is a self-scheduling agent. King NEVER blocks waiting on watchman, neve
 
 | King's allowed actions toward watchman | King's BANNED actions toward watchman |
 |---|---|
-| Read `watchman_state.json` + `WATCH_*.md` at session start | Send a dispatch brief (`cmux send --workspace watchman-N -- "..."`) |
+| Read `watchman_state.json` + `WATCH_*.md` at session start | Send a dispatch brief (`cmux_send "watchman-N" "..."`) |
 | Include watchman's latest report in the daily-kickoff synthesis | Block or gate until watchman produces a report |
 | Surface a watchman finding to the user as an FYI | Ask watchman to check something specific (watchman decides what to check) |
 

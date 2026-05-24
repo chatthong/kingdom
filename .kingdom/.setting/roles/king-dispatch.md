@@ -8,7 +8,7 @@ See [`king.md`](king.md) for the King role overview, [`worker.md`](worker.md) fo
 
 ## Dispatching a task to a lane
 
-### Primary (`cmux send --workspace` via cmux.app)
+### Primary (`cmux_send` via cmux.app)
 
 In PRIMARY mode each master owns its own workspace (spawned in `commands/work.md` Step 0.4). Workspace refs are persisted at `$LOGS/workspace-refs.env` (sourced by King at session start):
 
@@ -21,12 +21,11 @@ When you finish, run the 4-step closer (see worker.md):
   2) curated -> $LOGS/<ID>.md  (## TL;DR first)
   3) one-line status -> $LOGS/master_agent.log
   4) touch    $LOGS/done/<ID>__opus-worker-1.flag
-     ALSO run: cmux notify --workspace $KING_WS \\
-       --title '👑 ' --body 'lane worker-1 done: <ID>'
+     ALSO run: cmux_notify \"$KING_WS\" '👑 ' '' 'lane worker-1 done: <ID>'
 Spawn sub-agents as visible tabs by default (R38 — all models default to tab).
-Use: cmux tab-action --action new-terminal-right --workspace $WORKER_WS_1
+Use: cmux_tab_action new-terminal-right --workspace \"$WORKER_WS_1\"
 Tab-spawned sub-agents follow the 5-step closer (Step 5 = close own tab via
-cmux tab-action --action close --surface \$CMUX_SURFACE_ID).
+cmux_tab_action close --surface \"\$CMUX_SURFACE_ID\").
 Background Agent() spawns are opt-in only (set spawn_mode: background in brief)."
 
 # v0.31.0 R31+R36 hard gate: refuse to send brief if worker-1's cmux workspace
@@ -36,8 +35,7 @@ Background Agent() spawns are opt-in only (set spawn_mode: background in brief).
 # burned ~3 hours on exactly this failure mode.
 guard_lane_workspace_exists "worker-1" || { echo "❌ worker-1 workspace missing — spawn first"; exit 1; }
 
-cmux send --workspace "$WORKER_WS_1" -- "$PROMPT"
-cmux send --workspace "$WORKER_WS_1" Enter
+cmux_send "$WORKER_WS_1" "$PROMPT"
 ```
 
 No `-l` flag, no Enter ceremony, no escaping fights. The workspace ref is stable across the session — King addresses lanes by `$WORKER_WS_N` not by pane title.

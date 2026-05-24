@@ -10,7 +10,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
 | [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R50`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
-| [`king.md`](roles/king.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
+| [`king.md`](roles/king.md) | King role: planning fan-out, dispatch (cmux_send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`worker.md`](roles/worker.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-worker.md`](roles/co-worker.md) | Co-worker (user-paired) interactive protocol |
 | [`watchman.md`](roles/watchman.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, cross-story drift scan, lifecycle, dual-view layout |
@@ -229,7 +229,7 @@ Hierarchy: the King orchestrates five default lanes; every lane writes artifacts
 graph TB
     K([👑 King\nOpus · primary checkout · branch=kingdom])
 
-    K -->|"dispatches via cmux send / tmux send-keys / claude -p"| W1[👷 worker-1\nautonomous task work]
+    K -->|"dispatches via cmux_send / tmux send-keys / claude -p"| W1[👷 worker-1\nautonomous task work]
     K --> W2[👷 worker-2\nautonomous task work]
     K --> W3[👷 worker-3\nautonomous task work]
     K --> CW[🧑‍💼 co-worker-1\nuser-paired · interactive]

@@ -13,9 +13,8 @@ spawn_subagent_from_pool () {
 
   sed -i.bak '1d' "$pool_file" && rm "${pool_file}.bak"
 
-  cmux rename-tab --surface "$surface" -- "🐱 sub · $model · $(echo "$brief" | head -c 30)"
-  cmux send --surface "$surface" -- "$brief"
-  cmux send --surface "$surface" Enter
+  cmux_tab_action rename --surface "$surface" --title "🐱 sub · $model · $(echo "$brief" | head -c 30)"
+  cmux_send "$surface" "$brief"
 
   spawn_pool_slot &   # refill pool in background
 }

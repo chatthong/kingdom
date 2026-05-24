@@ -7,9 +7,6 @@
         "_bounded_wait",
         "attach_or_create_worktree",
         "carve_and_push_feature",
-        "cmux_attention_clear",
-        "cmux_attention_override",
-        "cmux_set_state",
         "compute_gate_duration",
         "compute_ready_for_fresh_work",
         "compute_task_duration",
@@ -49,6 +46,9 @@
         "spawn_subagent_tab",
         "summarise_gate_failure",
         "wait_for_ter_decision"
+      ],
+      "deps": [
+        "cmux"
       ]
     },
     "watchman": {
@@ -83,6 +83,50 @@
       "role": "roles/senior.md",
       "deps": [
         "core"
+      ]
+    },
+    "cmux": {
+      "always": true,
+      "_comment": "One micro-wrapper per cmux subcommand. Every role/command/function calls these instead of raw `cmux …`. Single source of truth = reference/cmux.md.",
+      "functions": [
+        "cmux_attention_clear",
+        "cmux_attention_override",
+        "cmux_capture_pane",
+        "cmux_close_surface",
+        "cmux_close_window",
+        "cmux_close_workspace",
+        "cmux_identify",
+        "cmux_list_pane_surfaces",
+        "cmux_list_panes",
+        "cmux_list_workspaces",
+        "cmux_new_split",
+        "cmux_new_window",
+        "cmux_new_workspace",
+        "cmux_notify",
+        "cmux_read_screen",
+        "cmux_rpc",
+        "cmux_send",
+        "cmux_send_key",
+        "cmux_set_state",
+        "cmux_tab_action",
+        "cmux_tree",
+        "cmux_workspace_action"
+      ]
+    },
+    "browser": {
+      "_comment": "On-demand built-in-browser verification. Any role: `load_feature browser` then browser_verify/browser_open/… when it needs to SEE a running UI. Not always-loaded.",
+      "functions": [
+        "browser_open",
+        "browser_snapshot",
+        "browser_click",
+        "browser_fill",
+        "browser_eval",
+        "browser_screenshot",
+        "browser_close",
+        "browser_verify"
+      ],
+      "deps": [
+        "cmux"
       ]
     }
   }

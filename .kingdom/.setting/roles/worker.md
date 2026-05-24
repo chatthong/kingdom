@@ -14,9 +14,9 @@ A lane master spawns sub-agents in one of three ways. **Default since v0.28.0 (R
 
 | Mode | Spawn cost | When it's worth it |
 |---|---|---|
-| 📑 `cmux tab-action --action new-terminal-right` + boot Claude | **~10–20s** (full Claude session boot) or **~20ms** with pre-warmed pool (v0.18.0+) | **Default for all sub-agent work** — visible, auditable, auto-closes on sentinel |
-| 🐱 Lane dispatch via `cmux send --workspace worker-N -- "..."` | **~20ms** | Routing work to an already-running lane Claude session (audit specialists, pattern scans) |
-| 🪟 `cmux new-split right` | Same as tab | Side-by-side comparison of ≤2 sub-agents. Rare. |
+| 📑 `cmux_tab_action new-terminal-right` + boot Claude | **~10–20s** (full Claude session boot) or **~20ms** with pre-warmed pool (v0.18.0+) | **Default for all sub-agent work** — visible, auditable, auto-closes on sentinel |
+| 🐱 Lane dispatch via `cmux_send "worker-N" "..."` | **~20ms** | Routing work to an already-running lane Claude session (audit specialists, pattern scans) |
+| 🪟 `cmux_new_split right` | Same as tab | Side-by-side comparison of ≤2 sub-agents. Rare. |
 
 **`Agent(run_in_background=true)` is banned as kingdom default (R38).** Background spawns may be used only when explicitly opted-in via `kingdom.json.cmux.subAgentSpawnByModel` on a per-task basis; they must still run the 4-step closer.
 
@@ -61,13 +61,13 @@ Common reasons to override:
 
 ### Auto-close still applies (Tab-spawned)
 
-Tab-spawned sub-agents run the **5-step closer** (Step 5 = `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`). Tabs self-destruct after sentinel. Watchman has an orphan-tab sweep as belt-and-suspenders (v0.14.9).
+Tab-spawned sub-agents run the **5-step closer** (Step 5 = `cmux_tab_action close --surface "$CMUX_SURFACE_ID"`). Tabs self-destruct after sentinel. Watchman has an orphan-tab sweep as belt-and-suspenders (v0.14.9).
 
 Agent-spawned sub-agents run the **4-step closer** only — no Step 5 (no tab to close).
 
 ### Pre-warmed sub-agent pool (v0.18.0+) — instant tab spawns
 
-Tab spawns cost ~10–20s each (full Claude session boot). Layer-3 fan-out of 5 Sonnet sub-agents pre-v0.18 took ~50–100s just for spawn. **v0.18.0 pre-warms a pool of idle `claude -p` processes** in hidden tabs so sub-agent spawn becomes `cmux send` to the existing surface (~20ms) instead of `cmux tab-action --action new-terminal-right` + boot.
+Tab spawns cost ~10–20s each (full Claude session boot). Layer-3 fan-out of 5 Sonnet sub-agents pre-v0.18 took ~50–100s just for spawn. **v0.18.0 pre-warms a pool of idle `claude -p` processes** in hidden tabs so sub-agent spawn becomes `cmux_send` to the existing surface (~20ms) instead of `cmux_tab_action new-terminal-right` + boot.
 
 Configured in `kingdom.json.cmux.subAgentPool`:
 
@@ -85,13 +85,13 @@ Master initialises the pool at spawn time (background, non-blocking):
 >
 > - `init_subagent_pool` — call once at master spawn; fans out `perMasterPoolSize` hidden tabs running `claude -p 'AWAITING_DISPATCH'`.
 > - `spawn_pool_slot` — internal; spawns one hidden tab + appends its surface ref to the pool list file.
-> - `spawn_subagent_from_pool` — public dispatch entry; reuses a hot slot (`cmux send` ~20ms) or falls back to `spawn_subagent_tab` (~10-20s).
+> - `spawn_subagent_from_pool` — public dispatch entry; reuses a hot slot (`cmux_send` ~20ms) or falls back to `spawn_subagent_tab` (~10-20s).
 
 Result:
 
 | Spawn pattern | Pre-v0.18 | Post-v0.18 |
 |---|---|---|
-| Layer-3 fan-out of 5 Sonnet sub-agents (tab mode) | ~50–100s | **~100ms** (5 × 20ms `cmux send`) |
+| Layer-3 fan-out of 5 Sonnet sub-agents (tab mode) | ~50–100s | **~100ms** (5 × 20ms `cmux_send`) |
 | Per-spawn boot cost (when pool hit) | 10–20s | 20ms |
 | Per-spawn boot cost (when pool miss, fallback) | 10–20s | 10–20s |
 
@@ -293,23 +293,23 @@ The status checkboxes are flipped sequentially as work progresses. Each Layer's 
 
 After every checkbox flip / layer transition, the worker updates its own cmux workspace description so the sidebar shows current state at a glance:
 
-> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux_set_state.sh). Worker's usage patterns below.
+> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux/cmux_set_state.sh). Worker's usage patterns below.
 
 ```bash
 # At Step 0 (task file just created)
-cmux_set_state "▶" "$SUBTASK_ID · ▱▱▱▱ initialising"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "$SUBTASK_ID · ▱▱▱▱ initialising"
 
 # Layer transitions
-cmux_set_state "▶" "$SUBTASK_ID · ▰▱▱▱ L1 Discovery"
-cmux_set_state "▶" "$SUBTASK_ID · ▰▰▱▱ L2 Strategy"
-cmux_set_state "▶" "$SUBTASK_ID · ▰▰▰▱ L3 Execution"
-cmux_set_state "▶" "$SUBTASK_ID · ▰▰▰▰ L4 Verify"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "$SUBTASK_ID · ▰▱▱▱ L1 Discovery"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "$SUBTASK_ID · ▰▰▱▱ L2 Strategy"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "$SUBTASK_ID · ▰▰▰▱ L3 Execution"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "$SUBTASK_ID · ▰▰▰▰ L4 Verify"
 
 # Closer Step 4 (sentinel written)
-cmux_set_state "✅" "$SUBTASK_ID done · sentinel written"
+cmux_set_state "$CMUX_WORKSPACE_ID" "✅" "$SUBTASK_ID done · sentinel written"
 
 # Idle (no claim for >5 min)
-cmux_set_state "🐾" "Awaiting dispatch"
+cmux_set_state "$CMUX_WORKSPACE_ID" "🐾" "Awaiting dispatch"
 ```
 
 Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](../reference/cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
@@ -371,7 +371,7 @@ A lane runs **one task at a time** (no two task briefs from the King in flight a
 Sequence:
 
 0. King sends task brief → lane pane. **Lane master creates the task file** (`<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`) with status, brief, and multi-layer plan filled in. No sub-agent is dispatched until the task file exists.
-1. King sends task brief → lane pane (via `cmux send` / `tmux send-keys` / `claude -p`).
+1. King sends task brief → lane pane (via `cmux_send` / `tmux send-keys` / `claude -p`).
 2. Lane master reads the brief, analyzes the work, plans its sub-agent strategy (recorded in the task file). **R41 — skills:** King's dispatch brief includes a `${SUGGESTED_SKILLS}` block (0-3 domain skills from `skill-routing.md`). Lane invokes those skills immediately. If a gap is discovered mid-task (e.g., unexpected Prisma migration, Stripe error), lane may invoke ADDITIONAL skills mid-task and logs each invocation to `## Progress notes` in the task file.
 3. Lane master spawns its sub-agents — parallel where independent, sequential where dependent.
 4. Lane master synthesizes sub-agent outputs, makes edits to the lane's worktree, updates task file progress notes and checkboxes.
@@ -383,7 +383,7 @@ Task lifecycle within a lane:
 
 ```mermaid
 flowchart TB
-    A(["👷 King sends task brief\n(cmux send / tmux send-keys / claude -p)"])
+    A(["👷 King sends task brief\n(cmux_send / tmux send-keys / claude -p)"])
     A0["Step 0: Create task file\n(status + brief + multi-layer plan)"]
     B["Lane master reads brief\nplans sub-agent strategy"]
     C["Spawn sub-agents\n(parallel if independent, sequential if dependent)"]
@@ -576,9 +576,9 @@ The worker prompt has **four mandatory closing actions** done at the end of each
 1. **Write raw** → `<LOGS>/raw/<UTC>__<sub>-<lane-name>__<sub-task-id>.md` (full raw output; lane embedded for grep)
 2. **Write curated** → `<LOGS>/<UTC>__<lane-name>__<sub-task-id>.md` with `## TL;DR` at top (machine-readable digest; lane embedded)
 3. **Append 1-line status** → `<LOGS>/master_agent.log` (line includes lane name)
-4. **Touch sentinel flag** → `<LOGS>/done/<UTC>__<sub>-<lane-name>__<sub-task-id>.flag` — AND fire two `cmux notify` calls (mandatory in PRIMARY mode):
-   - `cmux notify --surface "$CMUX_SURFACE_ID" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR from curated digest>"` — gives this pane a blue ring + tab lights up in cmux.app
-   - `cmux notify --workspace "$KING_WS" --title "👷 <lane> done" --subtitle "<ID>" --body "<one-line TL;DR>"` — King's sidebar entry gets a badge + bell-icon panel logs the event
+4. **Touch sentinel flag** → `<LOGS>/done/<UTC>__<sub>-<lane-name>__<sub-task-id>.flag` — AND fire two `cmux_notify` calls (mandatory in PRIMARY mode):
+   - `cmux_notify "" "👷 <lane> done" "<ID>" "<one-line TL;DR from curated digest>" "$CMUX_SURFACE_ID"` — gives this pane a blue ring + tab lights up in cmux.app
+   - `cmux_notify "$KING_WS" "👷 <lane> done" "<ID>" "<one-line TL;DR>"` — King's sidebar entry gets a badge + bell-icon panel logs the event
    `$KING_WS` is sourced from `<LOGS>/workspace-refs.env`. See `cmux.md` → § Notification system for visual targeting reference.
 
 4-step write chain:
@@ -606,7 +606,7 @@ Master writes nothing under `<LOGS>/`. The worker is the only writer for its tas
 
 When a master spawns a sub-agent as a **visible tab** (the default since v0.14.9 — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
 
-5. **Close own tab** — `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` (the env var is auto-set in every cmux terminal)
+5. **Close own tab** — `cmux_tab_action close --surface "$CMUX_SURFACE_ID"` (the env var is auto-set in every cmux terminal)
 
 The tab self-destructs after the sentinel flag is written. The master doesn't need to clean up; the sidebar/tab-strip stays tidy automatically.
 
@@ -615,7 +615,7 @@ The tab self-destructs after the sentinel flag is written. The master doesn't ne
 ```bash
 # In the sub-agent's brief (added by the master):
 # After Steps 1-4 (raw + curated + log + sentinel), ALWAYS run:
-cmux tab-action --action close --surface "$CMUX_SURFACE_ID" 2>/dev/null
+cmux_tab_action close --surface "$CMUX_SURFACE_ID" 2>/dev/null
 # Errors are swallowed because by this point the sentinel is already
 # written — the master sees the work as done regardless of whether the
 # tab close succeeds.
@@ -701,7 +701,7 @@ There is no `log_master` helper — master writes nothing. The worker prompt emb
 
 ## Worker dispatch — Single-worker self-curate (most common)
 
-Master dispatches via `cmux send` / `tmux send-keys` (kingdom mode — PRIMARY) or the `Agent` tool (standalone mode only — no cmux). In kingdom mode, `Agent()` in-process spawns are banned by R38; use tab or lane dispatch. The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
+Master dispatches via `cmux_send` / `tmux send-keys` (kingdom mode — PRIMARY) or the `Agent` tool (standalone mode only — no cmux). In kingdom mode, `Agent()` in-process spawns are banned by R38; use tab or lane dispatch. The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
 
 ```bash
 # Master-side setup (Bash) — generate IDs and paths.
@@ -856,7 +856,7 @@ If a worker runs and produces any reasoning / analysis / file content, **all fou
 | Authoritative pre-commit gate | King runs the gate; workers may run fast feedback tests internally but those are hygiene, not gating |
 | Reuse task files across tasks | New task = new task file. Task files are never reused or overwritten for a subsequent task. |
 
-Workers DO: read, edit, commit locally to `<role>-<n>`, spawn their own sub-agents (P1/P2/P3, no eco cap), run the 4-step closer, signal completion via the sentinel flag (+ optional `cmux notify` for sidebar badge). Everything else is the King.
+Workers DO: read, edit, commit locally to `<role>-<n>`, spawn their own sub-agents (P1/P2/P3, no eco cap), run the 4-step closer, signal completion via the sentinel flag (+ optional `cmux_notify` for sidebar badge). Everything else is the King.
 
 ---
 
@@ -887,7 +887,7 @@ flowchart TB
     class C compact
 ```
 
-For lane master itself (long-lived across tasks): `/compact` between tasks is mandatory. Without it, lane context accumulates and pollutes the next task's reasoning. The King's per-task closing sequence ends with sending `/compact` to the lane pane via `cmux send` (or `tmux send-keys`).
+For lane master itself (long-lived across tasks): `/compact` between tasks is mandatory. Without it, lane context accumulates and pollutes the next task's reasoning. The King's per-task closing sequence ends with sending `/compact` to the lane pane via `cmux_send` (or `tmux send-keys`).
 
 For sub-agents spawned by lane master: each sub-agent is one-shot; it returns (via sentinel flag) when done. In kingdom mode (R38), "spawn sub-agent" means tab-spawn or lane dispatch — not in-process `Agent()`. In standalone mode, `Agent()` calls are used directly. The lane master collects results, synthesises, then moves to the next dispatch within the same task (or completes the task and runs the 4-step closer).
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # kingdom function loader (v0.34.0+).
 #
-# Functions now live one-per-file in this directory. Source this loader, then
-# pull only the helpers a run actually calls:
+# Functions live one-per-file. Most sit flat in this directory; provider-scoped
+# wrappers live in a subfolder (e.g. functions/cmux/, functions/tmux/ later) so
+# each dispatch backend stays self-contained. `load` resolves a bare name in either
+# place, so callers + manifest.json never need to know the path.
 #
 #   source "$(dirname "$0")/.kingdom/.setting/functions/_load.sh"
 #   load render_card spawn_master_workspace kingdom_overlay_lane
@@ -14,13 +16,19 @@
 _KFN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 load () {
-  local f
+  local f path
   for f in "$@"; do
     if [ -f "$_KFN_DIR/$f.sh" ]; then
-      # shellcheck disable=SC1090
-      source "$_KFN_DIR/$f.sh"
+      path="$_KFN_DIR/$f.sh"
     else
-      echo "load: no function file '$f.sh' in $_KFN_DIR (see functions/index.md)" >&2
+      # fall back to one level of provider/feature subfolders (cmux/, tmux/, browser/, …)
+      path=$(ls "$_KFN_DIR"/*/"$f.sh" 2>/dev/null | head -1)
+    fi
+    if [ -n "$path" ] && [ -f "$path" ]; then
+      # shellcheck disable=SC1090
+      source "$path"
+    else
+      echo "load: no function file '$f.sh' in $_KFN_DIR or its subfolders (see functions/index.md)" >&2
       return 1
     fi
   done
@@ -28,7 +36,9 @@ load () {
 
 load_all () {
   local f
-  for f in "$_KFN_DIR"/*.sh; do
+  # flat files + one level of subfolders
+  for f in "$_KFN_DIR"/*.sh "$_KFN_DIR"/*/*.sh; do
+    [ -f "$f" ] || continue
     [ "$(basename "$f")" = "_load.sh" ] && continue
     # shellcheck disable=SC1090
     source "$f"

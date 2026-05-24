@@ -6,8 +6,8 @@ The cmux native "1 local agent · ctrl+t to hide tasks" indicator (the compresse
 
 | Pattern | When |
 |---|---|
-| **Visible tab via `cmux tab-action --action new-terminal-right --workspace <lane-ws>`** | All Layer-3 fan-out, all sub-agent work that needs visibility, all work that should auto-close on sentinel (5-step closer Step 5) |
-| **Lane dispatch via `cmux send --workspace worker-N -- "..."`** | Routing work to an already-running lane Claude session (most common for kingdom-internal work like audit specialists) |
+| **Visible tab via `cmux_tab_action new-terminal-right --workspace "<lane-ws>"`** | All Layer-3 fan-out, all sub-agent work that needs visibility, all work that should auto-close on sentinel (5-step closer Step 5) |
+| **Lane dispatch via `cmux_send "worker-N" "..."`** | Routing work to an already-running lane Claude session (most common for kingdom-internal work like audit specialists) |
 
 **Banned:** `Agent(subagent_type="general-purpose", ...)` or any in-process Claude Code agent-team spawn in King's main session.
 

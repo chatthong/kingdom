@@ -80,6 +80,6 @@ If the user passed `skill=<name>[,<name>...]` in the instruction, the helper sho
 
 ## Notes
 
-- This card is what flows through `cmux send --workspace <lane-ws> -- "<brief>"`. It's NOT printed to the user's chat; it's a system message between King and the lane.
+- This card is what flows through `cmux_send "<lane-ws>" "<brief>"`. It's NOT printed to the user's chat; it's a system message between King and the lane.
 - The brief is intentionally explicit about rules.md references because lanes spawn fresh contexts each task; reminding them up-front is cheaper than re-correcting later.
 - For co-workers (paired with the user), drop the "When done: fire closer" autonomous-completion line; co-workers wait for user input at each layer transition.

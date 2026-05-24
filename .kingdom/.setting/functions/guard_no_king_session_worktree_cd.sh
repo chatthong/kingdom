@@ -22,7 +22,7 @@ guard_no_king_session_worktree_cd () {
   case "$abs" in
     */.worktrees/worker-*|*/.worktrees/co-worker-*|*/.worktrees/watchman-*)
       local lane=$(basename "$abs")
-      echo "❌ R30 + R37 VIOLATION: King session attempting to cd into $lane worktree. King is orchestrator-only — heavy processing belongs IN the lane workspace, not the King's session. Fix: cmux rpc surface.send_text into the lane's surface, OR (for trivial reads) use git -C \"$abs\" <cmd> without changing directory." >&2
+      echo "❌ R30 + R37 VIOLATION: King session attempting to cd into $lane worktree. King is orchestrator-only — heavy processing belongs IN the lane workspace, not the King's session. Fix: cmux_send into the lane's surface, OR (for trivial reads) use git -C \"$abs\" <cmd> without changing directory." >&2
       return 1
       ;;
   esac

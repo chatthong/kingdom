@@ -4,7 +4,7 @@ The kingdom can run in **three modes** for lane dispatch (per memory `feedback_k
 
 | Mode | Lane backing | Verification source-of-truth |
 |---|---|---|
-| **PRIMARY** (cmux.app) | `cmux new-workspace` per lane | `workspace-refs.env` + `cmux tree --all` shows alive |
+| **PRIMARY** (cmux.app) | `spawn_master_workspace` per lane | `workspace-refs.env` + `cmux_tree` shows alive |
 | **FALLBACK** (tmux) | `tmux new-session -d -s kingdom-<project>` + windows | `tmux ls` shows the session |
 | **AGENT** (in-process) | `Agent(subagent_type=...)` sub-agents inside King's session | `.worktrees/<lane>/` directories exist + lane branches exist |
 
@@ -14,7 +14,7 @@ The kingdom can run in **three modes** for lane dispatch (per memory `feedback_k
 
 1. **`.worktrees/<lane>/` directories exist** for every lane in `kingdom.json.shape` — `ls .worktrees/worker-1 .worktrees/worker-2 ...`. If missing, run `git worktree add` (idempotent).
 2. **Mode-specific dispatch mechanism is alive:**
-   - PRIMARY: `workspace-refs.env` lists every lane + `cmux tree --all` shows them.
+   - PRIMARY: `workspace-refs.env` lists every lane + `cmux_tree` shows them.
    - FALLBACK: `tmux ls | grep kingdom-<project>` matches.
    - AGENT: no extra check (in-process, always available; just confirm worktrees from step 1).
 3. **Render `spawn-complete` card** so the user visually confirms shape (cmux sidebar for PRIMARY, tmux session list for FALLBACK, "Agent fallback mode" notice for AGENT) BEFORE dispatch begins.

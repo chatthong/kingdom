@@ -4,6 +4,8 @@
 
 This is the kingdom's slice of cmux's API — only the commands the roles actually use, with the exact invocations + when each applies. For the full cmux command surface, see `cmux --help` or `cmux docs api`.
 
+> **⚠️ Call cmux through the wrappers, never raw (v0.36.0).** Every cmux subcommand has a one-line wrapper in [`../functions/cmux/`](../functions/cmux/) — `cmux_send`, `cmux_notify`, `cmux_workspace_action`, `cmux_new_workspace`, … (browser: `browser_open`/`browser_verify`/…). Roles `load` them via `functions/_load.sh` (they're in the always-on `cmux` feature) and call the wrapper. The raw `cmux …` lines shown in each section below are **what the wrapper runs**, kept here as the single source of truth — not what you type in a role. One wrapper per subcommand means one place to fix when cmux's CLI shifts, and a future `functions/tmux/` mirrors the same names for the fallback backend. Wrapper ↔ subcommand map: [`../functions/index.md`](../functions/index.md) § cmux.
+
 Target version: **manaflow/cmux ≥ 0.64.6**. Not to be confused with `craigsc/cmux` (a different worktree-CLI tool — kingdom does NOT use it).
 
 ---
@@ -30,23 +32,30 @@ Target version: **manaflow/cmux ≥ 0.64.6**. Not to be confused with `craigsc/c
 
 ## Command index — quick lookup
 
-| Need to | Command | Section |
+Call the **wrapper** (left of `→`); it runs the raw subcommand shown in each section. All wrappers live in [`../functions/cmux/`](../functions/cmux/).
+
+| Need to | Wrapper call | Section |
 |---|---|---|
-| Spawn a master workspace | `cmux new-workspace --name … --cwd … --command "claude"` | [§ Spawn workspace](#spawn-a-workspace) |
-| Spawn a visible sub-agent tab | `cmux tab-action --action new-terminal-right --workspace <master-ws>` | [§ Spawn tab](#spawn-a-tab) |
-| Spawn a split inside a workspace | `cmux new-split <left\|right\|up\|down>` OR `--layout` at workspace creation | [§ Spawn split](#spawn-a-split) |
-| Send a prompt/command to a target | `cmux send --workspace <ref>` or `--surface <ref> --` `<text>` + `Enter` | [§ Send](#send-a-prompt-or-command) |
-| Rename a **workspace** (sidebar label) | `cmux workspace-action --action rename --workspace <ref> --title "…"` | [§ Rename](#rename) |
-| Rename a **surface** (tab inside a workspace) | `cmux tab-action --action rename --surface <ref> --title "…"` | [§ Rename](#rename) |
-| Set workspace color / description | `cmux workspace-action --action set-color\|set-description …` | [§ Set workspace color + description](#set-workspace-color--description) |
-| Close own tab (5-step closer Step 5) | `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"` | [§ Close tab](#close-own-tab) |
-| Close a whole **workspace** (kingdom teardown) | `cmux close-workspace --workspace <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
-| Close a **surface** (single tab/pane) | `cmux close-surface --surface <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
-| Close an entire **window** | `cmux close-window --window <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
-| Send notification | `cmux notify --workspace <ref> --title --body` | [§ Notification system](#notification-system) |
-| Identify current context | `cmux identify --json` | [§ Identify](#identify) |
-| List/inspect topology | `cmux tree --all` or `cmux list-panes --workspace <ref> --json` | [§ Inspect](#inspect-topology) |
-| Pin a workspace at top of sidebar | `cmux workspace-action --action pin --workspace <ref>` | [§ Pin](#pin-a-workspace) |
+| Spawn a master workspace (composite) | `spawn_master_workspace "$label" "$path" "$color"` | [§ Spawn workspace](#spawn-a-workspace) |
+| Create a bare workspace → echo ref | `cmux_new_workspace "$name" "$cwd" "$desc" "$window_flag"` | [§ Spawn workspace](#spawn-a-workspace) |
+| Spawn a visible sub-agent tab | `cmux_tab_action new-terminal-right --workspace <master-ws>` | [§ Spawn tab](#spawn-a-tab) |
+| Spawn a split inside a workspace | `cmux_new_split <left\|right\|up\|down> <ws>` | [§ Spawn split](#spawn-a-split) |
+| Send a prompt + submit it | `cmux_send <ref> "<text>"` (text **and** Enter, auto-targets surface/workspace) | [§ Send](#send-a-prompt-or-command) |
+| Send a bare key (Enter, C-c, …) | `cmux_send_key <ref> <key>` | [§ Send](#send-a-prompt-or-command) |
+| Rename a **workspace** (sidebar label) | `cmux_workspace_action <ref> rename --title "…"` | [§ Rename](#rename) |
+| Rename a **surface** (tab inside a workspace) | `cmux_tab_action rename --surface <ref> --title "…"` | [§ Rename](#rename) |
+| Set workspace color / description | `cmux_workspace_action <ref> set-color\|set-description …` | [§ Set workspace color + description](#set-workspace-color--description) |
+| Update a live status line | `cmux_set_state <ref> "▶" "<text>"` | [§ Dynamic workspace descriptions](#dynamic-workspace-descriptions-live-status-line) |
+| Close own tab (5-step closer Step 5) | `cmux_tab_action close --surface "$CMUX_SURFACE_ID"` | [§ Close tab](#close-own-tab) |
+| Close a whole **workspace** (kingdom teardown) | `cmux_close_workspace <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Close a **surface** (single tab/pane) | `cmux_close_surface <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Close an entire **window** | `cmux_close_window <ref>` | [§ Teardown / close commands](#teardown--close-commands) |
+| Send notification | `cmux_notify <ws> "<title>" "<subtitle>" "<body>" [surface]` | [§ Notification system](#notification-system) |
+| Identify current context | `cmux_identify` | [§ Identify](#identify) |
+| List/inspect topology | `cmux_tree` · `cmux_list_workspaces` · `cmux_list_panes <ref>` | [§ Inspect](#inspect-topology) |
+| Read what a pane shows | `cmux_capture_pane <ws> [lines]` · `cmux_read_screen <ws>` | [§ Read pane contents](#read-pane-contents-blocked-lane-detection) |
+| Pin a workspace at top of sidebar | `cmux_workspace_action <ref> pin` | [§ Pin](#pin-a-workspace) |
+| Verify a running UI (cmux.app only) | `browser_verify "<url>" "<expect>"` | [`../functions/index.md`](../functions/index.md) § browser |
 
 ---
 
@@ -172,21 +181,23 @@ Adds a pane to the existing workspace. Useful when user says "pair on co-worker-
 
 ## Send a prompt or command
 
-Address by workspace ref (most common) or surface ref (more precise).
+Address by workspace ref (most common) or surface ref (more precise). **Use `cmux_send`** — it does both calls:
 
 ```bash
-# Send to a workspace (auto-targets its focused/active surface)
-cmux send --workspace "$WORKER_WS_1" -- "<task brief text>"
-cmux send --workspace "$WORKER_WS_1" Enter
-
-# Send to a specific surface (multi-tab workspaces — needed for tab-spawned sub-agents)
-cmux send --surface "$SURFACE_REF" -- "<text>"
-cmux send --surface "$SURFACE_REF" Enter
+cmux_send "$WORKER_WS_1" "<task brief text>"   # workspace ref → text + Enter
+cmux_send "$SURFACE_REF" "<text>"              # surface ref → auto-detected
 ```
 
-**Always two calls** — one for the literal text (`--` separator avoids shell-arg confusion), one for the Enter keystroke. This matches manaflow's API; collapsing them into one call doesn't work.
+Under the hood it's **two raw calls** — the text, then a real Enter keypress:
 
-Special keys: `Enter`, `C-l` (Ctrl-L, clear), `C-c` (Ctrl-C), etc. — sent positionally without `--`.
+```bash
+cmux send "$flag" "$ref" -- "<text>"   # $flag = --workspace or --surface; `--` avoids shell-arg confusion
+cmux send-key --workspace "$ref" Enter # a REAL keypress — see the trap below
+```
+
+> **⚠️ `cmux send <ref> Enter` does NOT submit — it types the literal word "Enter".** `cmux send` only emits text. To press a key you need **`cmux send-key`** (which is what `cmux_send_key` / `cmux_send` call). Getting this wrong is the classic "brief lands in a dead shell, lane never starts" silent failure. (Verified on darwin: `cmux send-key --surface …` can error "Surface is not a terminal"; prefer `--workspace` for keypresses.) For booting a REPL you can also push `"<text>\n"` through `cmux_rpc surface.send_text` — there the `\n` executes in a terminal, but inside the Claude REPL a `\n` only inserts a newline, so still submit with `cmux_send_key … Enter`.
+
+Special keys: `cmux_send_key "$ref" C-l` (Ctrl-L, clear), `C-c` (Ctrl-C), etc.
 
 ---
 
@@ -662,7 +673,7 @@ Description updates are nice-to-have, not load-bearing. If a role fails to updat
 | `Tab not found` from `cmux tab-action` | Missing `--surface` or `--tab` flag when `$CMUX_SURFACE_ID` isn't set | Pass `--surface "$CMUX_SURFACE_ID"` explicitly, or use `--workspace <ref>` if targeting a whole workspace |
 | Workspace ref drifts after restart | Workspace refs are NOT stable across cmux.app restarts | Kingdom persists refs to `<LOGS>/workspace-refs.env` and re-reads on `/kingdom:work` resume — but if cmux.app was force-quit, refs may need rebuilding. Self-care Check 1 flags this. |
 | Sub-agent tab doesn't close | The sub-agent's process didn't run Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`) | Verify `$CMUX_SURFACE_ID` was set when the sub-agent launched — if not, the spawn went through `Agent(...)` not `cmux tab-action`, and there's no tab to close |
-| `cmux send` doesn't trigger Enter | You sent the prompt with `--` separator but forgot the second `cmux send … Enter` call | Always two calls: text, then Enter |
+| Brief sent but lane never starts (text shows, no submit) | Used `cmux send <ref> Enter` — that types the literal word "Enter"; `send` only emits text | Use `cmux_send` (text + real keypress) or `cmux_send_key <ref> Enter` (which calls `cmux send-key`) |
 | `new-workspace` ignores `--color` | `cmux new-workspace` does NOT support `--color` — only `--name`, `--description`, `--cwd`, `--command`, `--layout`, `--window`, `--focus` | Set color in a separate call: `cmux workspace-action --action set-color --workspace <ref> --color violet` |
 
 ---

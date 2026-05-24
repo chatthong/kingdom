@@ -6,7 +6,7 @@
 
 | Memory note says | Tier-1 rule says | Correct action |
 |---|---|---|
-| `feedback_kingdom_cmux_dispatch_fallback.md`: "if cmux send fails, pivot to Agent()" | R31: spawn cmux workspaces BEFORE dispatch (any mode) | **Spawn cmux workspaces.** The memory note covers a *dispatch-time* fallback after spawn succeeded but `cmux send` failed — NOT a session-start excuse to skip spawning entirely. |
+| `feedback_kingdom_cmux_dispatch_fallback.md`: "if cmux_send fails, pivot to Agent()" | R31: spawn cmux workspaces BEFORE dispatch (any mode) | **Spawn cmux workspaces.** The memory note covers a *dispatch-time* fallback after spawn succeeded but `cmux_send` failed — NOT a session-start excuse to skip spawning entirely. |
 | `feedback_no_performative_apology.md`: "never say 'you're absolutely right'" | R30: King acknowledges its own violations | **Acknowledge the violation factually.** Memory note bans performative apology, not factual self-correction. ("I violated R31 by not spawning. Repairing now.") |
 | `feedback_solo_vs_tmux.md`: "work solo by default" | R31: spawn lane workspaces on `/kingdom:work` | **Spawn the workspaces.** `/kingdom:work` is the explicit multi-lane ritual; the memory note covers default chat behaviour, not the dispatch flow. |
 

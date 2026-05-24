@@ -4,6 +4,29 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.36.0] — 2026-05-25
+
+**cmux through wrappers — one micro-function per subcommand.** The kit no longer types raw `cmux …` anywhere in its prompts. Every cmux subcommand now has a one-line wrapper in `functions/cmux/`, and every role / command / rule / card calls the wrapper. This makes calls accurate and uniform, gives one place to fix when cmux's CLI shifts, and sets up a clean `functions/tmux/` for the fallback backend later. Built by dogfooding: 5 parallel cmux worker lanes did the rewire, then a cross-lane consistency pass (each lane fanning the diff-reads out to parallel Sonnet sub-agents).
+
+### Added
+
+- **`functions/cmux/` backend folder** — 22 `cmux_*` wrappers (one per subcommand: `cmux_send`, `cmux_send_key`, `cmux_notify`, `cmux_new_workspace`, `cmux_new_window`, `cmux_new_split`, `cmux_workspace_action`, `cmux_tab_action`, `cmux_close_workspace`/`_surface`/`_window`, `cmux_tree`, `cmux_list_workspaces`/`_panes`/`_pane_surfaces`, `cmux_identify`, `cmux_capture_pane`, `cmux_read_screen`, `cmux_rpc`, plus the existing `cmux_set_state`/`cmux_attention_override`/`cmux_attention_clear`) **plus the 8 `browser_*` wrappers** (`browser_open`/`snapshot`/`click`/`fill`/`eval`/`screenshot`/`close`/`verify`) for cmux.app's built-in browser — UI verification any role can call via `load_feature browser`.
+- **`cmux` feature** (always-on) + **`browser` feature** (on-demand, deps cmux) in `manifest.json`; `core` now deps `cmux`.
+- **Subfolder-aware loader** — `_load.sh` resolves a bare function name whether it sits flat or in a backend subfolder (`cmux/`, future `tmux/`), so the manifest and callers never carry paths.
+
+### Changed
+
+- **Every raw `cmux …` invocation across `roles/`, `commands/`, `rules/`, `cards/`, and `index.md` rewired to the wrappers.** `reference/cmux.md` is now the wrapper catalog (raw commands shown only as "what each wrapper runs").
+- **`cmux_send` submits via `cmux send-key`, not `cmux send … Enter`** — the latter types the literal word "Enter" (a "brief lands in a dead shell" silent failure). The wrapper now does text + a real keypress; `reference/cmux.md` § Send documents the trap.
+- **`cmux_capture_pane` gained an optional surface arg** for per-pane precision (watchman orphan-tab sweep) while defaulting to workspace-level.
+
+### Fixed
+
+- **`cmux_set_state` 2-arg call sites** (`cmux_set_state "▶" "text"`) corrected to the 3-arg signature `(ws, emoji, text)` across `king.md`, `worker.md`, `senior.md`, `work.md` — the 2-arg form silently passed the emoji as the workspace ref, so the status line never updated (undermined R36). Surfaced by the cross-lane consistency pass.
+- Unquoted refs in a few `cmux_notify` / `--workspace $VAR` sites quoted.
+
+---
+
 ## [0.35.0] — 2026-05-24
 
 **Modular architecture — the big upgrade.** Completes the reorg begun in v0.34.0: every part of the kit is now a small, single-purpose file in a clearly-named folder, features are declared bundles that plug in/out, the two oversized role docs are slimmed, and a structure-lint keeps it honest. Behavior is unchanged; this is organization. Built largely in parallel (4 workers + a serial rewire stage).

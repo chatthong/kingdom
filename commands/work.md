@@ -148,25 +148,22 @@ Per R41, no-skill is a valid result. Don't invoke a vague match just to invoke s
 
 ```bash
 # Capture King's window + workspace refs
-KING_WS=$(cmux identify --json | jq -r .caller.workspace_ref)
-KING_WIN=$(cmux identify --json | jq -r .caller.window_ref)
+KING_WS=$(cmux_identify | jq -r .caller.workspace_ref)
+KING_WIN=$(cmux_identify | jq -r .caller.window_ref)
 KJSON="$PWD/.kingdom/${project}/kingdom.json"
 KING_COLOR=$(jq -r '.cmux.workspaceColors.king // "amber"' "$KJSON")
 
 # Rename + describe in parallel (cosmetic, fire-and-forget; R42: bounded wait)
 RENAME_PIDS=""
-cmux workspace-action --action rename --workspace "$KING_WS" \
-  --title "👑 King · ${project}" 2>/dev/null &
+cmux_workspace_action "$KING_WS" rename --title "👑 King · ${project}" &
 RENAME_PIDS="$RENAME_PIDS $!"
-cmux workspace-action --action set-color --workspace "$KING_WS" \
-  --color "$KING_COLOR" 2>/dev/null &
+cmux_workspace_action "$KING_WS" set-color --color "$KING_COLOR" &
 RENAME_PIDS="$RENAME_PIDS $!"
-cmux workspace-action --action set-description --workspace "$KING_WS" \
-  --description "Starting ${project}..." 2>/dev/null &
+cmux_set_state "$KING_WS" "▶" "Starting ${project}..." &
 RENAME_PIDS="$RENAME_PIDS $!"
 PIN_KING=$(jq -r '.cmux.pinKingWorkspace // true' "$KJSON")
 if [ "$PIN_KING" = "true" ]; then
-  cmux workspace-action --action pin --workspace "$KING_WS" 2>/dev/null &
+  cmux_workspace_action "$KING_WS" pin &
   RENAME_PIDS="$RENAME_PIDS $!"
 fi
 _bounded_wait 5 $RENAME_PIDS  # 4 cmux calls × <0.05s nominal; 5s budget covers slow socket
@@ -206,7 +203,7 @@ for lane in $LANES_EXPECTED; do
     # Skip if workspace ref already present + alive (resume)
     if grep -q "^${lane}_WS=" "$REFS_FILE" 2>/dev/null; then
       ref=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
-      cmux tree --all 2>/dev/null | grep -qF "$ref" && exit 0
+      cmux_tree | grep -qF "$ref" && exit 0
     fi
     # Ensure worktree exists
     [ -d "$PROJ/.worktrees/$lane" ] || \
@@ -232,7 +229,7 @@ for lane in $LANES_EXPECTED; do
 done
 # R42: bounded wait — git worktree add can stall on .git/index.lock or half-created worktrees;
 # 60s budget covers ~5 lanes × (worktree add 2s + 4 cmux calls 0.2s) with 5x safety margin.
-_bounded_wait 60 $SPAWN_PIDS || echo "⚠️ spawn cycle hit 60s budget; survivors killed (check cmux tree --all + worktree-refs.env)"
+_bounded_wait 60 $SPAWN_PIDS || echo "⚠️ spawn cycle hit 60s budget; survivors killed (check cmux_tree + worktree-refs.env)"
 
 echo "👑 All lanes spawned. Sidebar shape confirmed."
 
@@ -261,7 +258,7 @@ fi
 # Mode detection (PRIMARY vs FALLBACK vs AGENT)
 MODE="AGENT"   # default
 if command -v cmux >/dev/null 2>&1 && [ -f "$REFS_FILE" ]; then
-  ALIVE_REFS=$(cmux tree --all 2>/dev/null | grep -oE 'workspace:[0-9]+' | sort -u)
+  ALIVE_REFS=$(cmux_tree | grep -oE 'workspace:[0-9]+' | sort -u)
   ALL_ALIVE=1
   for lane in $LANES_EXPECTED; do
     REF=$(grep "^${lane}_WS=" "$REFS_FILE" 2>/dev/null | cut -d= -f2)
@@ -351,8 +348,7 @@ The audit's specialists dispatch to lane workspaces via `cmux send`, not to in-p
 ```bash
 echo "👑 Step 1/5 · Dispatching audit specialists to lanes (R37)..."
 
-cmux workspace-action --action set-description --workspace "$KING_WS" \
-  --description "Audit in flight · 4 specialists across lanes" 2>/dev/null
+cmux_set_state "$KING_WS" "▶" "Audit in flight · 4 specialists across lanes"
 
 SPECIALISTS=("audit-lead" "audit-a-project-scan" "audit-b-checkbox-reconcile" \
              "audit-c-digest-quality" "audit-d-log-repair")
@@ -364,11 +360,10 @@ for spec in "${SPECIALISTS[@]}"; do
   if [ -n "$lane_ws" ]; then
     BRIEF="/kingdom audit specialist: ${spec}. Scope: \`.kingdom/${project}/\`. \
 Write findings to \`.kingdom/${project}/logs/audit-${spec}.md\` + sentinel."
-    cmux send --workspace "$lane_ws" -- "$BRIEF" 2>/dev/null
-    cmux send --workspace "$lane_ws" Enter 2>/dev/null
+    cmux_send "$lane_ws" "$BRIEF"
   else
     # No lane available — spawn as visible TAB inside King's workspace (R38: never Agent())
-    cmux tab-action --action new-terminal-right --workspace "$KING_WS" --focus false 2>/dev/null
+    cmux_tab_action new-terminal-right --workspace "$KING_WS" --focus false 2>/dev/null
   fi
 done
 
@@ -452,7 +447,7 @@ if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
     #    keeps the Senior in-pod + visible-only (R30 amendment).
     SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" | cut -d= -f2)
     guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
-    cmux send --workspace "$SENIOR_WS" -- \
+    cmux_send "$SENIOR_WS" \
       "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push."
     spawn_senior_loop "$SENIOR_WS" "$STORY_ID"
     echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
@@ -496,7 +491,7 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
     # v0.31.0 R31+R36 hard gate: refuse dispatch if lane workspace missing.
     # Bypassing this caused "dispatch into the void" in the 2026-05-19 session.
     guard_lane_workspace_exists "$lane" || { echo "⏸ skipping resume of $lane (workspace check failed)"; continue; }
-    cmux send --workspace "$lane_ws" -- "$BRIEF" 2>/dev/null
+    cmux_send "$lane_ws" "$BRIEF"
     echo "Resumed $lane → $TASK_ID"
     continue
   fi
@@ -513,7 +508,7 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
   # The 2026-05-20 morning incident was a dispatch that ran without a visible
   # workspace — work happened in King's session, the user saw nothing happen.
   guard_lane_workspace_exists "$lane" || { echo "⏸ skipping $lane (workspace check failed)"; continue; }
-  cmux send --workspace "$lane_ws" -- "$BRIEF"
+  cmux_send "$lane_ws" "$BRIEF"
   echo "Dispatched $lane → $TASK"
   TASKS_DISPATCHED_TODAY=$((TASKS_DISPATCHED_TODAY + 1))
 
@@ -569,8 +564,8 @@ while true; do
       export LANE="$SENIOR" TASK_ID="$STORY_ID" TOPIC="$STORY_ID" STORY_ID
       render_card "senior-verdict"   # reads the SENIOR_ report for the clean verdict
       render_card "push-prompt"
-      cmux notify --workspace "$KING_WS" --title "👑 King · story review ready" \
-        --subtitle "story/${STORY_ID}" --body "Senior cleared it. Reply 'push' to open the PR."
+      cmux_notify "$KING_WS" "👑 King · story review ready" \
+        "story/${STORY_ID}" "Senior cleared it. Reply 'push' to open the PR."
       wait_for_ter_decision   # on "push": carve story/${STORY_ID} → develop PR (Step 6)
       continue
     fi
@@ -582,11 +577,11 @@ while true; do
     ls "$PWD/${project}/docs/test-reports/KING_"*"__${LANE}__${SUBTASK_ID}.md" \
       >/dev/null 2>&1 && continue
 
-    cmux_set_state "" "Tier-1 gate · ${LANE} · ${SUBTASK_ID}"
+    cmux_set_state "$KING_WS" "▶" "Tier-1 gate · ${LANE} · ${SUBTASK_ID}"
     run_tier1_gate "${LANE}" "${SUBTASK_ID}"
 
     if [ "$?" = "0" ]; then
-      cmux_set_state "" "Overlaying ${LANE} onto kingdom"
+      cmux_set_state "$KING_WS" "▶" "Overlaying ${LANE} onto kingdom"
       # v0.31.1: was a stale-name no-op call (overlay_lane_onto_kingdom is not
       # defined anywhere — bash silently skipped, then Tier-2 ran against the
       # empty kingdom branch). The real helper is kingdom_overlay_lane and it
@@ -596,7 +591,7 @@ while true; do
         continue
       }
 
-      cmux_set_state "" "Tier-2 gate · kingdom overlay"
+      cmux_set_state "$KING_WS" "▶" "Tier-2 gate · kingdom overlay"
       run_tier2_gate
 
       if [ "$?" = "0" ]; then
@@ -612,12 +607,10 @@ while true; do
         export N_MODIFIED N_NEW GATE_DURATION PR_TITLE
         render_card "push-prompt"
 
-        cmux_set_state "" "Review live diff · ${LANE} · ${SUBTASK_ID}"
-        cmux workspace-action --action mark-unread --workspace "$KING_WS"
-        cmux notify --workspace "$KING_WS" \
-          --title "👑 King · review ready" \
-          --subtitle "${LANE} · ${SUBTASK_ID}" \
-          --body "Tier-2 passed. Reply 'push' to publish."
+        cmux_set_state "$KING_WS" "⚠" "Review live diff · ${LANE} · ${SUBTASK_ID}"
+        cmux_workspace_action "$KING_WS" mark-unread
+        cmux_notify "$KING_WS" "👑 King · review ready" \
+          "${LANE} · ${SUBTASK_ID}" "Tier-2 passed. Reply 'push' to publish."
 
         wait_for_ter_decision    # per R1: only the literal 'push' word counts
       else
@@ -626,8 +619,8 @@ while true; do
           REPORT_PATH=$(latest_test_report "${LANE}" "${SUBTASK_ID}")
         export LANE TASK_ID="${SUBTASK_ID}" TIER TIER_SCOPE FAILURE_SUMMARY REPORT_PATH
         render_card "gate-fail"
-        cmux notify --workspace "$KING_WS" --title "👑 King · Tier-2 FAIL" \
-          --subtitle "${LANE} · ${SUBTASK_ID}" --body "$FAILURE_SUMMARY"
+        cmux_notify "$KING_WS" "👑 King · Tier-2 FAIL" \
+          "${LANE} · ${SUBTASK_ID}" "$FAILURE_SUMMARY"
       fi
     fi
   done
@@ -665,8 +658,8 @@ git checkout kingdom
 git reset --hard origin/develop
 git clean -fd
 
-cmux_set_state "" "Pushed feature/${TOPIC}"
-cmux workspace-action --action mark-read --workspace "$KING_WS"
+cmux_set_state "$KING_WS" "✅" "Pushed feature/${TOPIC}"
+cmux_workspace_action "$KING_WS" mark-read
 PRS_OPENED_TODAY=$((PRS_OPENED_TODAY + 1))     # toward pr-limit
 PODS_DONE_TODAY=$((PODS_DONE_TODAY + 1))       # this PR completed one unit (solo task or story pod)
 ```

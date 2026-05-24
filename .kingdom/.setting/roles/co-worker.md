@@ -37,7 +37,7 @@ When the user signals "pair on co-worker-1":
 1. **The user selects the co-worker pane** (manually in cmux.app, or via `cmux select-pane`).
 2. **The user types a task brief directly** into the pane — describing what to work on, which files, what the goal is.
 3. **The co-worker session reads the brief** and starts assisting interactively.
-4. **King may also dispatch a USER-AUTHORED brief** into the pane via `cmux send` if the user explicitly asks ("King, send my plan to co-worker-1"). But the King does NOT pick task content for co-workers — that's the user's call.
+4. **King may also dispatch a USER-AUTHORED brief** into the pane via `cmux_send` if the user explicitly asks ("King, send my plan to co-worker-1"). But the King does NOT pick task content for co-workers — that's the user's call.
 
 Activation: how a co-worker lane goes from dormant to active.
 
@@ -75,7 +75,7 @@ Co-workers follow the same task file convention as autonomous workers (see [`wor
 
 The only difference from autonomous workers:
 
-- **Brief source:** the user typically dictates the brief verbatim (typing into the pane or via `cmux send` from the King at the user's request). The co-worker captures what the user said into the task file's "Brief" section, then proceeds with planning.
+- **Brief source:** the user typically dictates the brief verbatim (typing into the pane or via `cmux_send` from the King at the user's request). The co-worker captures what the user said into the task file's "Brief" section, then proceeds with planning.
 - **Sub-task ID:** may be informal — co-worker work isn't always tied to a sub-task in `TODO_Master.csv`. Use a descriptive slug if no formal ID exists: `<UTC>__co-worker-1__navbar-redesign.md`.
 - **Multi-layer planning is OPTIONAL** for co-workers. If the user is driving (e.g., live UI iteration), the task file may be a single layer with checkboxes for the agreed-upon work. If the co-worker is doing autonomous follow-up (the user set scope, then walked away), full multi-layer planning applies — same as a worker.
 
@@ -89,7 +89,7 @@ Other than that, the schema, lifecycle, and read/write rules are identical to wo
 |---|---|---|
 | Task source | `kingdom.json.taskSource` — King picks claimable sub-tasks | The user dictates the task directly |
 | Claim files | Yes — King writes `<LOGS>/claims/<id>.lane` before dispatch | **No** — co-worker work is user-directed; may intentionally overlap with autonomous lanes |
-| Dispatch mechanism | King sends a 4-step-closer prompt via `cmux send` / `tmux send-keys` | The user types directly; King mediates only if asked |
+| Dispatch mechanism | King sends a 4-step-closer prompt via `cmux_send` / `tmux send-keys` | The user types directly; King mediates only if asked |
 | `/compact` between tasks | King sends `/compact` after each task closer | The user manages context manually (or asks King to send `/compact`) |
 | Autonomous TODO picking | Yes — King iterates from project's task source | **Never** — co-workers don't claim from TODO |
 
@@ -97,17 +97,15 @@ Other than that, the schema, lifecycle, and read/write rules are identical to wo
 
 ## 4-step closer still applies
 
-Even though dispatch is interactive, the **artifact protocol is unchanged** — the 4-step closer (raw → curated → log → sentinel, plus the mandatory Step-4 `cmux notify` pair) is defined canonically in [`worker.md`](worker.md) → "The 4-step closer". Co-workers run it identically, with only these differences:
+Even though dispatch is interactive, the **artifact protocol is unchanged** — the 4-step closer (raw → curated → log → sentinel, plus the mandatory Step-4 `cmux_notify` pair) is defined canonically in [`worker.md`](worker.md) → "The 4-step closer". Co-workers run it identically, with only these differences:
 
 - **Slug** = `co-worker-N` — so artifacts are `raw/<ID>__opus-co-worker-N.md`, `done/<ID>__opus-co-worker-N.flag`, etc. Master polls the flag the same way it does for autonomous workers.
 - **Trigger** is interactive: the closer fires when the user says "we're done with this UI task on co-worker-1", not on autonomous task completion.
 - **Notify titles** use the 🧑‍💼 emoji + co-worker slug (the worker version uses 👷):
 
 ```bash
-cmux notify --surface "$CMUX_SURFACE_ID" \
-  --title "🧑‍💼 co-worker-1 done" --subtitle "$ID" --body "$(head -1 $LOGS/$ID.md)"
-cmux notify --workspace "$KING_WS" \
-  --title "🧑‍💼 co-worker-1 done" --subtitle "$ID" --body "$(head -1 $LOGS/$ID.md)"
+cmux_notify "" "🧑‍💼 co-worker-1 done" "$ID" "$(head -1 $LOGS/$ID.md)" "$CMUX_SURFACE_ID"
+cmux_notify "$KING_WS" "🧑‍💼 co-worker-1 done" "$ID" "$(head -1 $LOGS/$ID.md)"
 ```
 
 The co-worker's own pane gets a blue ring; the King's sidebar gets a badge. Then the user can ask for the pre-commit gate + push. See [`cmux.md`](../reference/cmux.md) → § Notification system for the targeting reference.
@@ -166,7 +164,7 @@ Same as workers (see [`worker.md`](worker.md) → Spawn rights inside a lane):
 - Edit + commit locally to `co-worker-N`.
 - Lane master itself runs **Opus** (high-quality coding inside the lane). Sub-agents it spawns follow the P1/P2/P3 chain — canonical definition in [`index.md`](../index.md) → Sub-agent model priority. The lane master's model is separate from the sub-agent chain. No eco cap; parallel allowed.
 - Run the 4-step closer when the task chunk is complete.
-- Use `cmux notify` to ping King/the user when something needs attention.
+- Use `cmux_notify` to ping King/the user when something needs attention.
 - Write the task file (mandatory, Step 0 of any task).
 - **Invoke skills directly (R41).** In a paired session, the co-worker resolves skills via `pick_skills_for_task` (or `skill-routing.md`) at task start, just like workers do. Because the user is present, the co-worker may also invoke additional skills mid-task on user request — log each invocation in the task file's `## Progress notes`.
 

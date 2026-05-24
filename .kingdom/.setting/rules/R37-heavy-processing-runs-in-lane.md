@@ -1,6 +1,6 @@
 ### R37. Heavy processing runs IN lane workspaces, not in King's session — Tier 1 (v0.28.0+)
 
-Audit fan-outs (the 4 specialists from `/kingdom:work` audit phase), pattern-grep scans (R8 Layer-1 Discovery), doc-digest fan-outs, and any other parallelisable work must dispatch to lane workspaces via `cmux send --workspace worker-N -- "..."`. King's main session never runs the work itself.
+Audit fan-outs (the 4 specialists from `/kingdom:work` audit phase), pattern-grep scans (R8 Layer-1 Discovery), doc-digest fan-outs, and any other parallelisable work must dispatch to lane workspaces via `cmux_send "worker-N" "..."`. King's main session never runs the work itself.
 
 **Rationale:** every lane already has its own Claude session running. Using them as parallel compute (instead of spinning new in-process Agent() calls) gives:
 

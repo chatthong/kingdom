@@ -14,7 +14,7 @@ spawn_master_workspace () {
     new)
       # Lazy-create the kingdom window once; cache UUID in workspace-refs.env
       if ! grep -q '^KING_WINDOW=' "$LOGS/workspace-refs.env" 2>/dev/null; then
-        local king_win=$(cmux new-window 2>&1 | grep -oE '[A-F0-9-]{36}' | head -1)
+        local king_win=$(cmux_new_window)
         [ -n "$king_win" ] && echo "KING_WINDOW=$king_win" >> "$LOGS/workspace-refs.env"
       fi
       local cached_win=$(grep '^KING_WINDOW=' "$LOGS/workspace-refs.env" | cut -d= -f2)
@@ -33,38 +33,30 @@ spawn_master_workspace () {
   # bash prompt and King's subsequent `cmux send -- "<brief>"` landed in the
   # shell. Explicit post-spawn `claude\n` (Step 1b below) replaces it; the
   # `spawn_watchman_loop` helper already proved this pattern works.
-  local result=$(cmux new-workspace \
-    --name "$label" \
-    --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" \
-    --cwd "$path" \
-    --focus false \
-    $window_flag 2>&1)
-  local ref=$(echo "$result" | grep -oE 'workspace:[0-9]+' | head -1)
-  [ -z "$ref" ] && { echo "❌ spawn failed: $result" >&2; return 1; }
+  local desc="Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)"
+  local ref=$(cmux_new_workspace "$label" "$path" "$desc" "$window_flag")
+  [ -z "$ref" ] && { echo "❌ spawn failed for $label (cmux_new_workspace returned no ref)" >&2; return 1; }
 
   # Step 1b (v0.31.1): explicitly launch claude in the workspace's surface.
   # Without this, the workspace sits at a bash prompt and dispatch briefs
   # sent later via `cmux send` land in the shell — silent failure mode.
-  local surface=$(cmux rpc workspace.list 2>/dev/null \
+  local surface=$(cmux_rpc workspace.list \
     | jq -r ".[] | select(.ref == \"$ref\") | .surfaces[0].ref" 2>/dev/null)
   if [ -n "$surface" ] && [ "$surface" != "null" ]; then
-    cmux rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}" 2>/dev/null
+    cmux_rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}"
     sleep 1.5   # claude boot — same budget proven by spawn_watchman_loop
   else
     echo "⚠️ $label: no surface found post-spawn; claude REPL not launched. Dispatch will land in shell." >&2
   fi
 
   # Step 2: FORCE sidebar name (override "✳ Claude Code" auto-title)
-  cmux workspace-action --action rename --workspace "$ref" --title "$label" 2>/dev/null
+  cmux_workspace_action "$ref" rename --title "$label"
 
   # Step 3: set color (new-workspace doesn't accept --color)
-  [ -n "$color" ] && \
-    cmux workspace-action --action set-color --workspace "$ref" --color "$color" 2>/dev/null
+  [ -n "$color" ] && cmux_workspace_action "$ref" set-color --color "$color"
 
   # Step 4: force-set description (auto-title can clobber what new-workspace --description set)
-  cmux workspace-action --action set-description \
-    --workspace "$ref" \
-    --description "Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)" 2>/dev/null
+  cmux_workspace_action "$ref" set-description --description "$desc"
 
   echo "$ref"
 }

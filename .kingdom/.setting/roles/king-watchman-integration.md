@@ -23,7 +23,7 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 
 ### Pre-dispatch checks (King-side, before sending a brief)
 
-Before `cmux send --workspace $WORKER_WS_N -- "<brief>"`:
+Before `cmux_send "$WORKER_WS_N" "<brief>"`:
 
 ```bash
 source "$LOGS/workspace-refs.env"   # exposes KING_WS, WORKER_WS_N, etc.

@@ -6,7 +6,7 @@
 
 ## Autonomous Haiku fan-out (v0.29.0+, per rules.md R39 + R40)
 
-Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — it also fans out up to `haiku_cap_per_tick` Haiku sub-agents in parallel to perform four new surveillance duties. These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux tab-action --action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All four duties run in parallel at every tick; no duty waits for another.
+Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — it also fans out up to `haiku_cap_per_tick` Haiku sub-agents in parallel to perform four new surveillance duties. These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux_tab_action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All four duties run in parallel at every tick; no duty waits for another.
 
 **R41 — Skill-aware (v0.29.3+):** Watchman Haiku sub-agents may optionally invoke domain skills to strengthen their analysis. Duty 1 (code review) may use `code-review:code-review`; Duty 2 (CVE scan) may use `security-review`. Invocation is optional — skip if the skill adds no material benefit for a shallow diff or trivial audit file. No cap beyond the normal 3-skill-per-brief limit.
 
@@ -330,4 +330,4 @@ This is the King's cross-story signal (R50): the watchman only **detects and rep
 <list any duties skipped or trimmed due to haiku_cap_per_tick, or "none">
 ```
 
-**Urgent escalation:** If any duty's output file contains `severity: urgent` (case-insensitive in its TL;DR), Watchman renders a `watchman-tick` card (from the `cards/` directory) and fires `cmux notify` to both `$KING_WS` and `$WATCHMAN_WS`. Non-urgent ticks are logged only; no notification.
+**Urgent escalation:** If any duty's output file contains `severity: urgent` (case-insensitive in its TL;DR), Watchman renders a `watchman-tick` card (from the `cards/` directory) and fires `cmux_notify` to both `$KING_WS` and `$WATCHMAN_WS`. Non-urgent ticks are logged only; no notification.

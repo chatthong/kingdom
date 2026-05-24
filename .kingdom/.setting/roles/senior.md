@@ -38,7 +38,7 @@ The King assigns the Senior a story and a set of worker lanes (the pod). A worke
 
 - Splits the story into sub-tasks (one coherent chunk per worker).
 - Writes a **story task file** at `.kingdom/<project>/tasks/<UTC>__senior-N__<story-id>.md` (Step 0, before any dispatch, same spirit as R23). It tracks the sub-task list, who owns each, merge status, and the review-loop iteration.
-- Dispatches each sub-task to a pod worker via a visible `cmux send`, guarded by `guard_senior_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace). Workers then run their normal 4-layer flow and write their own per-sub-task task files.
+- Dispatches each sub-task to a pod worker via a visible `cmux_send`, guarded by `guard_senior_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace). Workers then run their normal 4-layer flow and write their own per-sub-task task files.
 
 **Banned (R30 + R48):** dispatching to a worker outside the pod; dispatching to a worker with no visible workspace; writing feature code directly; re-reviewing another Senior's story.
 
@@ -83,12 +83,12 @@ The Senior owns Tier-2 (on the story branch) and Tier-3 (review). It is a **soft
 After each loop transition the Senior updates its cmux workspace description (see [`_primitives.md` § cmux_set_state](../_primitives.md)):
 
 ```bash
-cmux_set_state "▶" "story/<id> · split + dispatching pod"
-cmux_set_state "▶" "story/<id> · merging worker-N (3/4 in)"
-cmux_set_state "▶" "story/<id> · Tier-2 gate"
-cmux_set_state "🔎" "story/<id> · review loop (iter 2/3)"
-cmux_set_state "✅" "story/<id> · push-eligible, handed to King"
-cmux_set_state "⛔" "story/<id> · blocked — escalated to King"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "story/<id> · split + dispatching pod"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "story/<id> · merging worker-N (3/4 in)"
+cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "story/<id> · Tier-2 gate"
+cmux_set_state "$CMUX_WORKSPACE_ID" "🔎" "story/<id> · review loop (iter 2/3)"
+cmux_set_state "$CMUX_WORKSPACE_ID" "✅" "story/<id> · push-eligible, handed to King"
+cmux_set_state "$CMUX_WORKSPACE_ID" "⛔" "story/<id> · blocked — escalated to King"
 ```
 
 ---
