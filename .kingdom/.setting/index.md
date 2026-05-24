@@ -9,7 +9,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | File | Owns |
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
-| [`rules.md`](rules.md) | **Priority-tiered rules (v0.19.0+)** — Tier 1 IRON-CLAD (R1-R7, R22-R23), Tier 2 STRONG DEFAULTS (R8-R16, R24-R28), Tier 3 CONVENTIONS (R17-R21). King reads this **FIRST** at session start per R14, before any other role doc. |
+| [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R50`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
 | [`kings.md`](kings.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`workers.md`](workers.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-workers.md`](co-workers.md) | Co-worker (user-paired) interactive protocol |
@@ -17,7 +17,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`seniors.md`](seniors.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
 | [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
 | [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
-| [`_primitives.md`](_primitives.md) | **Shared bash helpers** (v0.19.0+) — canonical implementations of every helper the role docs reference (`cmux_set_state`, `attach_or_create_worktree`, `spawn_master_workspace`, `spawn_pool_slot`, `kingdom_*`, `carve_and_push_feature`, `generate_pr_body_from_task_file`, `pattern_grep_fanout`, `fetch_weather_line`, `render_card`, `pick_skills_for_task`, etc). Single source of truth for shared bash. |
+| [`functions/`](functions/) | **Shared bash helpers (v0.34.0: one function per file)** — 42 helpers, one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader (`source _load.sh; load <names>`). A role/feature spec lists the function names it calls. (`_primitives.md` is now a pointer to this folder.) |
 | [`cards/`](cards/) | **Card display library** (v0.22.0+) — 19 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
 | [`skill-routing.md`](skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
 

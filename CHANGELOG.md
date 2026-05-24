@@ -4,6 +4,21 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.34.0] — 2026-05-24
+
+Modular reorganization (phase 1): the two monoliths become many small files, so each file stays short and a run loads only what it calls.
+
+### Changed
+
+- **`rules.md` → `rules/` (one rule per file).** All 50 rules are now individual files `rules/R01-…md` … `rules/R50-…md`, with `rules/index.md` as the registry (Tier-1 legend + a table linking every `R##` to its file). Tier-1 stays exactly 10. `rules.md` is now a thin pointer to `rules/index.md`.
+- **`_primitives.md` → `functions/` (one function per file).** All 42 bash helpers are now individual `functions/<name>.sh` files (each `bash -n`-clean), with `functions/index.md` as the registry and `functions/_load.sh` the loader: `source _load.sh; load render_card spawn_master_workspace …` pulls only the helpers a run calls. `_primitives.md` is now a thin pointer to `functions/index.md`.
+- **`/kingdom:init`** now copies the `rules/` and `functions/` directories into a scaffolded workspace; `index.md` file-map updated to point at the new folders.
+
+### Notes
+
+- Behavior is unchanged — this is packaging only. Old `[rules.md]` / `[_primitives.md]` references still resolve (the files are pointers).
+- Phase 2 (deferred): move role docs into `roles/` + reference docs into `reference/`, and rewire deep `R##` anchor cross-references to the new per-file paths.
+
 ## [0.33.0] — 2026-05-24
 
 Command-surface cleanup for consistency and simplicity. **Breaking** for the `/kingdom:work` and `/kingdom:init` argument surfaces.

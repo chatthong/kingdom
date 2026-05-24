@@ -76,6 +76,11 @@ cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cards/"*.md "$PWD/.kingdom/.setting/
 # v0.23.0+: per-task skill routing
 cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/skill-routing.md" "$PWD/.kingdom/.setting/skill-routing.md"
 
+# v0.34.0+: rules and functions are one-file-each directories (rules.md / _primitives.md are now pointers)
+mkdir -p "$PWD/.kingdom/.setting/rules" "$PWD/.kingdom/.setting/functions"
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/rules/"*.md       "$PWD/.kingdom/.setting/rules/"
+cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/functions/"*       "$PWD/.kingdom/.setting/functions/"
+
 wc -l "$PWD/.kingdom/.setting/"*.md
 ```
 
