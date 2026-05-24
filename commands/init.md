@@ -71,7 +71,7 @@ cp "$SRC/_primitives.md"  "$DST/_primitives.md"     # pointer -> functions/index
 cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior + king-*/watchman-* sub-docs
 cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing
 cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R50 + index.md
-cp "$SRC/functions/"*     "$DST/functions/"         # 42 *.sh + index.md + _load.sh
+cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ backend (cmux_* + browser_* wrappers). -R so the cmux/ subfolder comes along (plain cp skips directories).
 cp "$SRC/cards/"*.md      "$DST/cards/"
 
 echo "Scaffolded .setting/: $(find "$DST" -name '*.md' -o -name '*.sh' -o -name '*.json' | wc -l | tr -d ' ') files"

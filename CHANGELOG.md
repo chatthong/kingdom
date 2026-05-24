@@ -4,6 +4,14 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.36.1] — 2026-05-25
+
+### Fixed
+
+- **`/kingdom:init` now scaffolds the `functions/cmux/` backend.** v0.36.0's copy step used `cp "$SRC/functions/"* "$DST/functions/"` (no `-R`), which skips directories — so a freshly scaffolded workspace got the flat helpers but **none of the 30 `cmux_*`/`browser_*` wrappers**, breaking `load_feature cmux`/`core` (every cmux call dead). Changed to `cp -R "$SRC/functions/."`, verified by simulating the full copy (178/178 files, cmux/ included). Future backend subfolders (e.g. `tmux/`) now come along automatically.
+
+---
+
 ## [0.36.0] — 2026-05-25
 
 **cmux through wrappers — one micro-function per subcommand.** The kit no longer types raw `cmux …` anywhere in its prompts. Every cmux subcommand now has a one-line wrapper in `functions/cmux/`, and every role / command / rule / card calls the wrapper. This makes calls accurate and uniform, gives one place to fix when cmux's CLI shifts, and sets up a clean `functions/tmux/` for the fallback backend later. Built by dogfooding: 5 parallel cmux worker lanes did the rewire, then a cross-lane consistency pass (each lane fanning the diff-reads out to parallel Sonnet sub-agents).
