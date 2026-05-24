@@ -353,6 +353,36 @@ This is never a hard fail: a project without the keys simply runs the classic fl
 
 ---
 
+## Check 11 — modular structure lint (v0.35.0+, informational)
+
+The kit is now many small files (`rules/`, `functions/`, `roles/`, `reference/`). This lint keeps that structure from rotting as it grows: every function parses, every rule is registered, every internal link resolves.
+
+```bash
+SET="${CLAUDE_PLUGIN_ROOT:-$PWD}/.kingdom/.setting"; bad=0
+# (a) every function .sh is syntactically valid
+for f in "$SET"/functions/*.sh; do [ "$(basename "$f")" = "_load.sh" ] && continue; bash -n "$f" 2>/dev/null || { echo "  ✗ syntax: $(basename "$f")"; bad=1; }; done
+# (b) every rule file is listed in rules/index.md
+for r in "$SET"/rules/R*.md; do id=$(basename "$r" | grep -oE '^R[0-9]+'); grep -q "\b$id\b" "$SET/rules/index.md" || { echo "  ✗ $id missing from rules/index.md"; bad=1; }; done
+# (c) every local .md link under .setting resolves
+python3 - "$SET" <<'PY'
+import io,os,re,sys
+root=sys.argv[1]; lr=re.compile(r'\]\(([^)]+\.md)(#[^)]*)?\)')
+for b,_,fs in os.walk(root):
+  for f in fs:
+    if not f.endswith(".md"): continue
+    p=os.path.join(b,f); d=os.path.dirname(p)
+    for m in lr.finditer(io.open(p,encoding="utf-8").read()):
+      t=m.group(1)
+      if t.startswith("http"): continue
+      if not os.path.exists(os.path.normpath(os.path.join(d,t))): print(f"  ✗ broken link: {os.path.relpath(p,root)} -> {t}")
+PY
+[ "$bad" = 0 ] && echo "  ✓ structure lint clean" || echo "  ⚠ structure issues above (see lines)"
+```
+
+Informational (a consumer workspace may have customized files). Run it after a `/kingdom:init` re-sync or before shipping a plugin change so the modular tree can't silently break.
+
+---
+
 ## Final summary
 
 After all 9 checks (including any patch outcomes for Check 6 + import outcomes for Check 9), collect results. Use these result symbols:

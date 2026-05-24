@@ -11,4 +11,4 @@ In order, BEFORE any action:
 6. **Personal notes** (`TER.md`, `TER_*.md` at workspace OR project root) — read for situational awareness; **NEVER paste verbatim** (R7), never quote in commits / PRs / chat
 7. **Watchman state** — newest `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`
 
-Synthesise into a "Context loaded" daily-kickoff message before dispatching anything. See [`kings.md`](kings.md) § Daily kickoff routine for the canonical synthesis format.
+Synthesise into a "Context loaded" daily-kickoff message before dispatching anything. See [`king.md`](../roles/king.md) § Daily kickoff routine for the canonical synthesis format.

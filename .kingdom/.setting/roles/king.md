@@ -1,10 +1,10 @@
-# kings.md — King role
+# king.md — King role
 
 > Plural filename anticipates **multi-king mode** (multiple Kings per workspace, one per active project, coordinating across projects). For now there is exactly one King per kingdom — that's the only mode implemented.
 
 The King is the top-level orchestrator. Runs in the project's primary checkout on branch `kingdom`. Never edits files directly. Sole pusher.
 
-See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.md) for lane-master details, [`git.md`](git.md) for the branch model.
+See [`index.md`](../index.md) for the entry-point overview, [`worker.md`](worker.md) for lane-master details, [`git.md`](../reference/git.md) for the branch model.
 
 ---
 
@@ -28,7 +28,7 @@ See [`index.md`](index.md) for the entry-point overview, [`workers.md`](workers.
 
 The King updates its own cmux workspace description on every state transition so the sidebar reads at a glance:
 
-> Helper definition: see [`_primitives.md § cmux_set_state`](_primitives.md#cmux_set_state--update-workspace-description-live-status-line). King's usage patterns below.
+> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux_set_state.sh). King's usage patterns below.
 
 ```bash
 # Idle (default after spawn / resume)
@@ -66,7 +66,7 @@ cmux workspace-action --action mark-read --workspace "$KING_WS" 2>/dev/null
 sleep 300 && cmux_set_state "🐾" "Idle · $N_ACTIVE lanes active" &
 ```
 
-Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
+Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](../reference/cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
 
 ---
 
@@ -110,7 +110,7 @@ When the two halves of the philosophy conflict (e.g., "auto-load idle capacity" 
 
 ## Story-pod delegation + cross-story (v0.32.0+, R30/R46-R50)
 
-When `kingdom.json.integration.enabled` and `seniors > 0`, the King delegates per-story orchestration to **Seniors** (see [`seniors.md`](seniors.md), `commands/work.md` Step 3.5). The King's job shrinks to what only it can see (R50):
+When `kingdom.json.integration.enabled` and `seniors > 0`, the King delegates per-story orchestration to **Seniors** (see [`senior.md`](senior.md), `commands/work.md` Step 3.5). The King's job shrinks to what only it can see (R50):
 
 - **Partition + sequence:** scope stories so file-areas do not overlap; serialize stories that must touch the same area; sequence dependent stories. Allocate pods within `sanityCap` (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
 - **Delegate:** assign each story + its worker pod to a Senior, pass cross-cutting conventions, start its loop. The King does **not** dispatch the pod's sub-tasks (the Senior does, in-pod + visible, `guard_senior_dispatch_scope`).
@@ -260,252 +260,17 @@ After the user picks, the WINNER merges to kingdom + pushes; the LOSER's branch 
 
 ## Auto-gate on completion (King never sits on an un-gated sentinel)
 
-Every sentinel a lane writes is **King's cue to run the pre-commit gate immediately** — no waiting for the user to nudge. This applies both in-session (King dispatched a task, polls for sentinel, sentinel writes, King continues to gate) AND on session resume (King reads existing sentinels at startup and detects which haven't been gated yet).
+Every sentinel a lane writes is the King's cue to run the pre-commit gate immediately — no waiting for the user to nudge. Covers un-gated-sentinel detection, the auto-trigger rule, when it fires (resume / pre-interaction / post-dispatch / watchman-notify), and the gate-pass → kingdom-overlay handoff.
 
-### Detection — un-gated sentinel pattern
-
-A lane completion produces a sentinel at `<LOGS>/done/<ID>__<sub>-<lane>.flag`. The King's pre-commit gate, when it runs, produces a test report at `<project>/docs/test-reports/KING_<UTC>__<lane>__<sub-task-id>.md`.
-
-**Definition:** an **un-gated sentinel** is a flag at `<LOGS>/done/<ID>__*-<lane>.flag` with NO matching `KING_*__<lane>__<sub-task-id-from-flag>.md` test report.
-
-```bash
-# Find un-gated sentinels at session start (and pre-every-Ter-interaction)
-for FLAG in "$LOGS"/done/*.flag; do
-  [ -f "$FLAG" ] || continue
-  BASE=$(basename "$FLAG" .flag)
-  # Filename format: <ID>__<sub>-<lane>
-  ID="${BASE%%__*}"
-  LANE_PART="${BASE#*__}"          # e.g., sonnet-worker-2
-  LANE=$(echo "$LANE_PART" | sed 's/^[a-z]*-//')   # strip "sonnet-" → worker-2
-
-  # Already gated?
-  if ! ls "$PROJ/docs/test-reports/KING_"*"__${LANE}__${ID}.md" >/dev/null 2>&1; then
-    echo "UN_GATED: $LANE / $ID"
-  fi
-done
-```
-
-### The auto-trigger rule
-
-When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail.
-
-Then — per § "Kingdom as review staging — MANDATORY before any push" — gate-pass flows directly into kingdom merge:
-
-- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to the user). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux notify --workspace $KING_WS --title "👑 King · review on kingdom?" --subtitle "<lane> · <sub-task-id>"` and asks the user in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
-- **Gate FAIL** → King fires `cmux notify --workspace <lane-ws> --title "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
-
-Push only happens after the user explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
-
-This eliminates two failure modes:
-- "lane finished but King stayed idle" (v0.14.10 fix)
-- "King jumped from gate-pass to push without showing the user the integrated review surface" (v0.15.1 fix — real test caught this)
-
-### When this fires
-
-| Trigger | Action |
-|---|---|
-| **Session resume** (first message after `/kingdom:work`) | Sweep `<LOGS>/done/*.flag` → identify un-gated → auto-gate each |
-| **Pre-user-interaction** (before responding to any new chat message) | Same sweep — catches sentinels written while King was idle |
-| **Post-dispatch polling** (King dispatched a task and is polling for its sentinel) | Standard in-session flow — sentinel detected → continue to gate |
-| **Watchman notify** (cmux notify fires "lane done") | King reads the alert, looks up the lane's pending sentinel, auto-gates |
-
-### Daily kickoff additions (Step 0.5)
-
-The kickoff synthesis (after Context loaded + Watchman state) now includes a section if any un-gated sentinels exist:
-
-```text
-Un-gated work (auto-firing gates):
-   • worker-2 / FE-P0-FOUND.7  →  running gate now
-   • worker-1 / BE-AUTH-3      →  running gate now
-
-   (results will appear as test reports in docs/test-reports/ +
-    "push?" prompts in this chat as each gate completes)
-```
-
-King doesn't ask permission to run the gates — they're non-destructive. King DOES ask permission before each push.
-
-### Anti-patterns
-
-- ❌ King reports "worker-2 done" + lists state + stops. The sentinel sits un-gated; the user has to manually say "run the gate."
-- ❌ King runs the gate but waits for the user to ask. Same problem — the work is done; the next deterministic step is the gate.
-- ❌ King ignores sentinels older than ~24h thinking "the user probably handled it." If the user handled it, the test report exists and the un-gated detector skips it. If it doesn't exist, the work is genuinely un-gated and King runs it.
-- ❌ **King jumps from gate-pass directly to "push?" — skipping the kingdom merge + review surface step.** v0.15.1 makes the kingdom merge MANDATORY. See § "Kingdom as review staging".
-- ❌ King auto-pushes after the user approves review. Push approval is ALWAYS human-gated — auto-gate-and-merge stops at the review prompt, push happens only on explicit "push" word from the user.
+**Full state machine moved to [`king-auto-gate.md`](king-auto-gate.md)** (v0.35.0 modular reorg).
 
 ---
 
 ## Working WITH the Watchman (mandatory when one exists)
 
-The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for every develop tick + PR state change, maintains `watchman_state.json` with current PR snapshots + `blocked_lanes` map, and surfaces `WATCH_DOCS_AUDIT.md` gap findings. **The King must read these at every major decision point** — otherwise watchman is doing work nobody consumes.
+The Watchman is the King's eyes and ears — the King reads `WATCH_*.md`, `WATCH_DOCS_AUDIT.md`, and `watchman_state.json` at every major decision point, otherwise the watchman does work nobody consumes. Covers the mandatory-reads table, pre-dispatch checks, the daily-kickoff routine (Step −1 context load → Step 0 watchman state → synthesis), reading-pattern helpers, and the no-watchman fallback.
 
-### Mandatory reads (before every major King decision)
-
-| King action | Files to read first | Why |
-|---|---|---|
-| **First message after `/kingdom:work`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** + **`haiku_read_docs_orientation "king" "$PROJ" "$LOGS"`** (R45, v0.31.1+ — fans out up to 10 Haiku in parallel across the WHOLE project: Phase 1 scans every directory for `readme.md` / `index.md` / `todo*.md` wayfinding files (cap 30); Phase 2 reads the 20 newest `*.md` everywhere else, minus test-reports. Consolidated digest lands at `<LOGS>/.king_<UTC>_doc_context.md`) | Full context: workspace rules, project conventions, the user's preferences, watchman state, AND a fresh project-docs digest. Skipping any of these breaks trust within minutes. |
-| **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
-| **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell the user to wait until watchman reports green |
-| **Ask the user "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
-| **Answer "what's the state?"** | All of the above + `master_agent.log` tail | Comprehensive status, not just lane progress |
-| **Long idle / blocking poll** | `watchman_state.json` last-updated timestamp | If watchman has been silent >2× its expected tick, alert the user — watchman may have crashed |
-
-### Pre-dispatch checks (King-side, before sending a brief)
-
-Before `cmux send --workspace $WORKER_WS_N -- "<brief>"`:
-
-```bash
-source "$LOGS/workspace-refs.env"   # exposes KING_WS, WORKER_WS_N, etc.
-
-# 1. Is develop green?
-LATEST_DEV=$(ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1)
-if echo "$LATEST_DEV" | grep -q 'develop_RED'; then
-  echo "⛔ develop is RED per $(basename "$LATEST_DEV") — pause dispatch until watchman reports green"
-  return 1
-fi
-
-# 2. Is the target lane blocked?
-TARGET_VAR="WORKER_WS_${N}"
-BLOCKED=$(jq -r ".blocked_lanes[\"${TARGET_VAR}\"] // false" "$LOGS/watchman_state.json" 2>/dev/null)
-if [ "$BLOCKED" = "true" ]; then
-  echo "⛔ ${TARGET_VAR} is blocked (per watchman_state.json) — resolve before dispatching new work"
-  return 1
-fi
-
-# 3. PR queue clear? (informational, not blocking)
-READY=$(jq -r '[.pr_states[]? | select(.ready_to_merge==true)] | length' "$LOGS/watchman_state.json" 2>/dev/null || echo 0)
-if [ "$READY" -gt 0 ]; then
-  echo "ℹ️  PR queue has $READY ready-to-merge — consider clearing before piling on new work"
-  # Continue anyway — King decides
-fi
-
-# All checks pass → safe to dispatch
-```
-
-### Daily kickoff routine (King's first message of the day)
-
-> **R36 (Tier 1):** Workspace rename + lane spawn happen FIRST (work.md Step 0.4), before context load or processing. User must see immediate sidebar feedback before any of the steps below fire.
-
-On the first dispatch after `/kingdom:work`, the King runs **Session-start context load → Watchman state read → Synthesis** in that order. Context load comes FIRST because watchman state alone is missing the surrounding instructions the user has written.
-
-#### Step −1 — Session-start context load (mandatory)
-
-Before reading watchman state, King reads every authoritative context source:
-
-```bash
-WS="$PWD"   # workspace root (where the King was launched)
-
-# 1. Workspace-level CLAUDE.md — workspace rules, project map, cross-cutting conventions
-[ -f "$WS/CLAUDE.md" ] && Read "$WS/CLAUDE.md"
-
-# 2. Project-level CLAUDE.md — local stack, gate commands, project-specific rules
-[ -f "$WS/${PROJECT}/CLAUDE.md" ] && Read "$WS/${PROJECT}/CLAUDE.md"
-
-# 3. Auto-memory index — durable user preferences, feedback rules, project facts
-WS_KEY=$(echo "$WS" | sed 's|/|-|g; s|^-|-|')   # encode path the way Claude Code does
-MEM_DIR="$HOME/.claude/projects/${WS_KEY}/memory"
-[ -f "$MEM_DIR/MEMORY.md" ] && Read "$MEM_DIR/MEMORY.md"
-
-# 4. Skim flagged memory entries (feedback + project types — load on relevance)
-#    MEMORY.md is the index; specific entries are read JIT when the day's plan
-#    suggests they apply. King reads the index lines + the title/description of
-#    each entry to decide which are load-bearing today.
-
-# 5. Personal notes (if present + Ter has named them)
-#    Examples: TER.md, TER_WEEK.md, NOTES.md at workspace root or project root.
-#    King reads ONLY for situational awareness — NEVER paste verbatim, NEVER
-#    commit; summary into the kickoff synthesis if relevant.
-for NOTES in "$WS/TER.md" "$WS/${PROJECT}/TER.md" "$WS/NOTES.md"; do
-  [ -f "$NOTES" ] && Read "$NOTES"
-done
-```
-
-The King synthesises this into a brief "context loaded" line in the kickoff output so the user sees what got picked up:
-
-```
-👑 Context loaded:
-   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
-   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
-   • MEMORY.md             (42 entries — 18 feedback, 7 user, 14 project, 3 reference)
-   • Personal notes        (TER.md — read but never quoted)
-```
-
-This step is **non-negotiable**. Without it, the King may dispatch tasks against rules the user has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn the user's trust + cycles re-correcting.
-
-**R41 (Tier 1):** After loading context, King resolves its own process-skill set (`pick_skills_for_task` against `skill-routing.md`) before deciding today's plan — see work.md Step 0.3.5 for the full resolution procedure.
-
-#### Step 0 — Watchman state read
-
-Then the watchman state read happens (per § "Mandatory reads" above). The combined Step −1 + Step 0 output is the **single synthesis paragraph** the user sees:
-
-```text
-👑 Good morning.
-
-Context loaded:
-   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
-   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
-   • MEMORY.md             (42 entries; will load specific ones JIT)
-   • Personal notes        (TER.md — read but never quoted)
-
-Watchman state:
-   • develop:        green @ 2026-05-18T01:30Z (latest tick)
-   • PR queue:       2 open
-                       #234 — CI green, awaiting your review (idle 4h)
-                       #236 — CI failed × 3 retries (last 01:20Z)
-   • Lanes blocked:  none
-   • Gap findings:   1 Gap-A in WATCH_DOCS_AUDIT.md
-                       docs/STEP.md claims "Phase 2 done" — no log trace
-   • Last watchman tick:  2 min ago (healthy)
-
-Today's plan (king-plan task file: 2026-05-18T0900Z__king-plan__monday-kickoff.md):
-   1. Address Gap A — dispatch worker-3 to verify Phase 2 reality
-   2. Resume in-flight — worker-1 on BE-AUTH-3 (last at L3/4 73%)
-   3. Investigate #236 CI fail — possibly fix-task to worker who pushed it
-   4. Hold worker-2 idle — clear #234 first if you want
-
-Awaiting your go / overrides.
-```
-
-King writes this synthesis every morning, after every long break, and whenever the user says "what's the state?".
-
-**R33 (Tier 1):** Before deciding "Today's plan," King MUST scan `.kingdom/<project>/tasks/*.md` for in-flight task files (status `planning|executing|verifying` with no matching sentinel). Resume queue takes priority over fresh dispatch — the synthesis "Today's plan" section should open with resume candidates before new work. See work.md Step 0.6 for the full scan procedure.
-
-### Reading patterns (bash helpers)
-
-```bash
-# Latest watchman develop heartbeat (passing OR failing)
-ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1
-
-# All PR transitions logged today
-ls -1t "$PROJ/docs/test-reports/WATCH_"*pr-*.md 2>/dev/null \
-  | xargs -I{} grep -l "$(date -u +%Y-%m-%d)" {} 2>/dev/null
-
-# Current PR state snapshot
-jq '.pr_states' "$LOGS/watchman_state.json"
-
-# Blocked lanes (output of v0.14.6 blocked-lane scan)
-jq '.blocked_lanes' "$LOGS/watchman_state.json"
-
-# Gap findings
-[ -f "$LOGS/WATCH_DOCS_AUDIT.md" ] && cat "$LOGS/WATCH_DOCS_AUDIT.md"
-
-# Watchman alive check (last tick timestamp)
-jq -r '.last_smoke_ts' "$LOGS/watchman_state.json"
-```
-
-### What changes when there's NO watchman (shape: `watchman: 0`)
-
-If the kingdom was started with `watchman: 0` in `kingdom.json.shape`, the King skips all watchman reads — those checks become no-ops. King still does the rest (lane state from `master_agent.log`, gate runs, push approvals) but has no automated develop / PR / blocked-lane visibility. This is a valid choice for solo-fast-prototype work but loses the safety net. **Default kingdom shape includes 1 watchman for a reason.**
-
-### Anti-pattern: ignoring watchman alerts
-
-The King MUST NOT:
-
-- ❌ Dispatch new tasks while develop is RED without telling the user first
-- ❌ Skip reading `WATCH_DOCS_AUDIT.md` at session start (it has Gap A/B findings that should shape today's plan)
-- ❌ Treat blocked-lane alerts as "the lane will figure it out" — blocked lanes need human resolution or kingdom dispatch
-- ❌ Send a "push?" prompt without checking the PR's latest watchman alert first
-
-If watchman is sending alerts that the King keeps ignoring, the kingdom is worse than running solo. Watchman is the King's eyes — closed eyes are no eyes.
+**Full contract moved to [`king-watchman-integration.md`](king-watchman-integration.md)** (v0.35.0 modular reorg).
 
 ---
 
@@ -523,7 +288,7 @@ Example: `2026-05-17T0900Z__king-plan__pick-todays-3-tasks.md`
 
 The lane name slot is `king-plan` (constant). The slug is a short descriptor of the planning session — "pick-todays-3-tasks", "brief-co-worker-on-navbar", "audit-cross-lane-overlap-risk", etc.
 
-Same schema as a worker task file (see [`workers.md`](workers.md) → Task file template):
+Same schema as a worker task file (see [`worker.md`](worker.md) → Task file template):
 - Status checkboxes
 - Brief (1-2 lines — what the planning session is for)
 - **Step 0 — Watchman state read** (mandatory when a watchman exists) — pull latest `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md` + `watchman_state.json` BEFORE the Layer-1 fan-out. The synthesis goes in this step; it sets context that the planning sub-agents inherit. See [§ Working WITH the Watchman](#working-with-the-watchman-mandatory-when-one-exists).
@@ -580,7 +345,7 @@ graph TB
 
 Slugs for planning fan-out: `king-plan-survey`, `king-plan-files-be`, `king-plan-coworker-brief` (no `worker-N` prefix — these are King-level, not lane-internal).
 
-**Multi-layer planning depth:** The King's planning fan-out is typically shallow (1-2 layers) — it's coordinating across lanes, not doing deep code work. The recursive multi-layer planning pattern (3-4 layers, fan-out → synthesise → fan-out → synthesise) belongs to lane masters once they receive a task. See [`workers.md`](workers.md) → "Multi-layer planning."
+**Multi-layer planning depth:** The King's planning fan-out is typically shallow (1-2 layers) — it's coordinating across lanes, not doing deep code work. The recursive multi-layer planning pattern (3-4 layers, fan-out → synthesise → fan-out → synthesise) belongs to lane masters once they receive a task. See [`worker.md`](worker.md) → "Multi-layer planning."
 
 ---
 
@@ -604,7 +369,7 @@ worker-1, task <sub-task-id>:
                    Burden of proof: if "no pattern exists" — show me the grep
                    output that proves it.
   Gate:         runs kingdom.json.gate.* after completion (standard)
-  Closer:       4-step (raw + curated + log + sentinel flag) per workers.md
+  Closer:       4-step (raw + curated + log + sentinel flag) per worker.md
   Task file:    Step 0 — write <workspace>/.kingdom/<project>/tasks/<UTC>__worker-1__<id>.md before any sub-agent dispatch
   Spawn mode:   (optional) tab | background | split
                 Override for sub-agents spawned by this task. If omitted,
@@ -612,7 +377,7 @@ worker-1, task <sub-task-id>:
                 defaults (haiku → background, sonnet → background, opus → tab).
                 Add this line when Ter says "watch worker-1 do BE-AUTH-3"
                 (set to "tab") or "fast scan, don't bother showing me"
-                (set to "background"). See workers.md → "Per-task override".
+                (set to "background"). See worker.md → "Per-task override".
 ```
 
 **No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:
@@ -713,72 +478,15 @@ tmux select-layout -t "$SESSION:$WIN" main-vertical
 # cd into each pane's worktree — git worktree add already ran in Phase 4.
 ```
 
-See [`index.md`](index.md) → Session start for the detection logic that picks primary vs fallback.
+See [`index.md`](../index.md) → Session start for the detection logic that picks primary vs fallback.
 
 ---
 
 ## Dispatching a task to a lane
 
-### Primary (`cmux send --workspace` via cmux.app)
+How the King sends a task brief to a lane across all three host modes — `cmux send --workspace` (primary), `tmux send-keys -l` (fallback), `claude -p` (headless) — plus the R31+R36 `guard_lane_workspace_exists` gate and file-based completion polling. Same 4-step closer artifact protocol in all modes.
 
-In PRIMARY mode each master owns its own workspace (spawned in `commands/work.md` Step 0.4). Workspace refs are persisted at `$LOGS/workspace-refs.env` (sourced by King at session start):
-
-```bash
-source "$LOGS/workspace-refs.env"     # exposes KING_WS, WORKER_WS_1..N, COWORKER_WS_*, WATCHMAN_WS_*
-
-PROMPT="Claim sub-task <SUBTASK_ID> from <task-source>. Work it in this worktree.
-When you finish, run the 4-step closer (see workers.md):
-  1) raw     -> $LOGS/raw/<ID>__opus-worker-1.md
-  2) curated -> $LOGS/<ID>.md  (## TL;DR first)
-  3) one-line status -> $LOGS/master_agent.log
-  4) touch    $LOGS/done/<ID>__opus-worker-1.flag
-     ALSO run: cmux notify --workspace $KING_WS \\
-       --title '👑 ' --body 'lane worker-1 done: <ID>'
-Spawn sub-agents as visible tabs by default (R38 — all models default to tab).
-Use: cmux tab-action --action new-terminal-right --workspace $WORKER_WS_1
-Tab-spawned sub-agents follow the 5-step closer (Step 5 = close own tab via
-cmux tab-action --action close --surface \$CMUX_SURFACE_ID).
-Background Agent() spawns are opt-in only (set spawn_mode: background in brief)."
-
-# v0.31.0 R31+R36 hard gate: refuse to send brief if worker-1's cmux workspace
-# is missing from the sidebar. Without this guard, the brief was historically
-# routed into a void: dispatch returned success, no lane ever saw it, King
-# polled forever for a sentinel that never came. The 2026-05-20 morning session
-# burned ~3 hours on exactly this failure mode.
-guard_lane_workspace_exists "worker-1" || { echo "❌ worker-1 workspace missing — spawn first"; exit 1; }
-
-cmux send --workspace "$WORKER_WS_1" -- "$PROMPT"
-cmux send --workspace "$WORKER_WS_1" Enter
-```
-
-No `-l` flag, no Enter ceremony, no escaping fights. The workspace ref is stable across the session — King addresses lanes by `$WORKER_WS_N` not by pane title.
-
-### Fallback (`tmux send-keys -l` via raw tmux)
-
-```bash
-PANE=2                                                       # pane 1.2 = worker-1
-tmux send-keys -t "$SESSION:$WIN.$PANE" -l "$PROMPT"         # -l = literal
-tmux send-keys -t "$SESSION:$WIN.$PANE" Enter
-```
-
-### Headless (`claude -p`)
-
-Skip both multiplexers — useful for CI / unattended runs:
-
-```bash
-( cd "$PROJ/.worktrees/worker-1" && claude -p "$PROMPT" )    # blocks until lane completes
-```
-
-Same 4-step closer artifact protocol in all three modes.
-
-### Polling completion (file-based, all modes)
-
-```bash
-until [ -f "$LOGS/done/${ID}__opus-worker-1.flag" ]; do sleep 5; done
-tail -n 1 "$LOGS/master_agent.log"
-```
-
-See [`workers.md`](workers.md) → 4-step closer for the artifact format.
+**Full mechanics moved to [`king-dispatch.md`](king-dispatch.md)** (v0.35.0 modular reorg).
 
 ---
 
@@ -831,7 +539,7 @@ cmux notify --workspace "$KING_WS" \
   --body "All gates green. Reply 'push' in King chat to publish feature/<topic>."
 ```
 
-See [`cmux.md`](cmux.md) → § Notification system for `--surface` vs `--workspace` targeting (blue ring vs sidebar badge vs bell-panel entry).
+See [`cmux.md`](../reference/cmux.md) → § Notification system for `--surface` vs `--workspace` targeting (blue ring vs sidebar badge vs bell-panel entry).
 
 ---
 
@@ -880,7 +588,7 @@ When carving `feature/<topic>` for push, King auto-fills `gh pr create --body` f
 
 ### Body template
 
-> Helper definition: see [`_primitives.md § generate_pr_body_from_task_file`](_primitives.md#feature-carve--featuretopic-byte-for-byte-from-worker-n-v0163). The template is one place — edit it there.
+> Helper definition: see [`_primitives.md § generate_pr_body_from_task_file`](../functions/carve_and_push_feature.sh). The template is one place — edit it there.
 
 ### Fields auto-extracted
 
@@ -909,175 +617,9 @@ In that case, King skips the auto-generation and asks the user to paste a body b
 
 ## Kingdom as review staging — WORKING-TREE OVERLAY (never commit on kingdom)
 
-Push approval is NOT just "gate passed → ask the user push?". The kingdom is **a local working-tree overlay for human review** — the user MUST see the full code-surface of all in-flight lane changes as UNCOMMITTED files so GitHub Desktop's "Changes" tab (or any diff tool) shows everything line-by-line.
+The kingdom branch is a local working-tree overlay for human review — it never receives commits (R4). Each gate-pass resets it to `origin/$BASE`, overlays each gated lane's changes as UNCOMMITTED files, prints the review surface, runs Tier-2, then carves `feature/<topic>` byte-for-byte from the lane tip (R9) and discards the overlay after push. Covers the mandatory workflow, why-never-commit rationale, conflict patterns, A-vs-B extra-content rules, multi-lane overlay order, and anti-patterns.
 
-**v0.17.0+ rule: kingdom branch never receives commits.** It's a scratch surface that gets reset to `origin/develop` each review cycle, then has the worker-N CHANGES overlaid as uncommitted modifications. After review + push, the overlay is discarded.
-
-Review surface: **GitHub Desktop's "Changes" tab** (or `git diff` / VS Code source-control panel / lazygit) showing every file modified across all in-flight lanes as UNCOMMITTED changes. No commit history to navigate — files diffed line-by-line in one view.
-
-### Mandatory workflow
-
-After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
-
-1. **Reset kingdom to `origin/develop`** (clean slate — overlay starts fresh each review cycle):
-   ```bash
-   git checkout kingdom
-   git fetch origin
-   git reset --hard "origin/$BASE"
-   ```
-2. **Overlay each gated lane's changes onto kingdom's working tree** (no commits — just files modified):
-   ```bash
-   # For each gated lane:
-   git checkout "worker-N" -- .       # copy worker-N's tree into kingdom's working tree
-   # Or, if you want to preserve other lanes' changes already overlaid:
-   #   git diff "origin/$BASE..worker-N" | git apply -3
-   # (3-way merge; conflicts surface as unmerged paths Ter can resolve)
-   ```
-   Result: kingdom's working tree has all changes from all in-flight lanes, **UNCOMMITTED**. Conflicts (typically shared TODO/CHANGELOG files) appear as merge markers in the working tree — King hand-resolves by keeping all close-suffix headers.
-3. **Print the review surface** — file list + per-file diff stats from the working tree:
-   ```bash
-   git status --short                   # what's modified/added/deleted
-   git diff --stat                      # per-file line counts
-   git diff "origin/$BASE" --stat       # alternative — same view from develop's POV
-   ```
-4. **Run Tier-2 gate on the working tree** (tests/smoke/lint run against the overlaid state). Tests see all integrated changes even though nothing's committed on kingdom.
-5. **Ask the user to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
-6. **Wait for the user's approval**.
-7. **On approval — carve `feature/<topic>` from each lane's tip** (NOT from kingdom; the feature branch is the lane's commits, untouched). Push, open PR.
-8. **After push — discard the kingdom overlay**:
-   ```bash
-   git restore .                        # discard working-tree changes
-   # OR `git reset --hard origin/develop` if needed
-   ```
-   Kingdom is back to clean = `origin/develop`. Next gate-pass starts a fresh overlay.
-
-### Why never commit on kingdom?
-
-- **Review tool friendly.** GitHub Desktop's "Changes" tab, VS Code's source-control panel, lazygit, and `git diff` all default to showing uncommitted changes. Merge-commit-based integration hid changes inside commit history; uncommitted-overlay puts everything front and center.
-- **No history clutter.** Old approach left 5+ merge commits per review cycle on a branch you never push — pollution that complicated `git log` reads.
-- **Clean reset.** After push, `git restore .` drops everything; kingdom is pristine for the next cycle. No accumulating cruft.
-- **Tier-2 gate still works.** Tests run on the overlaid working tree. Same coverage as before.
-- **Conflict handling stays the same.** Working-tree conflict markers surface during `git apply -3` or `git checkout worker-N -- file`; King hand-resolves in the working tree (typically by keeping all close-suffix headers in TODO files).
-
-### Why carve from lane tip, not from kingdom?
-
-Each PR should be one purpose, one commit, traceable to a single lane. Carving from `kingdom` would mix lanes (kingdom contains develop + lane-1 + lane-2 + lane-3 integrated). Carving from `worker-N` keeps the PR a clean one-commit feature branch matching exactly what that lane produced.
-
-### STRICT: `feature/<topic>` = `worker-N` tip, byte-for-byte identical
-
-The carved `feature/<topic>` branch is a **fast-forward checkout** from `worker-N`'s tip. **The King MUST NOT add commits on the feature branch.** Whatever is on `worker-N` at the moment of carve IS what gets pushed — no additions, no rewrites, no post-hoc edits.
-
-This guarantees `kingdom` = source of truth for what's about to ship. After the user reviews on kingdom, the carved `feature/<topic>` branches contain EXACTLY the commits visible on kingdom from each lane. No surprises in the PR.
-
-```bash
-# Correct carve (single fast-forward; no new commits)
-git checkout -b "feature/<topic>" "worker-N"
-git push -u origin "feature/<topic>"
-gh pr create --base develop --head "feature/<topic>" --title "..." --body "..."
-
-# WRONG — adds a commit AFTER carving:
-git checkout -b "feature/<topic>" "worker-N"
-cp docs/test-reports/SMOKE_*.md .                 # ❌ post-carve edit
-git add docs/test-reports/
-git commit -m "add smoke report"                  # ❌ feature/* now diverges from worker-N
-git push -u origin "feature/<topic>"
-# → kingdom no longer reflects what's pushing; Ter's review is incomplete
-```
-
-### What to do when you want extra content in the PR
-
-If you want something in a PR that isn't yet on the worker's branch (e.g., a smoke test report from Tier-2 gate, an updated changelog entry, a doc reference to the new feature):
-
-**Option A — bundle into the worker's commit (preferred).** The lane writes the extra content as part of its closer. The worker's commit contains code + report + doc updates together. Single commit, single PR purpose. Clean.
-
-**Option B — separate PR.** Create a fresh `feature/<topic>-followup` branch from `origin/develop`, add the extra content as its own commit, push as its own PR. This is the right call when the extra content is genuinely independent (e.g., a smoke report covering 3 different PRs belongs in its own `docs(test-reports)` PR, not bundled with one of the feature PRs).
-
-**Anti-pattern: adding commits to `feature/<topic>` after carving.** This diverges from `worker-N` tip + invalidates kingdom's review surface. **Don't.**
-
-### How King decides between A and B
-
-| Scenario | Choice |
-|---|---|
-| Test report covers ONE PR's work specifically | A — worker commits it |
-| Test report covers MULTIPLE PRs (smoke across feature-7/8/9) | B — separate PR |
-| Doc update is about THIS PR's new feature | A — worker commits it |
-| Changelog entry mentions THIS PR | A — worker commits it |
-| Cross-cutting infrastructure change (e.g., `.gitignore` for kingdom worktrees) | B — separate PR (different concern entirely) |
-
-When uncertain, default to B — separate PRs are easier to review + revert than mixed-concern PRs.
-
-```text
-origin/develop:    A --- B --- C
-                              \
-worker-1:                      D (one commit, gated, merged to kingdom)
-                              \
-worker-2:                      E (one commit, gated, merged to kingdom)
-
-kingdom (local):   A --- B --- C --- M1 --- M2 (merge commits for review)
-                                  \   \
-                                   D   E (still visible in kingdom)
-
-# After Ter reviews on kingdom and approves:
-feature/topic-1:   A --- B --- C --- D   ← push this (1 commit from worker-1 tip)
-feature/topic-2:   A --- B --- C --- E   ← push this (1 commit from worker-2 tip)
-```
-
-### Multiple in-flight lanes — overlay order (v0.17.0+)
-
-When ≥2 lanes are gated and ready for review at the same time, overlay them in completion order (oldest sentinel first). The kingdom branch starts at `origin/develop`, gets each lane's changes applied to its working tree:
-
-```bash
-# Reset kingdom to origin/develop tip first (clean slate)
-git checkout kingdom
-git fetch origin
-git reset --hard "origin/$BASE"
-
-# Overlay each gated lane's CHANGES onto the working tree (no commits).
-#
-# v0.31.0: route through kingdom_overlay_lane helper (in _primitives.md).
-# The helper enforces R4 at call-site: refuses to apply if kingdom branch
-# isn't checked out, or if kingdom HEAD ≠ origin/$BASE (which would mean
-# a rogue commit landed on kingdom — common 2026-05-20 failure mode where
-# the King FF-merged a feature branch onto kingdom).
-for LANE in $(ls -t "$LOGS/done/"*.flag | xargs -I{} basename {} | sed 's/^.*__\([^.]*\).flag/\1/' | sort -u); do
-  echo "▶ Overlaying $LANE..."
-  if ! kingdom_overlay_lane "$PWD" "$LANE" "$BASE"; then
-    echo "⚠️ Conflict overlaying $LANE — resolve in working tree"
-    echo "   Common cases:"
-    echo "     - TODO_*.md  → keep all close-suffix headers from each lane"
-    echo "     - CHANGELOG.md → keep both entries; order by sub-task ID"
-    echo "     - docs/test-reports/ → all keep (different filenames)"
-    echo "   After resolving, continue to next lane manually."
-  fi
-done
-
-# Show the review surface (working tree, not commit history)
-echo ""
-echo "📋 Review surface — all changes UNCOMMITTED on kingdom:"
-git status --short
-echo ""
-git diff "origin/$BASE" --stat
-```
-
-### Common conflict patterns + canonical resolutions
-
-| Conflict on | Cause | Resolution |
-|---|---|---|
-| `TODO_*.md` (or similar task-status file) | Each lane added its own close-suffix header (e.g., `### FE-P0-FOUND.7 ✅ closed 2026-05-18`) | Keep ALL the close-suffix headers — they coexist; not a real conflict |
-| `CHANGELOG.md` | Multiple lanes appending to the same `## [Unreleased]` section | Keep both entries; order by sub-task ID |
-| `docs/test-reports/` | Multiple lanes wrote `KING_*` reports for different sub-tasks | All keep — different filenames, no real conflict |
-| Same source file edited by 2 lanes | Genuine collision — King should have caught this in pre-commit cross-lane overlap | Stop. Surface to the user. Ask which approach wins. |
-
-### Anti-patterns
-
-- ❌ King asks "push?" immediately after gate pass, skipping kingdom overlay + review
-- ❌ **King commits on kingdom branch** (v0.17.0+ rule: kingdom never receives commits — overlay only)
-- ❌ **King creates merge commits on kingdom** (`git merge --no-ff worker-N` on kingdom). Use `git diff worker-N | git apply` or `git checkout worker-N -- <files>` instead — changes overlay in working tree.
-- ❌ King carves `feature/*` from kingdom (mixes lanes; each PR loses one-purpose property)
-- ❌ King pushes without showing the user the review surface (`git status` + `git diff --stat`)
-- ❌ King auto-resolves a genuine source-file collision instead of surfacing it
-- ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
-- ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above.
+**Full protocol moved to [`king-overlay-review.md`](king-overlay-review.md)** (v0.35.0 modular reorg).
 
 ---
 
@@ -1184,7 +726,7 @@ When in doubt, prefer `tail master_agent.log` first — most decisions can be ma
 
 ## Reviewing watchman audit findings
 
-Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, missing log lines, dead `[[name]]` links). High-risk findings are flagged to `<LOGS>/WATCH_DOCS_AUDIT.md` for King review. See [`watchmans.md`](watchmans.md) → "Docs audit duty".
+Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, missing log lines, dead `[[name]]` links). High-risk findings are flagged to `<LOGS>/WATCH_DOCS_AUDIT.md` for King review. See [`watchman.md`](watchman.md) → "Docs audit duty".
 
 ### When to read it
 

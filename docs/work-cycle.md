@@ -27,7 +27,7 @@ Detail on shape choices: [`configuration.md`](configuration.md).
 /kingdom:work my-app lane=8 pod-limit=3     # King composes 8 lanes; stop after 3 pods (stories)
 ```
 
-Monday morning. One command. Kingdom runs an audit (refresh project state), spawns the lanes (idempotent, resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per [rules.md R1](../.kingdom/.setting/rules.md#r1-push-approval-is-single-shot--pr-specific)).
+Monday morning. One command. Kingdom runs an audit (refresh project state), spawns the lanes (idempotent, resumes if already running), prints a kickoff brief with your local date+time and a Suggested next task synthesised from in-flight work + open PRs + the project task-ledger, then enters the auto-gate-poll loop. King only stops to ask for **review approval** (Tier-2 passed, please check the live diff) and **push approval** (per PR, single-shot per [rules.md R1](../.kingdom/.setting/rules/R01-push-approval-is-single-shot.md)).
 
 Tuesday morning. Same command. The audit re-runs (cheap, parallel fan-out). The kickoff brief reflects yesterday's progress against your limits. Nothing to remember.
 
@@ -37,7 +37,7 @@ That's the whole routine. **It replaces the daily overhead of "what was I doing"
 
 ## Skill-aware execution (R41, v0.29.3+)
 
-Before dispatch, King + lanes resolve a skill set via `pick_skills_for_task` against [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md). Domain-routed: Next.js work invokes `nextjs-best-practices`, Prisma work invokes `prisma-cli`/`prisma-client-api`/etc, Supabase work invokes `supabase:supabase`. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) invoke directly when relevant. Per [R41](../.kingdom/.setting/rules.md#r41-auto-discover-and-use-the-right-skill-before-any-work-tier-1-v0293).
+Before dispatch, King + lanes resolve a skill set via `pick_skills_for_task` against [`.kingdom/.setting/reference/skill-routing.md`](../.kingdom/.setting/reference/skill-routing.md). Domain-routed: Next.js work invokes `nextjs-best-practices`, Prisma work invokes `prisma-cli`/`prisma-client-api`/etc, Supabase work invokes `supabase:supabase`. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) invoke directly when relevant. Per [R41](../.kingdom/.setting/rules/R41-auto-discover-and-use.md).
 
 ## `pr-limit` and `pod-limit` (v0.33.0)
 
@@ -94,6 +94,53 @@ Two layers, different routines:
 | `.claude/settings.json` permissions | ✅ untouched |
 
 If a release changes the `kingdom.json` schema (e.g., v0.5.0 dropped `focus`+`ownsPaths`), the [CHANGELOG entry](../CHANGELOG.md) for that version tells you what to edit. Schema migrations are manual edits right now; a future `/kingdom:migrate` command may automate this.
+
+## Reference (relocated from `commands/work.md`)
+
+These explanatory sections used to live inline in [`commands/work.md`](../commands/work.md) between its executable bash steps. They are reference material, not executable steps, so they live here; `work.md` keeps a one-line pointer at each original site.
+
+### The counting unit (work.md Step 0.3)
+
+**1 task = 1 task file (`.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md`) = 1 sentinel (`<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag`) ≈ 1 PR (`feature/<topic>`).**
+
+The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merges.
+
+| Unit | Counted? |
+|---|---|
+| **Task file** + sentinel (solo worker) | Yes — THE unit |
+| **Story pod** (v0.32.0: a Senior + workers → one `story/<id>` PR) | Yes — the whole pod counts as **1** (it ships one PR) |
+| **TODO Story / heading** (e.g. `FE-P0-FOUND.7`) | Yes — usually 1:1 with a task file or one pod |
+| **Sub-task / AC bullet** (one `- [x]` under a Story, or one worker's slice of a pod) | **No** — flips inside one task file / pod |
+| **PR** (`feature/<topic>` or `story/<id>`) | Yes — usually 1:1; a follow-up cleanup PR adds 1 |
+| **Milestone** (`M01-M20`) | No — spans many tasks |
+
+So the two limits count **things that become a PR**, not the sub-tasks inside them and not milestones:
+
+- `pr-limit=N` counts **PRs opened** (a solo task or a whole story pod each open one PR; a follow-up cleanup PR adds 1).
+- `pod-limit=N` counts **pods** (units of work: one story / task / milestone / issue = 1, regardless of how many workers or sub-tasks it contains).
+
+A 3-worker pod that ships one story PR counts as **1** toward both `pr-limit` and `pod-limit`, never 3. The two are independent ceilings; dispatch stops when either is reached. (See also the [`pr-limit` and `pod-limit`](#pr-limit-and-pod-limit-v0330) section above for the param-level summary.)
+
+### Cards fired later in the cycle (work.md Step 3)
+
+Step 3 prints the 4-card kickoff brief (`welcome`, `daily-status`, `suggested-task`, `dispatch-plan`). Other cards fire later in the cycle, at the points noted:
+
+- `cards/task-complete.md` — Tier-2 gate pass (~20 random congratulatory lines)
+- `cards/push-prompt.md` — Tier-2 passed, awaiting "push" word (R1 approval)
+- `cards/gate-fail.md` — Tier-1 or Tier-2 fail
+- `cards/limit-reached.md` — `pr-limit=N` or `pod-limit=N` hit
+- `cards/end-of-day.md` — day stops (exit / cap reached / all idle)
+- `cards/pr-merged.md` — PR flips MERGED (triggers R26 resync)
+- `cards/conflict-detected.md` — `git merge-tree` finds drift at push time
+- `cards/resume-queue.md` — in-flight tasks from prior session
+
+### Anti-patterns (work.md Steps 1 and 4)
+
+These are violation shapes the King must NOT produce. They are documented here; the enforcing rules live in [`rules.md`](../.kingdom/.setting/rules.md).
+
+- **Banned (R38 violation), Step 1 audit:** `Agent(subagent_type="general-purpose", prompt="audit specialist...")` in-process inside King. That hides the work behind the "1 local agent · ctrl+t to hide tasks" indicator. Always dispatch to a lane (`cmux send`) or spawn a visible tab (`cmux tab-action`).
+- **Anti-pattern (R30 violation), Step 4 dispatch:** drafting "Worker-N plan (final)" multi-batch tables in CHAT before dispatching. That table belongs in the lane's task file as `## Plan` (Layer-2 Strategy), written BY the lane AFTER it receives the brief.
+- **Anti-pattern (R32 violation), Step 4 dispatch:** printing `worker-1 staged · awaiting your dictation`. Workers don't wait. If worker-1 has no claimable task, mark it `idle (no claimable task)` and continue to the next lane.
 
 ## See also
 

@@ -1,7 +1,7 @@
 # gate-fail
 
 **Fires when:** Tier-1 or Tier-2 gate fails on a lane.
-**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5; [`kings.md`](../kings.md) gate flow.
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5; [`king.md`](../roles/king.md) gate flow.
 
 ## Template
 

@@ -4,7 +4,7 @@ At the START of any task — King's daily ritual kickoff AND every lane's task r
 
 **Resolution order:**
 
-1. **Fast path: routing table.** Run `pick_skills_for_task` against [`skill-routing.md`](skill-routing.md). If it returns 1-3 matches, use them.
+1. **Fast path: routing table.** Run `pick_skills_for_task` against [`skill-routing.md`](../reference/skill-routing.md). If it returns 1-3 matches, use them.
 2. **Fallback: system-reminder skill list.** If routing table returns 0 matches, list the skills surfaced in the current session's system reminders (or `Skill` tool catalog), match by description-keyword similarity to the task domain, pick best fit.
 3. **No-skill is valid.** If neither path produces a confident match, skip — don't invoke a vaguely-related skill just to invoke something. False-positive loads pollute context.
 

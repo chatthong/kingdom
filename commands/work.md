@@ -124,25 +124,7 @@ If the parse is ambiguous (malformed value), print the issue and stop.
 
 ### Step 0.3 — The counting unit
 
-**1 task = 1 task file (`.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md`) = 1 sentinel (`<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag`) ≈ 1 PR (`feature/<topic>`).**
-
-The kingdom counts **sentinel fires** (Step 4 of the 4-step closer), not PR merges.
-
-| Unit | Counted? |
-|---|---|
-| **Task file** + sentinel (solo worker) | Yes — THE unit |
-| **Story pod** (v0.32.0: a Senior + workers → one `story/<id>` PR) | Yes — the whole pod counts as **1** (it ships one PR) |
-| **TODO Story / heading** (e.g. `FE-P0-FOUND.7`) | Yes — usually 1:1 with a task file or one pod |
-| **Sub-task / AC bullet** (one `- [x]` under a Story, or one worker's slice of a pod) | **No** — flips inside one task file / pod |
-| **PR** (`feature/<topic>` or `story/<id>`) | Yes — usually 1:1; a follow-up cleanup PR adds 1 |
-| **Milestone** (`M01-M20`) | No — spans many tasks |
-
-So the two limits count **things that become a PR**, not the sub-tasks inside them and not milestones:
-
-- `pr-limit=N` counts **PRs opened** (a solo task or a whole story pod each open one PR; a follow-up cleanup PR adds 1).
-- `pod-limit=N` counts **pods** (units of work: one story / task / milestone / issue = 1, regardless of how many workers or sub-tasks it contains).
-
-A 3-worker pod that ships one story PR counts as **1** toward both `pr-limit` and `pod-limit`, never 3. The two are independent ceilings; dispatch stops when either is reached.
+Reference (table + rationale: what counts toward `pr-limit` / `pod-limit`): [`docs/work-cycle.md` § The counting unit](../docs/work-cycle.md#the-counting-unit-workmd-step-03). In short: the kingdom counts **sentinel fires** (≈ PRs), not sub-tasks or milestones; a story pod counts as **1**.
 
 ### Step 0.3.5 — Skill check (R41 · MANDATORY)
 
@@ -394,7 +376,7 @@ done
 poll_for_sentinels "audit-*" 180   # 3-min timeout total
 ```
 
-**Banned (R38 violation):** `Agent(subagent_type="general-purpose", prompt="audit specialist...")` in-process inside King. That hides the work behind the "1 local agent · ctrl+t to hide tasks" indicator. Always dispatch to a lane or spawn a visible tab.
+**Banned (R38 violation):** no in-process `Agent()` audit specialists inside King — always dispatch to a lane or spawn a visible tab. Rationale + the other cycle anti-patterns: [`docs/work-cycle.md` § Anti-patterns](../docs/work-cycle.md#anti-patterns-workmd-steps-1-and-4).
 
 ## Step 3 — Daily kickoff (4-card brief)
 
@@ -440,16 +422,7 @@ Cards used in Step 3:
 
 King picks 1-3 candidates and presents them as a numbered choice; the user can pick one or say "go" to accept the first.
 
-Other cards fired later in the cycle:
-
-- `cards/task-complete.md` — Tier-2 gate pass (~20 random congratulatory lines)
-- `cards/push-prompt.md` — Tier-2 passed, awaiting "push" word (R1 approval)
-- `cards/gate-fail.md` — Tier-1 or Tier-2 fail
-- `cards/limit-reached.md` — `pr-limit=N` or `pod-limit=N` hit
-- `cards/end-of-day.md` — day stops (exit / cap reached / all idle)
-- `cards/pr-merged.md` — PR flips MERGED (triggers R26 resync)
-- `cards/conflict-detected.md` — `git merge-tree` finds drift at push time
-- `cards/resume-queue.md` — in-flight tasks from prior session
+Cards that fire later in the cycle (task-complete, push-prompt, gate-fail, limit-reached, end-of-day, pr-merged, conflict-detected, resume-queue) and the points they fire at: [`docs/work-cycle.md` § Cards fired later in the cycle](../docs/work-cycle.md#cards-fired-later-in-the-cycle-workmd-step-3).
 
 ## Step 3.5 — Story-pod assignment (R46/R50, when `integration.enabled` and `seniors > 0`)
 
@@ -480,7 +453,7 @@ if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
     SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" | cut -d= -f2)
     guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
     cmux send --workspace "$SENIOR_WS" -- \
-      "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read seniors.md and run the story lifecycle. Mark push-eligible when clean; never push."
+      "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push."
     spawn_senior_loop "$SENIOR_WS" "$STORY_ID"
     echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
   done
@@ -563,9 +536,7 @@ done
 
 Workers begin work in parallel (per R28 parallel-by-default).
 
-**Anti-pattern (R30 violation):** drafting "Worker-N plan (final)" multi-batch tables in CHAT before dispatching. That table belongs in the lane's task file as `## Plan` (Layer-2 Strategy), written BY the lane AFTER it receives the brief.
-
-**Anti-pattern (R32 violation):** printing `worker-1 staged · awaiting your dictation`. Workers don't wait. If worker-1 has no claimable task, mark it `idle (no claimable task)` and continue to the next lane.
+**Anti-patterns (R30, R32):** no multi-batch plan tables in chat before dispatching; no `staged · awaiting your dictation` (workers don't wait — mark idle lanes `idle (no claimable task)` and continue). Detail: [`docs/work-cycle.md` § Anti-patterns](../docs/work-cycle.md#anti-patterns-workmd-steps-1-and-4).
 
 ## Step 5 — Auto-gate-poll loop (the perpetual part)
 

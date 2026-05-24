@@ -50,7 +50,7 @@ The 6 kingdom guardrails (from `PLAN.md`) all hold:
 
 ### Senior-N (new, Opus)
 
-- Role doc: `.kingdom/.setting/seniors.md`.
+- Role doc: `.kingdom/.setting/roles/senior.md`.
 - A per-story sub-orchestrator and the **sole reviewer of its story's internals**.
 - Gets its own cmux workspace (color: Teal) and a worktree at `.worktrees/senior-N/` checked out on its current `story/<id>`.
 - Runs a `/loop` scoped to its story (like the watchman, but Opus and story-scoped).
@@ -154,7 +154,7 @@ No path-locks (kingdom keeps workers as generic capacity). Three points of defen
 
 | File | Purpose |
 |---|---|
-| `.kingdom/.setting/seniors.md` | Senior role spec: pod ownership, story-branch create + merge-in, review loop, in-pod dispatch, conflict resolution, gate authority, `SENIOR_*` closer/sentinel conventions |
+| `.kingdom/.setting/roles/senior.md` | Senior role spec: pod ownership, story-branch create + merge-in, review loop, in-pod dispatch, conflict resolution, gate authority, `SENIOR_*` closer/sentinel conventions |
 | `docs/story-pods.md` | Long-form doc: the pod model, three-tier gate, branch lifecycle, pod-vs-solo guidance |
 | `.kingdom/.setting/cards/senior-verdict.md` | Card for the Senior review result (clean / fixes-routed, loop iteration) |
 | `.kingdom/.setting/cards/story-assembled.md` | Card for "all sub-tasks merged + Tier-2 result" |
@@ -165,19 +165,19 @@ No path-locks (kingdom keeps workers as generic capacity). Three points of defen
 |---|---|
 | `rules.md` | Add R46 (story integration branch), R47 (three-tier gate), R48 (Senior sole within-story reviewer; King never re-reviews), R49 (Senior owns within-story conflict resolution), R50 (King owns cross-story: partition, sequence, resolve-at-push). **Amend R30** (delegated dispatch). Refresh the Tier-1 cap legend (count stays 10) |
 | `_primitives.md` | New helpers: `create_story_branch`, `spawn_senior_workspace`, `spawn_senior_loop`, `senior_merge_worker_into_story`, `run_tier2_on_story`, `senior_review_tick`, `guard_senior_dispatch_scope`, `watchman_cross_story_scan` |
-| `kings.md` | King assigns stories to Seniors, partitions/sequences, resolves cross-story drift, owns the story-PR push; stops directly orchestrating story workers |
-| `workers.md` | Workers can belong to a pod: receive sub-tasks + fix-tasks from a Senior, signal done (Senior merges), no longer always report to King |
-| `watchmans.md` | New duty: per-tick cross-story `git merge-tree` scan. Clarify watchman (per-lane mechanical) vs Senior (story review) boundary |
+| `king.md` | King assigns stories to Seniors, partitions/sequences, resolves cross-story drift, owns the story-PR push; stops directly orchestrating story workers |
+| `worker.md` | Workers can belong to a pod: receive sub-tasks + fix-tasks from a Senior, signal done (Senior merges), no longer always report to King |
+| `watchman.md` | New duty: per-tick cross-story `git merge-tree` scan. Clarify watchman (per-lane mechanical) vs Senior (story review) boundary |
 | `git.md` | Document `story/<id>` in the branch model |
 | `cmux.md` | Senior workspace color + story worktree layout |
-| `index.md` | Add `seniors.md` to the role router |
+| `index.md` | Add `senior.md` to the role router |
 
 ### Edited files: commands
 
 | File | Change |
 |---|---|
 | `commands/work.md` | Spawn Seniors in Step 0.4; resolve stories from the task-ledger unit; assign stories to Seniors + create story branches; Senior-driven pod dispatch; three-tier gate poll loop; push story PRs |
-| `commands/init.md` | Add `seniors.md` to the `.setting` copy list; scaffold the `seniors` / `integration` blocks; senior color |
+| `commands/init.md` | Add `senior.md` to the `.setting` copy list; scaffold the `seniors` / `integration` blocks; senior color |
 | `commands/save.md` | Snapshot Senior pods + story-branch state to `state.json`; close senior workspaces |
 | `commands/self-care.md` | Check senior / integration config presence |
 
@@ -220,7 +220,7 @@ No path-locks (kingdom keeps workers as generic capacity). Three points of defen
 The plugin ships specs, not runtime code, so verification is behavioral plus consistency:
 
 1. **`/kingdom:self-care`** passes with the new `seniors` / `integration` config keys.
-2. **`/kingdom:init`** scaffolds the new `kingdom.json` blocks and copies `seniors.md`.
+2. **`/kingdom:init`** scaffolds the new `kingdom.json` blocks and copies `senior.md`.
 3. **Consumer dry-run:** `/kingdom:work` on a test project with `seniors=1` and a story carrying 2 sub-tasks. Verify, in order: story branch created off develop; Senior dispatches 2 workers in visible workspaces; worker branches merge into the story branch; Tier-2 runs on the story branch; the Senior review loop runs and routes at least one fix; push-eligible sentinel + `SENIOR_*` report written; King offers the push; PR `story/<id> -> develop` opens on the human's "push".
 4. **Negative checks:** `guard_senior_dispatch_scope` refuses a Senior dispatch to a non-pod worker and to a worker without a live workspace.
 5. **Rule consistency:** Tier-1 cap legend still lists exactly 10; all cross-references to R30 updated.

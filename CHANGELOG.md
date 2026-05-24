@@ -4,6 +4,25 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.35.0] — 2026-05-24
+
+**Modular architecture — the big upgrade.** Completes the reorg begun in v0.34.0: every part of the kit is now a small, single-purpose file in a clearly-named folder, features are declared bundles that plug in/out, the two oversized role docs are slimmed, and a structure-lint keeps it honest. Behavior is unchanged; this is organization. Built largely in parallel (4 workers + a serial rewire stage).
+
+### Added
+
+- **Composability — `manifest.json` + `load_feature` (phase 3).** Each feature (`core`/`senior`/`watchman`) is a manifest entry listing its `rules`, `functions`, `deps`, and the `kingdom.json` config flag that activates it (core=33 funcs, senior=7, watchman=2). `functions/_load.sh` gains `load_feature <name>`, which sources a feature + its deps in one call (`load_feature senior` → 7 senior helpers + `core`). Turning a feature off = don't `load_feature` it; zero edits to core.
+- **`roles/` and `reference/` folders (phase 2).** Role docs moved + renamed to `roles/king.md`, `roles/worker.md`, `roles/co-worker.md`, `roles/watchman.md`, `roles/senior.md`; cross-cutting guides to `reference/cmux.md`, `reference/git.md`, `reference/skill-routing.md`. Every cross-reference across ~40 files rewired to correct relative paths (verified: 0 broken links repo-wide).
+- **Structure-lint in `/kingdom:self-care` (Check 11, phase 5).** Verifies every `functions/*.sh` parses, every rule is registered in `rules/index.md`, and every internal `.md` link resolves. Keeps the small-file structure from rotting as it grows.
+
+### Changed
+
+- **Slimmed the oversized role docs (phase 4).** `roles/king.md` 1,328 → ~870 (extracted dispatch / gate / overlay / watchman-contract into `roles/king-*.md`); `roles/watchman.md` 1,037 → ~600 (duties extracted to `roles/watchman-*.md`); `commands/work.md` moved its non-executable prose/reference tables out to `docs/work-cycle.md`, keeping the bash steps.
+- **De-duplicated shared mechanics.** The 4-step closer + forbidden-ops list (canonical in `roles/worker.md`) and the P1/P2/P3 model chain (canonical in `index.md`) are now stated once; `roles/co-worker.md` links to them instead of restating.
+
+### Notes
+
+- `rules.md` and `_primitives.md` remain thin pointers (deep `R##` anchor links into the old monoliths are the one cosmetic follow-up left).
+
 ## [0.34.0] — 2026-05-24
 
 Modular reorganization (phase 1): the two monoliths become many small files, so each file stays short and a run loads only what it calls.
@@ -34,7 +53,7 @@ Command-surface cleanup for consistency and simplicity. **Breaking** for the `/k
 ### Added
 
 - **`lane=N` total-lane budget** (from v0.32.0, now first-class): the King auto-composes worker/co-worker/watchman/senior to fill N, honoring any per-role pin. `lane=8 watchman=1` pins 1 watchman and fills 7; `lane=12 senior=2` makes 2 story pods plus workers.
-- **Pods persist `logs/` + `tasks/` like every lane.** `seniors.md` now documents the full artifact set a pod writes: the Senior's story task file in `tasks/`, each worker's sub-task file in `tasks/`, and the Senior's 4-step closer (raw → curated → `master_agent.log` → sentinel) in `logs/`, plus the `SENIOR_*` review report. Nothing about a pod skips the audit trail.
+- **Pods persist `logs/` + `tasks/` like every lane.** `senior.md` now documents the full artifact set a pod writes: the Senior's story task file in `tasks/`, each worker's sub-task file in `tasks/`, and the Senior's 4-step closer (raw → curated → `master_agent.log` → sentinel) in `logs/`, plus the `SENIOR_*` review report. Nothing about a pod skips the audit trail.
 
 ### Migration
 
@@ -46,7 +65,7 @@ Story pods. A new **Senior** role (🎓 Opus) plus a **story integration branch*
 
 ### Added
 
-- **`Senior-N` role (`.kingdom/.setting/seniors.md`).** Opus per-story sub-orchestrator and sole within-story reviewer. It owns a worker pod, merges their branches into a local `story/<id>` branch, runs an autonomous review loop (route fixes back to the owning worker, re-review, capped at `integration.reviewLoopCap`), then marks the story push-eligible and hands it to the King. Never pushes, never writes feature code. New cmux color (Teal) and emoji (🎓).
+- **`Senior-N` role (`.kingdom/.setting/roles/senior.md`).** Opus per-story sub-orchestrator and sole within-story reviewer. It owns a worker pod, merges their branches into a local `story/<id>` branch, runs an autonomous review loop (route fixes back to the owning worker, re-review, capped at `integration.reviewLoopCap`), then marks the story push-eligible and hands it to the King. Never pushes, never writes feature code. New cmux color (Teal) and emoji (🎓).
 - **Story integration branch (R46).** A local branch (default `story/<id>`, configurable via `kingdom.json.integration`) with real merge commits, living in the Senior's worktree, branched off `develop`. Only the final `story/<id> -> develop` PR reaches origin. The solo `worker -> feature/<topic>` path remains for one-worker tasks.
 - **Three-tier gate (R47).** worker Tier-1 (lane typecheck) -> story-branch Tier-2 (tests/smoke/lint, run by the Senior) -> Senior review loop -> human push (R1 unchanged).
 - **`kingdom.json.integration` + `shape.seniors` + `seniors[]`.** New config: `enabled`, `unit` (story|milestone|issue), `branchPattern`, `gateOnStory`, `reviewLoopCap`; plus the senior workspace color and the `watchman.duties.crossStoryScan` toggle.
@@ -58,8 +77,8 @@ Story pods. A new **Senior** role (🎓 Opus) plus a **story integration branch*
 ### Changed
 
 - **`commands/work.md`:** Step 0.4 spawns Seniors; new Step 3.5 partitions stories, creates story branches, and assigns pods to Seniors; Step 4 skips senior lanes; Step 5 routes a Senior's push-eligible story sentinel through the cross-story check and the story-PR push.
-- **`commands/init.md`:** copies `seniors.md`; the scaffold template carries the new `integration` / `seniors` blocks.
-- Role docs updated: `kings.md` (delegation + cross-story), `workers.md` (pod membership), `watchmans.md` (Duty 5), `git.md` (story branch tier), `index.md` (Senior registered across all role tables).
+- **`commands/init.md`:** copies `senior.md`; the scaffold template carries the new `integration` / `seniors` blocks.
+- Role docs updated: `king.md` (delegation + cross-story), `worker.md` (pod membership), `watchman.md` (Duty 5), `git.md` (story branch tier), `index.md` (Senior registered across all role tables).
 
 ## [0.31.1] — 2026-05-22
 
@@ -76,17 +95,17 @@ Beyond the two fixes, this release also lands four planned consumer requests fro
 
 - **R45 (Tier 2) — Haiku-army doc orientation for all roles.** Every role (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` when getting the big picture before work. The new helper in `_primitives.md` runs 2 phases: (1) Phase 1 — wayfinding fan-out: scans EVERY directory for `readme.md` / `index.md` / `todo*.md`, caps at 30 files, spawns up to 10 Haiku in parallel for 5-bullet digests; (2) Phase 2 — broader doc fan-out: full `*.md` landscape minus Phase 1, 20 newest by mtime, same parallel fan-out. Both phases bounded by `_bounded_wait` (R42). Consolidated digest at `<LOGS>/.<role>_<UTC>_doc_context.md`. King calls at session start; workers at task receipt before any code edit; watchman once at spawn (refresh trigger is design-forward — not yet implemented in watchman's loop); any role mid-task when "not sure." HAIKU_CAP=10 hard ceiling per call. R45 also locks model defaults: Haiku for doc-orientation fan-outs, Sonnet for lane sub-agents, Opus for sensitive design review.
 - **Watchman Duty 1 expanded to senior-dev review with doc cross-check.** Previous Duty 1 was a per-lane code review (test coverage, security, style). v0.31.1 keeps those dimensions and adds a Doc cross-check section: per-tick read of root + `docs/` markdown, then each lane's Haiku reviews the diff with that doc context grounded. New severity grounds: contradicts a documented decision (urgent), drifts from documented pattern (warn), missing doc update (warn). King's overlay state on `kingdom` branch is now also reviewed each tick (third reviewee alongside workers and co-workers). Output files land at `<project>/docs/test-reports/WATCH_REVIEW_<UTC>__<lane>.md` (convention-compliant — fixes audit finding H3).
-- **Worker smoke-test report MANDATORY before every task commit.** New pre-closer section in `workers.md` (sits before the existing R4/R9 task-commit guard). Format-discovery first per R8 spirit: `ls $REPORTS_DIR | head -10` then read one existing report to match conventions. Bootstraps with a minimum schema (TL;DR + commands run + files touched + caveats) but expected to mimic existing format from the 2nd report onward. File naming `LANE_<UTC>__<lane>__<sub-task-id>.md` preserves the segment-2-is-lane grep contract. Both `worker-N` and `co-worker-N` use this; King's `KING_*` and Watchman's `WATCH_*` prefixes are untouched.
+- **Worker smoke-test report MANDATORY before every task commit.** New pre-closer section in `worker.md` (sits before the existing R4/R9 task-commit guard). Format-discovery first per R8 spirit: `ls $REPORTS_DIR | head -10` then read one existing report to match conventions. Bootstraps with a minimum schema (TL;DR + commands run + files touched + caveats) but expected to mimic existing format from the 2nd report onward. File naming `LANE_<UTC>__<lane>__<sub-task-id>.md` preserves the segment-2-is-lane grep contract. Both `worker-N` and `co-worker-N` use this; King's `KING_*` and Watchman's `WATCH_*` prefixes are untouched.
 - **Sub-agent pool defaults to Sonnet.** `kingdom.json.cmux.subAgentPool.model` reads to `"sonnet"` by default (was previously implicit Opus via no `--model` flag). Override to `"haiku"` for cheap-read pools or `"opus"` for sensitive design pools. Pool slots are mono-model at boot — `spawn_subagent_from_pool` still accepts a `$model` arg for tab-rename labeling but no longer changes the slot's actual model. Flag order: `claude --model <m> -p 'AWAITING_DISPATCH'` (audit caught the inverted `-p --model` order before ship — would have failed entirely on consumer install).
-- **R43 + R44 + R45 cross-references added throughout role docs.** `workers.md` Layer 1 Discovery now lists R45 as step 0 (doc orientation before code grep). `kings.md` mandatory-reads table cell for `/kingdom:work` first-message expanded to include the helper invocation.
+- **R43 + R44 + R45 cross-references added throughout role docs.** `worker.md` Layer 1 Discovery now lists R45 as step 0 (doc orientation before code grep). `king.md` mandatory-reads table cell for `/kingdom:work` first-message expanded to include the helper invocation.
 
 ### Changed
 
 - **`_primitives.md` orientation helper dropped `eval` indirection.** Original draft used `eval "find ... $prune -prune -o ..."` to interpolate the prune-clause string. Pre-commit audit (Audit #4) flagged this as redundant + a quoting vulnerability if `$proj` contains special chars. Replaced with direct backslash-escaped `\(` `\)` parens in the find invocation — works in bash without eval.
 - **`_primitives.md` orientation helper now handles filenames with spaces.** Phase 2 `comm -23` pipeline rewritten to use `IFS= read -r f` + per-line iteration instead of word-split-then-sort. The `stat -f %m` (BSD) vs `stat -c %Y` (Linux) fallback now uses explicit if-else with empty-output check rather than `||` short-circuit (handles minimal Alpine containers where both flavours behave oddly).
-- **`watchmans.md` Duty 1 doc-context pipeline mirrors the same fix.** Was `tr '\n' ' '` collapsing the file list to a space-separated string; now preserves newlines and the Haiku prompt is told to read line by line via the consolidated `$DOC_CONTEXT_FILE`. Prompt also clarifies "use your Read tool" explicitly (was ambiguous — auditor flagged Haiku could try cat).
+- **`watchman.md` Duty 1 doc-context pipeline mirrors the same fix.** Was `tr '\n' ' '` collapsing the file list to a space-separated string; now preserves newlines and the Haiku prompt is told to read line by line via the consolidated `$DOC_CONTEXT_FILE`. Prompt also clarifies "use your Read tool" explicitly (was ambiguous — auditor flagged Haiku could try cat).
 - **`CLAUDE.md` stale rule count.** "Pointers for unfamiliar areas" was still listing 40 rules with Tier 1 = 18. Updated to 43 rules; Tier 1 = 10 (per v0.31.0 cap); Tier 2 = 28; Tier 3 = 5.
-- **`kings.md` R45 reference scope corrected.** First-message-after-/kingdom:work mandatory-reads cell originally said "root *.md + docs/*.md"; updated to describe the actual two-phase / 30+20-file / every-directory scope.
+- **`king.md` R45 reference scope corrected.** First-message-after-/kingdom:work mandatory-reads cell originally said "root *.md + docs/*.md"; updated to describe the actual two-phase / 30+20-file / every-directory scope.
 
 ### Audit summary (pre-commit)
 
@@ -96,7 +115,7 @@ Beyond the two fixes, this release also lands four planned consumer requests fro
 |---|---|---|
 | 🔴 CRITICAL | 2 | Both fixed (flag order; `$KJSON` undefined) |
 | 🟠 HIGH | 3 | All fixed (filename spaces ×2 sites; eval drop; WATCH_REVIEW path) |
-| 🟡 MEDIUM | 5 | 2 fixed (kings.md scope; CLAUDE.md count). 3 deferred (soft-fail surface lookup; R45 watchman aspirational claim; tick aggregation across multi-lane WATCH_REVIEW) |
+| 🟡 MEDIUM | 5 | 2 fixed (king.md scope; CLAUDE.md count). 3 deferred (soft-fail surface lookup; R45 watchman aspirational claim; tick aggregation across multi-lane WATCH_REVIEW) |
 | 🟢 LOW | 5 | 1 fixed inline (Haiku prompt explicit Read-tool); 4 deferred to v0.32.0 |
 | ✅ PASS | 1 audit | (work.md BASE shadow + overlay rename) |
 
@@ -105,7 +124,7 @@ Audit cost: ~10×30k Haiku tokens (sub-dollar). Caught issues that would have sh
 ### Open threads — promoted to v0.32.0
 
 - **Soft-fail surface lookup** in `spawn_master_workspace` — currently warns + proceeds if `cmux rpc workspace.list` returns no surfaces yet; should add bounded retry loop (matching R42 pattern).
-- **Watchman doesn't actually call `haiku_read_docs_orientation`** — R45 claims watchman refreshes every 10 ticks OR on mtime change, but neither trigger is implemented in `watchmans.md`'s tick body yet. Either wire the call in or weaken R45's claim.
+- **Watchman doesn't actually call `haiku_read_docs_orientation`** — R45 claims watchman refreshes every 10 ticks OR on mtime change, but neither trigger is implemented in `watchman.md`'s tick body yet. Either wire the call in or weaken R45's claim.
 - **Tick-aggregation across multiple per-lane `WATCH_REVIEW_*.md` files** — Duty 1's senior-dev fan-out produces one review file per lane per tick; the existing tick-summary table has one row per duty. Needs max-merge logic for the duty's severity column.
 - **Per-rule heading sweep for Tier 1 cap** — still pending from v0.31.0; the legend at `rules.md:27` is authoritative, but per-rule headings still carry `— Tier 1` suffixes for ~19 rules that should be `— Tier 2`.
 - **`_primitives.md` split into `_primitives/` directory** — file has grown to ~1380 lines; proposed shape: ~15 per-area files (hard-gates / spawn / orientation / overlay / feature-carve / etc), with `_primitives.md` becoming a 50-line index. Discussed; deferred to v0.32.0 to keep v0.31.1 blast radius bounded.
@@ -127,7 +146,7 @@ Released the same day as v0.30.0 after a real consumer-kingdom session (`/kingdo
 - **R43 (Tier 2)** — Job-done closing actions are agent-owned. The 4-step closing checklist (flip AC checkboxes in the project ledger, append `— ✅ closed YYYY-MM-DD (PR #N)` to the heading, write Final summary, run 4-step closer) is wholly the lane's responsibility; King's dispatch brief MUST NOT annotate any of these as user-owned ("Ter's hand" / "(human flip)" / "Ledger update: manual"). Lane MUST reject any brief containing such fields. The 2026-05-19 worker-1 incident motivated the rule: brief said "TODO_Webshop.md AC flip held on kingdom branch — Ter's hand", worker-1 never flipped, drift leaked into kingdom as unstaged changes, and the next morning the King re-read the field and asked the user "decide how to ship the AC flip" — burning 15 minutes on a step that should have been silent.
 - **R44 (Tier 2)** — After user `go`, King executes. No further "pick execute mode m/a/m1/self?" or "spawn workspace now or later?" prompts. The user's `go` collapses all remaining dispatch branch points into kingdom defaults (`dispatch.defaultExecuteMode` = `cmux-lane`, smallest-task-first lane order, reuse-then-spawn workspace policy). What `go` does NOT collapse: R1 push approval (still per-PR) and R5 destructive-op approval (still with target). Recovery when violated: factual-ack in chat, default + execute, log `RULE_VIOLATION R44`, do not block.
 - **Tier 1 cap (v0.31.0+)** — `rules.md` now opens with a prominent legend declaring exactly 10 Tier-1 rules: R1, R2, R4, R5, R14, R22, R30, R31, R36, R42. The cap is intentional: Tier 1 should be "violation = kingdom worse than running solo." 29 prior rules carrying `— Tier 1` markers in their headings are demoted to Tier 2 by the legend (per-rule headings will be swept in a future release; the legend is authoritative until then).
-- **`workers.md` task brief schema** — explicit "Forbidden brief fields" callout listing the user-ownership annotations that violate R43 + the lane's rejection template.
+- **`worker.md` task brief schema** — explicit "Forbidden brief fields" callout listing the user-ownership annotations that violate R43 + the lane's rejection template.
 - **`cards/daily-status.md`** — splits the lane table in two: a Dispatch-lanes table (worker-N + watchman-N rows only) and a Paired-sessions table (co-worker rows only, manual-only per R32 + R43). The 2026-05-20 session repeatedly listed co-worker-1 in the same table as workers, treating it as a dispatch candidate even though R32 forbids this.
 
 ### Changed
@@ -159,13 +178,13 @@ Three open threads from v0.29.x cleanup + one new Tier-1 rule discovered via liv
 
 - **R42 (Tier 1) — Every parallel fan-out uses `_bounded_wait`, never bare `wait`.** Bare `wait` (no PID, no timeout) blocks until every backgrounded subshell exits; if any one hangs (`git worktree add` blocked on `.git/index.lock`, `gh pr view` on stale network, `cmux send` to not-yet-ready workspace), the parent script hangs forever and the Claude Code harness auto-pushes the bash call to background. User sees "Job's output is empty and files weren't written" — the actual hang vector observed across v0.27-v0.29.4. Spec: collect PIDs (`PIDS="$PIDS $!"`), pass to `_bounded_wait <budget> $PIDS`, function `kill -9`'s survivors and returns 124 on timeout.
 - **`_bounded_wait` helper** in `_primitives.md`. Pure-bash, macOS-portable (no GNU `timeout` dependency — confirmed missing on default macOS in audit). Per-PID poll loop with global wall-clock budget; default budgets table (5s cosmetic, 15s teardown, 45s `parallel_edit_fanout`, 60s spawn) documented inline.
-- **`parallel_edit_fanout` helper** in `_primitives.md` (sibling to `pattern_grep_fanout`). Takes `<search> <replace> <lane=pr-spec> [glob]`; fans out per-lane subshells, each running `rg-discover → sed → amend → push --force-with-lease`. Honours R27 (skips MERGED/CLOSED PRs), R28 (parallel across branches, serial within), R42 (bounded wait, 45s budget). Logs a `PARALLEL_EDIT_FANOUT` line to `master_agent.log`. Removes ~20 lines of inlined parallel `&`/`wait` skeleton from `watchmans.md`.
+- **`parallel_edit_fanout` helper** in `_primitives.md` (sibling to `pattern_grep_fanout`). Takes `<search> <replace> <lane=pr-spec> [glob]`; fans out per-lane subshells, each running `rg-discover → sed → amend → push --force-with-lease`. Honours R27 (skips MERGED/CLOSED PRs), R28 (parallel across branches, serial within), R42 (bounded wait, 45s budget). Logs a `PARALLEL_EDIT_FANOUT` line to `master_agent.log`. Removes ~20 lines of inlined parallel `&`/`wait` skeleton from `watchman.md`.
 - **Check 9 in `/kingdom:self-care` — workspace file sync.** Scans the plugin's `.kingdom/.setting/` against the workspace copy; missing files (a common after-effect of upgrading the plugin without re-running `/kingdom:init`) are listed for one-keystroke import. Reuses the existing `doctor-report/partial-pass` card variant — no new card needed.
 
 ### Changed
 
-- **`kings.md` § Push approval gate Step 7** now calls `kingdom_resync_after_merge "$PR" "$LANE"` instead of inlining the old `worktree remove + branch add -b` cleanup. Behavioural improvement: the helper does `branch -f $merged_lane $BASE`, **preserving** the worker's local worktree (R35) — the inlined pattern destroyed and recreated it. Feature-branch deletion remains inline (one-shot ref hygiene).
-- **`watchmans.md` § PR-number backfill duty** rewritten to call `parallel_edit_fanout`. Per-lane `&` fan-out with PID-collection + `_bounded_wait 45 $FANOUT_PIDS` instead of bare `wait`. Stdout drains to `WATCH_PR_BACKFILL.md`.
+- **`king.md` § Push approval gate Step 7** now calls `kingdom_resync_after_merge "$PR" "$LANE"` instead of inlining the old `worktree remove + branch add -b` cleanup. Behavioural improvement: the helper does `branch -f $merged_lane $BASE`, **preserving** the worker's local worktree (R35) — the inlined pattern destroyed and recreated it. Feature-branch deletion remains inline (one-shot ref hygiene).
+- **`watchman.md` § PR-number backfill duty** rewritten to call `parallel_edit_fanout`. Per-lane `&` fan-out with PID-collection + `_bounded_wait 45 $FANOUT_PIDS` instead of bare `wait`. Stdout drains to `WATCH_PR_BACKFILL.md`.
 - **`commands/work.md` Step 0.4** — King workspace-rename fan-out (4 cmux calls) and all-lane spawn cycle now both collect PIDs + call `_bounded_wait` (5s and 60s budgets respectively). The 60s spawn budget covers ~5 lanes × (worktree add 2s + 4 cmux calls 0.2s) with 5× safety margin.
 - **`commands/save.md` teardown** — `cmux close-workspace` fan-out now uses `_bounded_wait 15 $CLOSE_PIDS`.
 - **`rules.md` R28 footer** — removed "(the latter to be added in v0.19.0)" parenthetical now that the helper body exists.
@@ -177,7 +196,7 @@ Three open threads from v0.29.x cleanup + one new Tier-1 rule discovered via liv
 
 - Thread #1 ("self-care should detect workspace-stale files") — closed via Check 9.
 - Thread #2 ("`parallel_edit_fanout` referenced by R28 but spec-only") — body landed.
-- Thread #3 ("wire `kingdom_resync_after_merge` into `kings.md` Step 7") — Step 7 now calls the helper.
+- Thread #3 ("wire `kingdom_resync_after_merge` into `king.md` Step 7") — Step 7 now calls the helper.
 
 ### Audit findings (cmux command surface, 2026-05-20)
 
@@ -208,7 +227,7 @@ R41 propagation across docs + role-doc step audit. Shipped via 7 parallel Sonnet
 
 ### Audit findings (per role doc)
 
-**`kings.md` — 8 findings, all fixed:**
+**`king.md` — 8 findings, all fixed:**
 - **R4 / v0.17.0 violation** — Tier-2 gate code block used `git merge --no-ff "worker-N"` on kingdom (pre-overlay pattern). Fixed: now uses `git reset --hard "origin/$BASE"` + `git diff "origin/$BASE..worker-N" | git apply --3way -` (overlay, no commit) + review via `git status --short`.
 - **R4 violation** — "Refreshing the kingdom integration branch" section had live `git merge --no-edit "$LANE"` on kingdom. Marked RETIRED + added v0.17.0 deprecation note.
 - **R38 violation** — Dispatch prompt template told workers to use `Agent(...)` by default. Fixed: prompt now says "Spawn sub-agents as visible tabs by default (R38)".
@@ -218,17 +237,17 @@ R41 propagation across docs + role-doc step audit. Shipped via 7 parallel Sonnet
 - **R41 missing** — Step −1 context-load had no skill resolution mention. Added sentence pointing to work.md Step 0.3.5.
 - **R33 missing** — Kickoff synthesis showed "Today's plan" without note on resume queue check. Added 3-line callout.
 
-**`workers.md` — 3 findings, all fixed:**
+**`worker.md` — 3 findings, all fixed:**
 - **R25 missing** — No reference to updating both kingdom task file AND project task-ledger. Added bullet to Lifecycle list.
 - **R38 stale** in 3 places — Section header said "Default: model-tiered — cheap fan-outs headless"; `subAgentSpawnByModel` JSON had `haiku/sonnet: "background"`; fan-out example used inconsistent label. All flipped to v0.28.0 R38 defaults (all-tab, background opt-in only).
 - **R41 missing** — Zero skill references. Added 2-line note to task sequencing step covering King's `${SUGGESTED_SKILLS}` block + lane's authority to invoke additional skills mid-task.
 
-**`co-workers.md` — 3 findings, all fixed:**
+**`co-worker.md` — 3 findings, all fixed:**
 - **R32 contrast missing** — File said co-workers are dormant but didn't explicitly contrast with workers (which are NOT dormant). Added clarification.
-- **Rule cross-ref** — Task file template ref to workers.md didn't name R22/R23/R24/R25. Added.
+- **Rule cross-ref** — Task file template ref to worker.md didn't name R22/R23/R24/R25. Added.
 - **R41 missing** — No mention of skill invocation in paired sessions. Added bullet.
 
-**`watchmans.md` — 2 findings, all fixed:**
+**`watchman.md` — 2 findings, all fixed:**
 - **Dead `commands/doctor.md` ref** — File was deleted in v0.29.0. Replaced with `commands/init.md` reference.
 - **R41 missing for Haiku fan-out** — Watchman duties could optionally invoke `code-review:code-review` / `security-review` skills. Added paragraph between section intro and `haiku_cap_per_tick`.
 
@@ -243,9 +262,9 @@ R41 propagation across docs + role-doc step audit. Shipped via 7 parallel Sonnet
 
 ### Flagged for future cleanup (not touched this release)
 
-- `kings.md` "Refreshing the kingdom integration branch" section — entirely obsolete after v0.17.0 working-tree overlay; marked RETIRED but full removal deferred.
-- `kings.md` Two-tier gate prose still says "Runs on the kingdom branch" — accurate but unclear that tests run against the overlaid working tree. Low priority.
-- `workers.md` sub-agent lifecycle mermaid diagram still labels nodes "SPAWN more Agent() calls" — accurate in standalone mode but ambiguous in kingdom mode. Cosmetic.
+- `king.md` "Refreshing the kingdom integration branch" section — entirely obsolete after v0.17.0 working-tree overlay; marked RETIRED but full removal deferred.
+- `king.md` Two-tier gate prose still says "Runs on the kingdom branch" — accurate but unclear that tests run against the overlaid working tree. Low priority.
+- `worker.md` sub-agent lifecycle mermaid diagram still labels nodes "SPAWN more Agent() calls" — accurate in standalone mode but ambiguous in kingdom mode. Cosmetic.
 
 ### Changed
 
@@ -316,15 +335,15 @@ Audit + fix-up: stale references to v0.29.0-deleted commands across 22 files. Sh
 
 ### Audit findings (5 parallel Haiku scans)
 
-- ❌ ~50 stale `/kingdom:day` / `/kingdom:start` / `/kingdom:update` / `/kingdom:exit` / `/kingdom:doctor` references across rules.md (8 lines), watchmans.md (5 lines), cards/*.md (16 files affected), docs/branch-model.md, docs/cmux-integration.md (6 lines), docs/faq.md (Q/A headers — historical, kept), CLAUDE.md (rule counts wrong).
+- ❌ ~50 stale `/kingdom:day` / `/kingdom:start` / `/kingdom:update` / `/kingdom:exit` / `/kingdom:doctor` references across rules.md (8 lines), watchman.md (5 lines), cards/*.md (16 files affected), docs/branch-model.md, docs/cmux-integration.md (6 lines), docs/faq.md (Q/A headers — historical, kept), CLAUDE.md (rule counts wrong).
 - ❌ CLAUDE.md rule count claim was stale: "37 enforceable rules" / "Tier 1 = 16, Tier 2 = 16, Tier 3 = 5". Actual: **40 rules** (Tier 1 = 18, Tier 2 = 17, Tier 3 = 5).
-- ✅ R39/R40 consistent across rules.md + watchmans.md + kingdom.json.template + _primitives.md (verified live).
+- ✅ R39/R40 consistent across rules.md + watchman.md + kingdom.json.template + _primitives.md (verified live).
 - ✅ Cards index (cards/README.md) clean — 22 cards listed, 22 files present.
 
 ### Fixed (4 parallel Sonnet agents)
 
 - **rules.md**: 8 replacements. R30 / R32 / R33 / R36 / R37 / R20 → updated to use `/kingdom:work` (audit phase folded), `/kingdom:save`, `/kingdom:self-care`. R20 command list now shows 4 commands (init / self-care / work / save) instead of 6.
-- **watchmans.md**: 5 replacements. `/kingdom:update` → `/kingdom:work audit phase`.
+- **watchman.md**: 5 replacements. `/kingdom:update` → `/kingdom:work audit phase`.
 - **All 16 affected cards/*.md** files updated (fires-when + used-by + body refs + path links). Affected: end-of-day, scaffold-success, what-to-work-on, suggested-task, audit-summary, welcome, daily-status, doctor-report, dispatch-plan, cap-reached, resume-queue, spawn-complete, gate-fail, pr-merged, push-prompt, task-complete. Already clean: watchman-alert, watchman-tick, session-saved, dispatch-brief, conflict-detected, blocked-lane.
 - **CLAUDE.md**: rule count claim fixed (40 total, Tier 1 = 18, Tier 2 = 17, Tier 3 = 5). One stray `/kingdom:day` on line 105 → `/kingdom:work`. Version-history table entries kept as historical references (they describe what each release shipped at the time).
 - **docs/branch-model.md**: 1 replacement + fixed leftover `daily-ritual.md` link → `work-cycle.md` (file was renamed in v0.29.0).
@@ -377,7 +396,7 @@ Five commands deleted from `commands/`. Three new commands created. One kept and
 - **`commands/self-care.md`** (332 lines) — `/kingdom:self-care` (no args). 8 prereq checks: cmux/tmux/jq/gh/git/settings.json/tasks-writable/orphan-audit. Renders `doctor-report` card with 3 variants (all-pass / partial-pass / failed). Renamed from `/kingdom:doctor`.
 - **R39 (Tier 1) Watchman runs fully autonomously.** Watchman owns its own `/loop` schedule. King NEVER blocks waiting on watchman, never dispatches work to watchman. Watchman's duties are pull-based. King reads `watchman_state.json` + `WATCH_*.md` at session start (per R14) but never sends watchman briefs via `cmux send`.
 - **R40 (Tier 2) Watchman Haiku fan-out cap per tick.** Default `kingdom.json.watchman.haikuCapPerTick = 5`, max `10` (clamped + log warning if exceeded). Prevents API-usage spikes when multiple kingdoms run simultaneously.
-- **`watchmans.md` autonomous Haiku fan-out section** (+241 lines). Four per-tick fan-out duties: (1) code review per lane with new commits → `WATCH_REVIEW_<UTC>__<lane>.md`, (2) CVE scan per package manager → `WATCH_CVE_<UTC>.md`, (3) cross-lane file-overlap conflict scan → `WATCH_CONFLICTS_<UTC>.md`, (4) git hygiene (stale worktrees, orphan branches, broken sentinels) → `WATCH_GIT_<UTC>.md`. Tick aggregation → `WATCH_TICK_<UTC>.md`.
+- **`watchman.md` autonomous Haiku fan-out section** (+241 lines). Four per-tick fan-out duties: (1) code review per lane with new commits → `WATCH_REVIEW_<UTC>__<lane>.md`, (2) CVE scan per package manager → `WATCH_CVE_<UTC>.md`, (3) cross-lane file-overlap conflict scan → `WATCH_CONFLICTS_<UTC>.md`, (4) git hygiene (stale worktrees, orphan branches, broken sentinels) → `WATCH_GIT_<UTC>.md`. Tick aggregation → `WATCH_TICK_<UTC>.md`.
 - **`kingdom.json.template` watchman config block** — `haikuCapPerTick`, `haikuCapMax`, `duties.{codeReview,cveScan,conflictScan,gitHygiene}` toggles.
 - **`cards/session-saved.md`** (123 lines, `[!TIP]`) — `/kingdom:save` completion card with lane status + open PRs + ready_for_fresh_work indicator.
 - **`cards/watchman-tick.md`** (134 lines, `[!NOTE]` / `[!CAUTION]` variant) — Watchman autonomous tick summary; CAUTION variant when any finding is `urgent` severity.
@@ -389,7 +408,7 @@ Five commands deleted from `commands/`. Three new commands created. One kept and
 ### Changed
 
 - **`commands/init.md`** — slimmer. No prereq checks (moved to self-care). Final step now points to `/kingdom:self-care` then `/kingdom:work`.
-- **Cross-references across role docs** — old command names replaced throughout `.kingdom/.setting/index.md` (1), `kings.md` (6), `workers.md` (3), `cmux.md` (8). Behaviour preserved; only entry-point names changed.
+- **Cross-references across role docs** — old command names replaced throughout `.kingdom/.setting/index.md` (1), `king.md` (6), `worker.md` (3), `cmux.md` (8). Behaviour preserved; only entry-point names changed.
 - **README.md** — Quick start now uses `/kingdom:work`; slash command table updated to 4-row surface; install hint uses `/kingdom:self-care`.
 - **CLAUDE.md** — version → 0.29.0; version-history row added; directory layout updated (4 commands instead of 6); architectural decisions updated to 24 total (was 22, +R39 +R40).
 - `plugin.json`, `marketplace.json`, README badge — version → `0.29.0`.
@@ -419,7 +438,7 @@ Hard break — old commands gone. After updating the plugin:
 
 ### Shipped via 8 parallel Sonnet agents
 
-Per R28 parallel-by-default. Each agent owned a file slice end-to-end (no overlap). 5 deletions + 3 new command files + 2 new rules + 1 watchmans.md rewrite + 1 template update + 2 new cards + 3 new helpers + 7 cross-reference updates + README/docs/CLAUDE.md update. Total: ~28 files touched, ~2000 lines net change.
+Per R28 parallel-by-default. Each agent owned a file slice end-to-end (no overlap). 5 deletions + 3 new command files + 2 new rules + 1 watchman.md rewrite + 1 template update + 2 new cards + 3 new helpers + 7 cross-reference updates + README/docs/CLAUDE.md update. Total: ~28 files touched, ~2000 lines net change.
 
 ---
 
@@ -429,9 +448,9 @@ Per R28 parallel-by-default. Each agent owned a file slice end-to-end (no overla
 
 ### Changed
 
-- **`Ter` → `the user`** across `.kingdom/.setting/` role docs (kings.md ~45 replacements, co-workers.md ~40, workers.md 8, watchmans.md 4, git.md 7, cmux.md 3, _primitives.md 2, rules.md, index.md 4, plus docs/*.md). Remaining `Ter` occurrences are all inside fenced code/mermaid blocks (untouched per safety rules).
+- **`Ter` → `the user`** across `.kingdom/.setting/` role docs (king.md ~45 replacements, co-worker.md ~40, worker.md 8, watchman.md 4, git.md 7, cmux.md 3, _primitives.md 2, rules.md, index.md 4, plus docs/*.md). Remaining `Ter` occurrences are all inside fenced code/mermaid blocks (untouched per safety rules).
 - **`CLAUDE.md` synced to v0.28.0** — version footer, directory layout, plus 5 new rows in version-history table (v0.24-v0.28) and 9 new architectural-decision entries for R30-R38. Now 22 total architectural decisions (was 13).
-- **Helper consolidation per R37**: `make_artifact_id`, `raw_path`, `curated_path` moved from inline `workers.md` definitions to canonical home in `_primitives.md § Artifact path helpers`. `workers.md` now references `_primitives.md` instead of inlining.
+- **Helper consolidation per R37**: `make_artifact_id`, `raw_path`, `curated_path` moved from inline `worker.md` definitions to canonical home in `_primitives.md § Artifact path helpers`. `worker.md` now references `_primitives.md` instead of inlining.
 - **Em-dash density reduction** in 4 command docs: `commands/day.md` 49 → 33, `commands/update.md` 44 → 33, `commands/doctor.md` 44 → 34, `commands/start.md` 39 → 29. Targeted prose appositives + list-separators only; headings, code blocks, structural definition lists untouched.
 - `plugin.json`, `marketplace.json`, README badge — version → `0.28.1`.
 
@@ -446,7 +465,7 @@ Per R28 parallel-by-default. Each agent owned a file slice end-to-end (no overla
 
 ### Known remaining (deferred to next release)
 
-- 13 broken cross-link anchors verified by audit — Agent 5 (anchor-fix sub-agent) hit a transient API ConnectionRefused error; verified rules.md anchors are clean but cmux.md / watchmans.md anchor verification deferred. Most use GitHub-correct format already (manual spot-check passed); a comprehensive sweep can land in a future patch.
+- 13 broken cross-link anchors verified by audit — Agent 5 (anchor-fix sub-agent) hit a transient API ConnectionRefused error; verified rules.md anchors are clean but cmux.md / watchman.md anchor verification deferred. Most use GitHub-correct format already (manual spot-check passed); a comprehensive sweep can land in a future patch.
 
 ---
 
@@ -609,7 +628,7 @@ Re-run `/kingdom:init` (workspace-only) to sync new `rules.md` (R31 expanded + R
 
 - **R30 (Tier 1) King is ORCHESTRATOR ONLY — never executes task work itself.** Allowed verbs: plan-the-day, dispatch (`cmux send`), gate-fire, overlay onto kingdom, request push approval, read audits. BANNED: write code, make scoping decisions in chat, draft "Batch 1..N" execution plans in chat, run gates manually for a lane. **Hard 60s time budget** from `/kingdom:day` Step 4 reaching auto-dispatch to first `cmux send` firing.
 - **R31 (Tier 1) Lane workspaces MUST be spawned + verified BEFORE any dispatch.** `workspace-refs.env` must list every lane from `kingdom.json.shape`. `cmux tree --all` must show them alive. If missing, spawn first (idempotent). Render `spawn-complete` card BEFORE dispatch begins so the user visually confirms the sidebar shape. Prevents silent-failure pattern where King dispatches to non-existent workspace refs and polls forever.
-- **R32 (Tier 2) "Staged / waiting / dormant" is co-worker-ONLY.** Workers auto-claim from queue (per `kings.md` § Lane utilisation). If queue empty, lane shows `🐾 Idle (no claimable task)` but King keeps polling. Workers NEVER sit "awaiting your dictation" — only co-workers wait, only for explicit `pair on co-worker-N`. Watchmen always run `/loop`, never idle/waiting.
+- **R32 (Tier 2) "Staged / waiting / dormant" is co-worker-ONLY.** Workers auto-claim from queue (per `king.md` § Lane utilisation). If queue empty, lane shows `🐾 Idle (no claimable task)` but King keeps polling. Workers NEVER sit "awaiting your dictation" — only co-workers wait, only for explicit `pair on co-worker-N`. Watchmen always run `/loop`, never idle/waiting.
 - **`/kingdom:day` Step 0.5 — Lane-readiness gate.** New mandatory step BETWEEN Step 0 (parse args) and Step 1 (audit). Verifies every expected lane is listed in `workspace-refs.env` AND alive in `cmux tree --all`. Forces a `/kingdom:start` re-run if any lane is missing or stale. No dispatch fires until lanes are confirmed.
 - **`/kingdom:day` Step 4 — R30 budget enforcement.** Explicit `DISPATCH_START` timestamp; warns at 60s elapsed without first `cmux send`. Anti-pattern call-outs in step 4 prose: no multi-batch tables in chat, no "waiting for direction" for workers.
 
@@ -621,7 +640,7 @@ User's day: zero tasks completed. Symptoms:
 3. King displayed `co-worker-1 staged · awaiting your dictation` AND treated worker-1 as if it was waiting too. User: "WTF for waiting i said that for co-working but you waiting for wtf is that shit."
 4. King had been "Crunched for 1m 48s · 1 local agent still running" — local agent was King's own planning, no real lane work.
 
-Root cause: previous rules said WHAT King does (`kings.md` § Dispatch) but didn't HARD-BAN King from executing work itself. R30/R31/R32 close those gaps as Tier-1/2 rules.
+Root cause: previous rules said WHAT King does (`king.md` § Dispatch) but didn't HARD-BAN King from executing work itself. R30/R31/R32 close those gaps as Tier-1/2 rules.
 
 ### Changed
 
@@ -639,7 +658,7 @@ Per-task skill routing. King now picks up to 3 Claude Code skills per dispatch f
 
 ### Added
 
-- **`.kingdom/.setting/skill-routing.md`** — canonical keyword → skill mapping table (~40 mappings across P1/P2/P3 tiers). Covers Next.js, shadcn, Tailwind, OKLCH, frontend-design; Supabase + Postgres; Stripe; Claude API; PDF/XLSX/PPTX/DOCX/lark-doc; Figma; Hugging Face; plugin-dev (commands/agents/skills/hooks/MCP); CLAUDE.md management; code review; security review; superpowers process skills (brainstorming, writing-plans, TDD, systematic-debugging, verification-before-completion); commit-commands; git worktrees; doc-coauthoring; playground.
+- **`.kingdom/.setting/reference/skill-routing.md`** — canonical keyword → skill mapping table (~40 mappings across P1/P2/P3 tiers). Covers Next.js, shadcn, Tailwind, OKLCH, frontend-design; Supabase + Postgres; Stripe; Claude API; PDF/XLSX/PPTX/DOCX/lark-doc; Figma; Hugging Face; plugin-dev (commands/agents/skills/hooks/MCP); CLAUDE.md management; code review; security review; superpowers process skills (brainstorming, writing-plans, TDD, systematic-debugging, verification-before-completion); commit-commands; git worktrees; doc-coauthoring; playground.
 - **`pick_skills_for_task` helper** in `_primitives.md` — reads the routing table, greps task brief + AC + linked reference files (lowercase, whole-word, case-insensitive), returns up to 3 matching skills sorted by priority. Returns multi-line text ready for `${SUGGESTED_SKILLS}` substitution in the dispatch-brief.
 - **`cards/dispatch-brief.md` updated** — new `Suggested skills` block in the template + `${SUGGESTED_SKILLS}` variable. If empty (no keyword matched), the entire section is dropped from the brief.
 - **User override surface** — `worker-2: skill=figma:figma-implement-design pick BE-P0-AUTH.2` short-circuits the matcher with the user's verbatim skill list. `skill=none` clears the list (no skills suggested). Multiple skills comma-separated.
@@ -652,7 +671,7 @@ Per-task skill routing. King now picks up to 3 Claude Code skills per dispatch f
 
 ### Customisation note
 
-Edit the workspace copy at `.kingdom/.setting/skill-routing.md` (not the plugin source) to add project-specific mappings. Matcher reads the workspace copy at every dispatch, so changes apply on the next task without restarting the King. Common additions: project-specific framework keywords (Vue/Nuxt, Rust), internal DSL reserved words, organisation-specific skills.
+Edit the workspace copy at `.kingdom/.setting/reference/skill-routing.md` (not the plugin source) to add project-specific mappings. Matcher reads the workspace copy at every dispatch, so changes apply on the next task without restarting the King. Common additions: project-specific framework keywords (Vue/Nuxt, Rust), internal DSL reserved words, organisation-specific skills.
 
 ---
 
@@ -745,7 +764,7 @@ Every `/kingdom:day` invocation eats the audit cost upfront (~1-3 min parallel f
 
 ## [0.19.1] — 2026-05-18
 
-Closing the post-push overlay-discard loophole. The behaviour was already documented in `kings.md` Step 8 and implemented as `kingdom_discard_overlay` in `_primitives.md`, but it wasn't enforced via `rules.md` — so a lane-spawned King session could (and today did) skip it and leave the kingdom branch with stale overlay files after push.
+Closing the post-push overlay-discard loophole. The behaviour was already documented in `king.md` Step 8 and implemented as `kingdom_discard_overlay` in `_primitives.md`, but it wasn't enforced via `rules.md` — so a lane-spawned King session could (and today did) skip it and leave the kingdom branch with stale overlay files after push.
 
 ### Added
 
@@ -753,7 +772,7 @@ Closing the post-push overlay-discard loophole. The behaviour was already docume
 
 ### Incident summary (motivating R29)
 
-A King session pushed 4 PRs to bfg-swt (#255, #257, #258, #259) successfully, but never ran `kingdom_discard_overlay` after `gh pr create`. Ter opened GitHub Desktop, saw 18 stale uncommitted files on the kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes. `kings.md` Step 8 said so, but `rules.md` didn't, so the sub-King missed it.
+A King session pushed 4 PRs to bfg-swt (#255, #257, #258, #259) successfully, but never ran `kingdom_discard_overlay` after `gh pr create`. Ter opened GitHub Desktop, saw 18 stale uncommitted files on the kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes. `king.md` Step 8 said so, but `rules.md` didn't, so the sub-King missed it.
 
 ### Changed
 
@@ -777,25 +796,25 @@ Priority-tiered rules doc + post-merge automation + parallel-by-default executio
 - **R26 (Tier 2) Post-merge kingdom resync** — when `feature/<topic>` squash-merges to develop, King runs the 7-step resync: detect MERGED → clean overlay → fetch + ff base → reset kingdom → free merged lane → rebase remaining lanes → verify no duplicates → log line. Helper: `kingdom_resync_after_merge`.
 - **R27 (Tier 2) Watchman owns PR-number backfill + close-suffix maintenance** — worker commits `(PR #pending)` because PR doesn't exist at commit time. Watchman's `/loop` body fans out parallel `(PR #pending) → (PR #<N>)` flips per-lane in their own worktrees + amends + `--force-with-lease`. Skips already-MERGED PRs (opens `feature/post-<N>-cleanup` instead). Also sweeps stale `.lane` claims after sentinels close.
 - **R28 (Tier 2) Parallel by default for scan + non-conflicting edit** — read N files = parallel; edit N different files = parallel; amend + force-push N branches = serial *within* a branch, parallel *across* branches. Serialize only when A mutates B's input, or for "exclusive sensitive" ops (push, hard reset, branch delete, anything touching `keys/` / `.env*`).
-- `watchmans.md` — new "PR-number backfill duty" section (under R27); Sonnet watchman now owns this work, not King.
+- `watchman.md` — new "PR-number backfill duty" section (under R27); Sonnet watchman now owns this work, not King.
 - `cmux.md` — `#notify` anchor in the command index fixed to `#notification-system` (canonical GitHub heading anchor); new "Teardown / close commands" section documenting the canonical `close-workspace` / `close-surface` / `close-window` command family + the three common wrong incantations + the parallel teardown pattern (R28).
 
 ### Changed
 
 - `plugin.json`, `marketplace.json`, README badge — version → `0.19.0`.
 - **`/kingdom:exit` Step 5 fix** — switched from broken `cmux tab-action --action close --workspace <ref>` (errors `Unknown tab action`) to canonical `cmux close-workspace --workspace <ref>` AND parallelised the 5-lane teardown (each `close-workspace` is now `&`-backgrounded with a single `wait` at the end). Previous serial version took ~5× longer than necessary; the wrong command name also forced King to trial-and-error through `tab-action close-others`, `cmux --help`, etc.
-- **Role-doc bash trim** — duplicate helper definitions inlined across `kings.md` (2 blocks) and `workers.md` (4 blocks: 3-helper pool + `cmux_set_state`) now reference `_primitives.md` as the single source of truth. Usage examples remain inline (they show HOW the helper is called for that role); the function bodies move to `_primitives.md`. Approximate trim: `kings.md` 1320 → ~1290 lines, `workers.md` 779 → ~735 lines. Behaviour unchanged — the helper names + signatures are identical.
+- **Role-doc bash trim** — duplicate helper definitions inlined across `king.md` (2 blocks) and `worker.md` (4 blocks: 3-helper pool + `cmux_set_state`) now reference `_primitives.md` as the single source of truth. Usage examples remain inline (they show HOW the helper is called for that role); the function bodies move to `_primitives.md`. Approximate trim: `king.md` 1320 → ~1290 lines, `worker.md` 779 → ~735 lines. Behaviour unchanged — the helper names + signatures are identical.
 
 ### Pending for follow-up (not in 0.19.0)
 
 - `parallel_edit_fanout` helper in `_primitives.md` (R28 references it; spec-only for now).
-- Wiring the call site for `kingdom_resync_after_merge` into `kings.md` § Push approval gate Step 7 (helper exists in `_primitives.md`; the role-doc Step 7 still inlines the old per-lane cleanup pattern from before R26).
+- Wiring the call site for `kingdom_resync_after_merge` into `king.md` § Push approval gate Step 7 (helper exists in `_primitives.md`; the role-doc Step 7 still inlines the old per-lane cleanup pattern from before R26).
 
 ---
 
 ## [0.18.1] — 2026-05-18
 
-Light doc minification — removed 3 "Why this matters" motivational sections from role docs (2 in `cmux.md`, 1 in `kings.md`). Pure prose removal; no behavioural rules changed. Saves ~12 lines / ~1KB across the role docs read by King at session start.
+Light doc minification — removed 3 "Why this matters" motivational sections from role docs (2 in `cmux.md`, 1 in `king.md`). Pure prose removal; no behavioural rules changed. Saves ~12 lines / ~1KB across the role docs read by King at session start.
 
 ### Honest minification report
 
@@ -803,13 +822,13 @@ Role doc footprint (read by King at every `/kingdom:start` session per v0.14.8):
 
 | File | Lines | Lines in code blocks | Notes |
 |---|---|---|---|
-| `kings.md` | 1327→1320 | ~540 (40%) | Bulk is canonical bash patterns; non-trivial to trim safely |
-| `workers.md` | 779 | ~349 (45%) | Same — pool helper + closer templates are load-bearing |
-| `watchmans.md` | 631 | ~353 (56%) | /loop body bash + scan logic dominate |
+| `king.md` | 1327→1320 | ~540 (40%) | Bulk is canonical bash patterns; non-trivial to trim safely |
+| `worker.md` | 779 | ~349 (45%) | Same — pool helper + closer templates are load-bearing |
+| `watchman.md` | 631 | ~353 (56%) | /loop body bash + scan logic dominate |
 | `cmux.md` | 617→610 | ~194 (31%) | Command reference; each block is canonical |
 | `index.md` | 290 | ~65 | Mostly prose; tightest doc |
 | `git.md` | 258 | ~115 | Branch model reference |
-| `co-workers.md` | 190 | ~33 | Already light |
+| `co-worker.md` | 190 | ~33 | Already light |
 | **Total** | **4092→4080** | **~1649 (40%)** | |
 
 Going further (target -30%) would require a structural rewrite: consolidate anti-patterns across files into one shared section, move shared bash helpers (`cmux_set_state`, `spawn_pool_slot`, etc.) into a single primitives doc, deduplicate cross-references. That's a half-day v0.19 candidate, not a one-pass minification.
@@ -850,7 +869,7 @@ Layer-3 fan-out of 5 Sonnet sub-agents: ~100ms total (5 × 20ms) instead of ~50�
 
 Pool refills in background after each consumption so subsequent spawns also hit the fast path. Falls back to standard spawn when pool is empty. Disable via `kingdom.json.cmux.subAgentPool.enabled: false`. Only applies to tab-mode spawns; Agent() background spawns are already cheap.
 
-New section in `.kingdom/.setting/workers.md` § "Pre-warmed sub-agent pool" with full pool management bash.
+New section in `.kingdom/.setting/roles/worker.md` § "Pre-warmed sub-agent pool" with full pool management bash.
 
 ### 🆕 Auto-generated PR bodies from task files
 
@@ -865,7 +884,7 @@ Field mapping:
 
 Override available via dispatch brief `PR body: manual` — King skips auto-generation and asks Ter to paste a body before pushing. Default: auto-generate.
 
-New section in `.kingdom/.setting/kings.md` § "Auto-generated PR body from task file".
+New section in `.kingdom/.setting/roles/king.md` § "Auto-generated PR body from task file".
 
 ### Why this matters
 
@@ -893,12 +912,12 @@ User feedback (paraphrased): "We got many master with unlimited sub-agent but I 
 
 ### Changed
 
-- **`.kingdom/.setting/workers.md` Layer-1 Discovery section rewritten** with the "lazy implementor antidote" rule:
+- **`.kingdom/.setting/roles/worker.md` Layer-1 Discovery section rewritten** with the "lazy implementor antidote" rule:
   - **Default stance**: "The project HAS a pattern; my job is to find it. Burden of proof is on me to show one doesn't exist."
   - **Mandatory exhaustive pattern grep** before any implementation. Use sub-agents in parallel (capacity is unlimited).
   - Concrete checklist: grep across the project, read `.env*` and `.env.example`, read all relevant `scripts/`, read `lib/*-defaults.*` for HOW-TO comments, read `compose.*.yml`, read project `CLAUDE.md`.
   - Synthesise findings in task file Step 1: either "pattern found at <file:line>, reusing it" OR "no pattern found; grepped N files; confirming new approach with King BEFORE implementing".
-- **`.kingdom/.setting/kings.md` dispatch brief schema gets a NEW mandatory field**: `Patterns to grep first` — King specifies the file globs / search terms the worker MUST grep before implementing. Plus a `Default stance` line: "The project HAS a pattern. Find it before inventing. Burden of proof: if 'no pattern exists' — show me the grep output that proves it."
+- **`.kingdom/.setting/roles/king.md` dispatch brief schema gets a NEW mandatory field**: `Patterns to grep first` — King specifies the file globs / search terms the worker MUST grep before implementing. Plus a `Default stance` line: "The project HAS a pattern. Find it before inventing. Burden of proof: if 'no pattern exists' — show me the grep output that proves it."
 
 ### Added (anti-patterns)
 
@@ -981,12 +1000,12 @@ The "feature branch = worker-N tip, byte-for-byte" release. Real test caught a w
 
 ### Added
 
-- **`.kingdom/.setting/kings.md` § "STRICT: `feature/<topic>` = `worker-N` tip, byte-for-byte identical"** — new subsection inside "Kingdom as review staging". Rules:
+- **`.kingdom/.setting/roles/king.md` § "STRICT: `feature/<topic>` = `worker-N` tip, byte-for-byte identical"** — new subsection inside "Kingdom as review staging". Rules:
   - `feature/<topic>` is a fast-forward checkout from `worker-N` tip
   - King MUST NOT add commits on the feature branch after carving
   - Kingdom = source of truth for what's about to ship; feature branches = exact mirrors
   - Concrete correct + wrong bash snippets
-- **`kings.md` § "What to do when you want extra content in the PR"** — explicit decision matrix:
+- **`king.md` § "What to do when you want extra content in the PR"** — explicit decision matrix:
   - **Option A** (preferred): worker commits the extra content as part of its closer. Single commit on worker-N includes code + report + doc updates.
   - **Option B**: separate PR. Fresh `feature/<topic>-followup` branch from `origin/develop` for genuinely independent content.
   - Decision table: which to use when (test report ONE PR → A; test report MULTIPLE PRs → B; doc update about THIS feature → A; cross-cutting infra change → B)
@@ -1004,7 +1023,7 @@ Real transcript (paraphrased): King had `kingdom` at d75b85e (5 merge commits vi
 
 ### Non-breaking
 
-- No schema, command, or behaviour changes outside the kings.md procedural rules.
+- No schema, command, or behaviour changes outside the king.md procedural rules.
 - Existing kingdoms keep working; v0.16.3 just makes the rule that was implicit in v0.15.1 explicit + enforceable.
 
 ---
@@ -1061,20 +1080,20 @@ The "60% conservative + 40% industrial scheduler" release. Real test feedback: "
 
 ### Added
 
-- **`kings.md` § "Calibrated philosophy — 60% conservative core, 40% industrial overlay"** — new top-level section defining the balance:
+- **`king.md` § "Calibrated philosophy — 60% conservative core, 40% industrial overlay"** — new top-level section defining the balance:
   - **Conservative core (60%)**: human-gated push, mandatory kingdom merge, non-skippable gate, watchman passive by default, confirmation on risky moves, small inline work allowed
   - **Industrial overlay (40%)**: big work auto-delegated, auto-load idle capacity, plan for max parallelism, parallel duplicate dispatch (Ter-initiated), watchman test-verification duty
   - **Conflict resolution**: when the two halves disagree, conservative wins (60% is the floor, 40% layers on top)
-- **`kings.md` § "Two-tier gate — light per-lane, heavy on kingdom"** — formalises kingdom as test environment:
+- **`king.md` § "Two-tier gate — light per-lane, heavy on kingdom"** — formalises kingdom as test environment:
   - **Tier 1 (lane)**: typecheck only, runs in `.worktrees/<lane>`. Fast feedback in seconds.
   - **Tier 2 (kingdom)**: full tests + smoke + lint on the integrated kingdom branch. Catches cross-lane bugs Tier 1 misses.
   - Push approval requires Tier 2 pass (not just Tier 1).
-- **`kings.md` § "Lane utilisation — load idle capacity"** — bash logic for the utilisation check + default behaviour rules:
+- **`king.md` § "Lane utilisation — load idle capacity"** — bash logic for the utilisation check + default behaviour rules:
   - 2+ idle lanes + 2+ pending → auto-dispatch obvious matches
   - 1 idle + 1 pending → suggest, await nod
   - Controversial work → always suggest, never auto-dispatch
-- **`kings.md` § "Parallel duplicate dispatch (Ter-initiated)"** — explicit pattern for race-style exploration: same sub-task-id, different briefs/models, lanes named with `-A` / `-B` suffix in their task files. Winner ships; loser archived for audit.
-- **`watchmans.md` § "On-demand test verification (King-dispatched, read-only)"** — new role expansion:
+- **`king.md` § "Parallel duplicate dispatch (Ter-initiated)"** — explicit pattern for race-style exploration: same sub-task-id, different briefs/models, lanes named with `-A` / `-B` suffix in their task files. Winner ships; loser archived for audit.
+- **`watchman.md` § "On-demand test verification (King-dispatched, read-only)"** — new role expansion:
   - Request artifact at `<LOGS>/watchman-requests/<UTC>__verify-<slug>.md` with brief + commands + scope
   - Watchman picks up next `/loop` tick, runs commands, writes `WATCH_*__verify-*.md` report, notifies King
   - **Will**: run tests, read source, write report. **Won't**: edit test code, push, commit, take action on failures.
@@ -1104,7 +1123,7 @@ The "every artifact carries the lane" release. Real test surfaced drift: a lane 
 
 ### Added
 
-- **`.kingdom/.setting/workers.md` § "Task-artifact naming — strict"** — new top-level section right before "Task file" subsection. Defines:
+- **`.kingdom/.setting/roles/worker.md` § "Task-artifact naming — strict"** — new top-level section right before "Task file" subsection. Defines:
   - **Naming convention table** — every per-task artifact's exact filename pattern + where the lane appears
   - **Continuation grep patterns** — concrete `ls`/`grep` commands to find "all of worker-3's work today" / "most recent worker-3 task" / etc.
   - **Anti-patterns** — task file without lane in name, inconsistent lane positions, renaming after creation, putting two lanes in one file
@@ -1127,7 +1146,7 @@ The "kingdom is the review surface, not just the integration branch" release. Re
 
 ### Added
 
-- **`.kingdom/.setting/kings.md` § "Kingdom as review staging — MANDATORY before any push"** — new top-level section right before "Push approval gate". Defines:
+- **`.kingdom/.setting/roles/king.md` § "Kingdom as review staging — MANDATORY before any push"** — new top-level section right before "Push approval gate". Defines:
   - **Why**: gate catches mechanical conflicts; review catches logical conflicts, design judgement, bundle decisions
   - **Mandatory workflow** (5 steps): merge into kingdom → print review surface → ask Ter to review → wait for approval → carve `feature/*` from lane tip (NOT from kingdom) + push + PR
   - **Why carve from lane tip, not kingdom**: keeps PRs one-purpose, one-commit, traceable to a single lane
@@ -1172,8 +1191,8 @@ The "efficient by default" release. v0.14.9 made tab the default spawn mode for 
   },
   "subAgentSpawnFallback": "tab"
   ```
-- **`workers.md` "Tab vs Agent decision" rewritten** — now explains the **spawn-cost reality** table (tab ~10–20s vs Agent ~2s), the **model-tiered defaults**, and a **per-task override** mechanism via the dispatch brief's `Spawn mode:` line.
-- **`kings.md` dispatch brief schema** — added optional `Spawn mode: tab|background|split` field. Master honours the override; otherwise uses model-tiered defaults.
+- **`worker.md` "Tab vs Agent decision" rewritten** — now explains the **spawn-cost reality** table (tab ~10–20s vs Agent ~2s), the **model-tiered defaults**, and a **per-task override** mechanism via the dispatch brief's `Spawn mode:` line.
+- **`king.md` dispatch brief schema** — added optional `Spawn mode: tab|background|split` field. Master honours the override; otherwise uses model-tiered defaults.
 
 ### Why this matters
 
@@ -1227,7 +1246,7 @@ The "stop fighting `/kingdom:start`" release. Real test surfaced four friction p
 
 ### Added
 
-- **`.kingdom/.setting/cmux.md` § "Spawn → name → color → describe (the 4-call pattern)"** — explicit doc of the hard-won 4-call sequence per workspace creation, with the full `spawn_lane ()` helper and rationale for each step.
+- **`.kingdom/.setting/reference/cmux.md` § "Spawn → name → color → describe (the 4-call pattern)"** — explicit doc of the hard-won 4-call sequence per workspace creation, with the full `spawn_lane ()` helper and rationale for each step.
 - **Color-name pitfall callout** in `cmux.md` — explicitly notes `violet` is not in cmux's set; use `Purple`.
 
 ### Why this matters
@@ -1247,7 +1266,7 @@ The "override cmux's wrong auto-state" release. cmux.app auto-detects "Running" 
 
 ### Added
 
-- **`.kingdom/.setting/cmux.md` § "Attention markers — mark-read / mark-unread"** — new section before "Dynamic workspace descriptions":
+- **`.kingdom/.setting/reference/cmux.md` § "Attention markers — mark-read / mark-unread"** — new section before "Dynamic workspace descriptions":
   - Explains what cmux's auto-state covers vs what `mark-unread` does
   - Three-layer state override pattern: `mark-unread` + `set-description` + `cmux notify`
   - State → markers convention table (8 kingdom states mapped to badge / description / notify settings)
@@ -1275,14 +1294,14 @@ The "sidebar reads itself" release. cmux.app workspace descriptions are live-upd
 
 ### Added
 
-- **`.kingdom/.setting/cmux.md` § "Dynamic workspace descriptions"** — full reference for live state lines:
+- **`.kingdom/.setting/reference/cmux.md` § "Dynamic workspace descriptions"** — full reference for live state lines:
   - **State-emoji vocabulary**: `▶` running · `⏸` waiting · `⚠` needs attention · `✅` done · `❌` failed · `🐾` idle · `▰▰▰▱` progress bar
   - **Per-role description schema** with concrete examples for King / Worker / Co-worker / Watchman
   - **Update-site table** — when each role rewrites its description (12 trigger points across roles)
   - **`cmux_set_state` bash helper** — common pattern across all role docs
   - **Watchman-cross-update** — when the blocked-lane scan finds a stalled lane, it ALSO updates that lane's description to `⚠ Blocked · permission prompt` (visible immediately in sidebar)
-- **`workers.md` "Live workspace description" subsection** — workers update at every layer transition (L1 → L2 → L3 → L4) + closer + idle, with the 4-layer progress bar `▰▰▰▰`.
-- **`kings.md` "Live workspace description" subsection** — King updates at idle / gate-start / gate-pass / gate-fail / pushed. Push-state holds for 5 min then reverts to idle.
+- **`worker.md` "Live workspace description" subsection** — workers update at every layer transition (L1 → L2 → L3 → L4) + closer + idle, with the 4-layer progress bar `▰▰▰▰`.
+- **`king.md` "Live workspace description" subsection** — King updates at idle / gate-start / gate-pass / gate-fail / pushed. Push-state holds for 5 min then reverts to idle.
 
 ### Why this matters
 
@@ -1313,7 +1332,7 @@ The "King never sits on an un-gated sentinel" release. Prior versions had the Ki
 
 ### Added
 
-- **`kings.md` § "Auto-gate on completion (King never sits on an un-gated sentinel)"** — new top-level section before "Working WITH the Watchman". Defines:
+- **`king.md` § "Auto-gate on completion (King never sits on an un-gated sentinel)"** — new top-level section before "Working WITH the Watchman". Defines:
   - **Detection rule**: an un-gated sentinel = `<LOGS>/done/<ID>__*-<lane>.flag` with NO matching `KING_*__<lane>__<sub-task-id>.md` test report.
   - **Auto-trigger rule**: King auto-fires the pre-commit gate (non-destructive: typecheck + tests + dry-merge) on every un-gated sentinel detected. Gate PASS → `cmux notify "push?"` to Ter. Gate FAIL → `cmux notify "gate FAIL"` to lane's workspace + may dispatch fix-task.
   - **When this fires**: session resume, pre-Ter-interaction sweep, post-dispatch polling, watchman done-notify.
@@ -1339,7 +1358,7 @@ The "parallel work is now visible" release. v0.13.0 introduced tab-spawned sub-a
 ### Changed
 
 - **`kingdom.json.cmux.subAgentSpawnDefault` default flipped: `"background"` → `"tab"`** — every sub-agent spawn now opens a visible tab inside the master's workspace by default. Auto-closes on sentinel via 5-step closer Step 5.
-- **`.kingdom/.setting/workers.md` "Spawning sub-agents" section restructured.** Tab is now the documented default; `Agent(...)` is the **opt-in** exception for cheap Haiku fan-outs (Layer-1 Discovery scans, doc digests, fan-outs of >3 short agents where N tabs would be cramped). Three options total: `"tab"` (default), `"background"`, `"split"`.
+- **`.kingdom/.setting/roles/worker.md` "Spawning sub-agents" section restructured.** Tab is now the documented default; `Agent(...)` is the **opt-in** exception for cheap Haiku fan-outs (Layer-1 Discovery scans, doc digests, fan-outs of >3 short agents where N tabs would be cramped). Three options total: `"tab"` (default), `"background"`, `"split"`.
 - **Visual fan-out example added** — concrete ASCII diagram of worker-1's workspace as 3 Sonnet sub-agents spawn for Layer 3 parallel code edits, then disappear cleanly when each writes its sentinel.
 
 ### Added
@@ -1354,11 +1373,11 @@ Real test feedback: "and when master working i don't see it parallel work with s
 ### Compatibility notes
 
 - **`kingdom.json` schema is additive** — existing kingdoms without `cmux.subAgentSpawnDefault` get the new `"tab"` default automatically. To preserve v0.14.8 behaviour, set `"subAgentSpawnDefault": "background"` in your kingdom.json.
-- **Cost note** — tabs are full Claude Code sessions; spawning many simultaneously costs more than headless Agent() calls. For cheap Haiku fan-outs (Layer-1 scans, doc digests), masters should explicitly use `Agent(...)` — documented in workers.md.
+- **Cost note** — tabs are full Claude Code sessions; spawning many simultaneously costs more than headless Agent() calls. For cheap Haiku fan-outs (Layer-1 scans, doc digests), masters should explicitly use `Agent(...)` — documented in worker.md.
 
 ### Also bundled (small cleanup)
 
-- **`kings.md` kickoff synthesis** — removed the duplicate "Good morning. Checking watchman state..." paragraph that was left dangling after v0.14.8. Now there's exactly one synthesis block (the merged Context loaded + Watchman state version).
+- **`king.md` kickoff synthesis** — removed the duplicate "Good morning. Checking watchman state..." paragraph that was left dangling after v0.14.8. Now there's exactly one synthesis block (the merged Context loaded + Watchman state version).
 
 ---
 
@@ -1368,7 +1387,7 @@ The "King reads ALL context at session start" release. v0.14.7 made the King rea
 
 ### Added
 
-- **`kings.md` Step −1 — Session-start context load (mandatory)** — King reads, in this order, before doing ANYTHING else (including watchman state):
+- **`king.md` Step −1 — Session-start context load (mandatory)** — King reads, in this order, before doing ANYTHING else (including watchman state):
   1. **Workspace CLAUDE.md** at `$PWD/CLAUDE.md` — workspace rules, project map, cross-cutting conventions
   2. **Project CLAUDE.md** at `$PWD/<project>/CLAUDE.md` — local stack, gate commands, project-specific rules
   3. **Auto-memory MEMORY.md** at `~/.claude/projects/<workspace-key>/memory/MEMORY.md` — durable user preferences, feedback rules, project facts. King skims the index + decides which specific entries to load JIT during planning.
@@ -1394,7 +1413,7 @@ The "King actually uses the Watchman" release. Prior versions treated watchman a
 
 ### Added
 
-- **`.kingdom/.setting/kings.md` § "Working WITH the Watchman (mandatory when one exists)"** — new top-level section right after King's responsibilities. Defines:
+- **`.kingdom/.setting/roles/king.md` § "Working WITH the Watchman (mandatory when one exists)"** — new top-level section right after King's responsibilities. Defines:
   - **Mandatory reads table** — what watchman files King must read before each major action (daily kickoff, dispatch, gate, "push?" prompt, status questions, long idle)
   - **Pre-dispatch checks** — bash snippet King runs before `cmux send`: (1) is develop green per latest `WATCH_*develop_*.md`, (2) is target lane blocked per `watchman_state.json.blocked_lanes`, (3) PR queue informational
   - **Daily kickoff routine** — single synthesis paragraph aggregating all watchman state on first message of the day; auto-fires after `/kingdom:start`
@@ -1429,7 +1448,7 @@ The "lanes never silently stall" release. Fixes two related gaps: (1) Claude Cod
 
 ### Added (detection)
 
-- **Watchman blocked-lane scan** — new duty in `watchmans.md`. Every `/loop` tick, watchman `cmux capture-pane`s each lane workspace and pattern-matches the last 30 lines against:
+- **Watchman blocked-lane scan** — new duty in `watchman.md`. Every `/loop` tick, watchman `cmux capture-pane`s each lane workspace and pattern-matches the last 30 lines against:
   - `Do you want to proceed\?` — Claude Code's standard permission prompt
   - `Esc to cancel` — same prompt's footer
   - `\[y/N\]` — common interactive y/n confirmations
@@ -1441,7 +1460,7 @@ The "lanes never silently stall" release. Fixes two related gaps: (1) Claude Cod
   - `--workspace $KING_WS` → sidebar badge on King's workspace + bell-panel entry
 
   Idempotent + debounced via `watchman_state.json.blocked_lanes` — won't re-notify the same blocked lane every tick. Clears when the lane unblocks.
-- **`.kingdom/.setting/cmux.md` § Read pane contents** — documents `cmux capture-pane` + `cmux read-screen`, the watchman pattern set, and the prevention-vs-detection split (prevention preferred via expanded allow-list; detection catches what slips through).
+- **`.kingdom/.setting/reference/cmux.md` § Read pane contents** — documents `cmux capture-pane` + `cmux read-screen`, the watchman pattern set, and the prevention-vs-detection split (prevention preferred via expanded allow-list; detection catches what slips through).
 
 ### Why this matters
 
@@ -1502,18 +1521,18 @@ The "actually wire up cmux.app notifications" release. Prior spec mentioned `cmu
 
 ### Changed (notifications now mandatory in PRIMARY mode)
 
-- **4-step closer Step 4** in `workers.md` and `co-workers.md` — mandatory dual `cmux notify` calls:
+- **4-step closer Step 4** in `worker.md` and `co-worker.md` — mandatory dual `cmux notify` calls:
   - `--surface "$CMUX_SURFACE_ID"` → blue ring on the lane's own pane + tab lights up
   - `--workspace "$KING_WS"` → badge on King's sidebar entry + bell-panel logs the event
   - Previously was an optional "+ optional `cmux notify --pane <self>`" with the wrong flag (`--pane` doesn't exist; correct is `--surface`).
-- **Watchman alerts** in `watchmans.md` — schema standardised: `--title "🕵️ watchman-N"` + `--subtitle "<event class>"` (e.g., `develop RED`, `CI failed · PR #N`, `Ready to merge · PR #N`) + `--body "<one-line context>"`. All target `--workspace "$KING_WS"`.
-- **King gate notifications** in `kings.md`:
+- **Watchman alerts** in `watchman.md` — schema standardised: `--title "🕵️ watchman-N"` + `--subtitle "<event class>"` (e.g., `develop RED`, `CI failed · PR #N`, `Ready to merge · PR #N`) + `--body "<one-line context>"`. All target `--workspace "$KING_WS"`.
+- **King gate notifications** in `king.md`:
   - Pre-commit gate FAIL → notify originating master's workspace (so the lane gets a sidebar badge + ring)
   - Pre-commit gate PASS, asking "push?" → notify `$KING_WS` (Ter may be in another workspace; sidebar badge surfaces the prompt)
 
 ### Added
 
-- **`.kingdom/.setting/cmux.md` § Notification system** — fully rewritten with three visible surfaces table (ring / badge / panel), kingdom notification schema (8 canonical events), targeting cheat-sheet, "what NOT to notify" list. Single source of truth for every notification call across the kit.
+- **`.kingdom/.setting/reference/cmux.md` § Notification system** — fully rewritten with three visible surfaces table (ring / badge / panel), kingdom notification schema (8 canonical events), targeting cheat-sheet, "what NOT to notify" list. Single source of truth for every notification call across the kit.
 
 ### Why this matters
 
@@ -1532,7 +1551,7 @@ cmux.app's notification UX is its strongest feature — blue rings, tab lights, 
 
 - **Workspace colors applied per role.** After spawning each lane workspace, `/kingdom:start` now runs `cmux workspace-action --action set-color --workspace <ref> --color <named>` to apply the color from `kingdom.json.cmux.workspaceColors`. Defaults: King=amber, Worker=violet, Co-worker=blue, Watchman=rose. Visible as left-edge color bars in the cmux.app sidebar — visual role discrimination at a glance.
 - **King workspace gets a description** — `cmux workspace-action --action set-description` sets "Your conversation · pinned · `<UTC>`" so the sidebar shows context under the King's name.
-- **`.kingdom/.setting/cmux.md` updated** with the workspace-action vs tab-action distinction (new "Rename" section table, new "Set workspace color + description" section, new "Common pitfalls" row for the renamed-wrong-thing case).
+- **`.kingdom/.setting/reference/cmux.md` updated** with the workspace-action vs tab-action distinction (new "Rename" section table, new "Set workspace color + description" section, new "Common pitfalls" row for the renamed-wrong-thing case).
 
 ### Why this matters
 
@@ -1575,7 +1594,7 @@ The "three-tier cmux hierarchy" release. Big spec correction + new cmux referenc
 
 ### Added
 
-- **`.kingdom/.setting/cmux.md`** — new canonical cmux reference doc for every role. 300+ lines covering: three-tier hierarchy (Workspace → Tab → Split), every cmux command kingdom uses (`new-workspace`, `tab-action`, `new-split`, `send`, `notify`, `rename-tab`, `identify`, `tree`, `list-panes`), env vars (`CMUX_WORKSPACE_ID`, `CMUX_SURFACE_ID`), common pitfalls, and reference URLs. All other role docs link here for cmux details instead of repeating commands inline. Scaffolded by `/kingdom:init` into every workspace.
+- **`.kingdom/.setting/reference/cmux.md`** — new canonical cmux reference doc for every role. 300+ lines covering: three-tier hierarchy (Workspace → Tab → Split), every cmux command kingdom uses (`new-workspace`, `tab-action`, `new-split`, `send`, `notify`, `rename-tab`, `identify`, `tree`, `list-panes`), env vars (`CMUX_WORKSPACE_ID`, `CMUX_SURFACE_ID`), common pitfalls, and reference URLs. All other role docs link here for cmux details instead of repeating commands inline. Scaffolded by `/kingdom:init` into every workspace.
 - **Three-tier hierarchy** (PRIMARY mode):
   - 🏢 **Workspace** per master — King + every worker + co-worker + watchman gets its own cmux.app workspace (sidebar entry, full screen, native session restore).
   - 📑 **Tab** for visible sub-agent spawns inside a master's workspace — auto-closes on sentinel flag (new 5-step closer).
@@ -1584,14 +1603,14 @@ The "three-tier cmux hierarchy" release. Big spec correction + new cmux referenc
 - **5-step closer for tab-spawned sub-agents** — extends the standard 4-step closer with Step 5: `cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`. Tabs self-destruct after the sentinel flag; master doesn't clean up. Agent-spawned sub-agents (default, headless) skip Step 5 (no tab to close).
 - **`commands/start.md` Phase 5 + 6 rewrite** — PRIMARY mode uses `cmux new-workspace --name --cwd --command "claude"` per lane (no more broken `cmux claude-teams`). Returns workspace refs which persist to `$LOGS/workspace-refs.env` so King + watchman can address lanes by stable refs across session restarts.
 - **`commands/doctor.md` Check 1 expanded** — now verifies the 9 specific cmux commands kingdom uses (`new-workspace`, `new-split`, `tab-action`, `send`, `notify`, `rename-tab`, `identify`, `tree`, `list-panes`). Catches cmux versions too old for kingdom v0.13.
-- **King dispatch via workspace refs** — `kings.md` updated: `cmux send --workspace "$WORKER_WS_1" -- "<brief>"` replaces the broken `cmux send --lane "worker-1"` (which doesn't exist in manaflow/cmux).
+- **King dispatch via workspace refs** — `king.md` updated: `cmux send --workspace "$WORKER_WS_1" -- "<brief>"` replaces the broken `cmux send --lane "worker-1"` (which doesn't exist in manaflow/cmux).
 
 ### Changed
 
 - **`commands/start.md` Phase 5 + 6** — full rewrite. PRIMARY mode uses workspace-per-master; FALLBACK (raw tmux) tightened with pane-title emoji prefixes; HEADLESS unchanged.
-- **`.kingdom/.setting/kings.md` dispatch templates** — `--lane <name>` → `--workspace <ref>` everywhere; ref sourced from `$LOGS/workspace-refs.env`.
-- **`.kingdom/.setting/workers.md`** — new "Spawning sub-agents — Tab vs Agent decision" section at top; 5-step closer added inline after the 4-step closer doc (5-step applies only to tab-spawned sub-agents).
-- **`.kingdom/.setting/watchmans.md`** — documents the optional vertical split layout for the watchman workspace.
+- **`.kingdom/.setting/roles/king.md` dispatch templates** — `--lane <name>` → `--workspace <ref>` everywhere; ref sourced from `$LOGS/workspace-refs.env`.
+- **`.kingdom/.setting/roles/worker.md`** — new "Spawning sub-agents — Tab vs Agent decision" section at top; 5-step closer added inline after the 4-step closer doc (5-step applies only to tab-spawned sub-agents).
+- **`.kingdom/.setting/roles/watchman.md`** — documents the optional vertical split layout for the watchman workspace.
 - **`commands/init.md`** — also scaffolds the new `cmux.md` role doc.
 
 ### Fixed
@@ -1761,7 +1780,7 @@ The "learn first, then update" release. `/kingdom:update` becomes a true Layer-1
 - **`/kingdom:update` Step 3.7 — Gap synthesis.** Cross-references the project reality picture against `master_agent.log` + `tasks/*` + curated digests. Two new sections in every audit digest:
   - `## Gap A — Project says done, kingdom has no record` — surfaces out-of-band work (manual commits, ad-hoc changes) where the project doc claims completion but no kingdom log entry exists.
   - `## Gap B — Kingdom logged it, project docs don't reflect it` — surfaces docs that need updating after shipped work.
-- **King action table** (in `kings.md` → "Reviewing watchman audit findings") gets two new rows for Gap A and Gap B with the recommended follow-up per row (backfill log line vs dispatch doc-update task).
+- **King action table** (in `king.md` → "Reviewing watchman audit findings") gets two new rows for Gap A and Gap B with the recommended follow-up per row (backfill log line vs dispatch doc-update task).
 - **Watchman project-state scan (bounded)** — watchman's idle docs audit now does a small 5-file scan of project docs per tick, contributing to `## Gap A` / `## Gap B` sections of `WATCH_DOCS_AUDIT.md`. Flag-only — never edits project source.
 
 ### Changed
@@ -1782,9 +1801,9 @@ The "generic workers, any domain" release. Workers are no longer pre-specialised
 ### Changed
 
 - **Workers are generic capacity.** Removed `workers[i].focus` and `workers[i].ownsPaths` from `kingdom.json` (and the same for `coworkers[i]`). Every worker starts identical; `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, finance-model audit the day after.
-- **King assigns task scope per dispatch**, not per config. New "Dispatch brief schema" section in `kings.md` documents what King sends each worker. Cross-lane conflict prevention shifted entirely to (a) King's Layer-1 planning (sub-agents scan candidate task overlap) + (b) FINAL `git merge-tree` check at push gate. The combination replaces what `ownsPaths` did in v0.4.0 without the path-staleness problem.
+- **King assigns task scope per dispatch**, not per config. New "Dispatch brief schema" section in `king.md` documents what King sends each worker. Cross-lane conflict prevention shifted entirely to (a) King's Layer-1 planning (sub-agents scan candidate task overlap) + (b) FINAL `git merge-tree` check at push gate. The combination replaces what `ownsPaths` did in v0.4.0 without the path-staleness problem.
 - **`gate.*` keys are now explicitly arbitrary.** Template still ships `typecheck`/`tests`/`smoke`/`lint` as dev-friendly defaults, but role docs + template comments make clear the keys are user-defined. Finance kingdoms use `validate`/`audit`; science kingdoms use `reproduce`/`peer-review`; writing kingdoms use `spellcheck`/`fact-check`. Same `kingdom.json` schema, different vocabulary.
-- **Domain-agnostic framing.** README hero + tagline + workers.md now state explicitly: kingdom works for any domain that uses git for versioning, not just software dev.
+- **Domain-agnostic framing.** README hero + tagline + worker.md now state explicitly: kingdom works for any domain that uses git for versioning, not just software dev.
 - **`kingdom.json.template` simplified.** Per-lane entries now have only `slug` + `model` (was: `slug` + `model` + `focus` + `ownsPaths`). Significantly smaller, faster to read.
 
 ### Compatibility notes
@@ -1841,9 +1860,9 @@ The "audit safety net" release. Adds a forced sweep command + extends watchman w
 
 - **`.claude-plugin/marketplace.json`** — makes this repo serve as its own single-plugin marketplace. Install flow is now `/plugin marketplace add chatthong/kingdom` followed by `/plugin install kingdom@kingdom`. (Local-path install — `/plugin install /path/to/repo` — still works for development.)
 - **`/kingdom:update`** — new slash command that forces a docs/log/task audit pass on one project. Spawns a Sonnet sub-agent that re-reads every task file in `.kingdom/<project>/tasks/`, cross-checks each checkbox against `git log`, backfills orphan raw artifacts (raw with no curated digest), repairs missing `master_agent.log` summary lines, and flags higher-risk items (stale digests, merge candidates, archive candidates, suspect entries) for King review. Idempotent; current project only.
-- **Watchman docs audit duty** — new section in `watchmans.md` granting watchman scoped write authority on its own project's `tasks/`+`logs/` for low-risk fixes during idle `/loop` time (stale checkboxes, missing log lines, dead `[[name]]` links). Higher-risk findings (digest rewrites, task-file merges, archive moves) are flagged to `WATCH_DOCS_AUDIT.md` for King review.
+- **Watchman docs audit duty** — new section in `watchman.md` granting watchman scoped write authority on its own project's `tasks/`+`logs/` for low-risk fixes during idle `/loop` time (stale checkboxes, missing log lines, dead `[[name]]` links). Higher-risk findings (digest rewrites, task-file merges, archive moves) are flagged to `WATCH_DOCS_AUDIT.md` for King review.
 - **`WATCH_DOCS_AUDIT.md`** — new single-file-per-project rolling artifact at `<workspace>/.kingdom/<project>/logs/WATCH_DOCS_AUDIT.md`. Watchman appends findings; King reviews + clears bullets after acting.
-- **"Reviewing watchman audit findings" section** in `kings.md` — documents how/when King consumes `WATCH_DOCS_AUDIT.md` and what to do with each finding category.
+- **"Reviewing watchman audit findings" section** in `king.md` — documents how/when King consumes `WATCH_DOCS_AUDIT.md` and what to do with each finding category.
 - **`/kingdom:doctor` Check 8** — informational scan for orphan raw artifacts (raw with no curated digest). Suggests `/kingdom:update` when found.
 - **README FAQ entries** — `/kingdom:update` purpose + watchman write-authority scope.
 
@@ -1868,10 +1887,10 @@ The "actually opinionated" release. Major architectural changes that lock in how
 ### Added
 
 - **Task files** — new per-task audit artifact at `<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`. Checkbox doc capturing the multi-layer plan (Discovery → Strategy → Execution → Verification), in-progress progress notes, and final summary. Lane master is sole writer; sub-agents and everyone else read only. One file per task; never deleted, never reused.
-- **Multi-layer planning** — explicit recursive fan-out pattern in lane master execution. Layer 1 (Discovery, Haiku fan-out) → Layer 2 (Strategy, Sonnet/Opus) → Layer 3 (Execution, Sonnet parallel) → Layer 4 (Verification). Documented as the canonical pattern in `workers.md`; cross-referenced from `kings.md`, `co-workers.md`, `index.md`.
+- **Multi-layer planning** — explicit recursive fan-out pattern in lane master execution. Layer 1 (Discovery, Haiku fan-out) → Layer 2 (Strategy, Sonnet/Opus) → Layer 3 (Execution, Sonnet parallel) → Layer 4 (Verification). Documented as the canonical pattern in `worker.md`; cross-referenced from `king.md`, `co-worker.md`, `index.md`.
 - **Role Control authoritative table** in `index.md` — single source of truth for what each role can/can't do (writes / reads / spawns / pushes / edits / plans). Per-role files now document HOW; this table defines WHAT.
 - **Auto-detect outer host mode** — `/kingdom:start` and `/kingdom:doctor` now auto-detect PRIMARY (manaflow/cmux.app) vs FALLBACK (raw tmux) vs HEADLESS (`claude -p`). No user config needed; King adapts to what's installed.
-- **Native Mermaid diagrams** — every ASCII chart in role docs, README, and git.md converted to Mermaid (16 diagrams total: 2 in README + 4 in git.md + 4 in kings.md + 3 in workers.md + 2 in watchmans.md + 1 in co-workers.md + 1 in index.md). No theme directive — GitHub auto-adapts to user's light/dark theme.
+- **Native Mermaid diagrams** — every ASCII chart in role docs, README, and git.md converted to Mermaid (16 diagrams total: 2 in README + 4 in git.md + 4 in king.md + 3 in worker.md + 2 in watchman.md + 1 in co-worker.md + 1 in index.md). No theme directive — GitHub auto-adapts to user's light/dark theme.
 - **King's own task files for planning sessions** — slug `king-plan` (e.g., `2026-05-17T0900Z__king-plan__pick-todays-3-tasks.md`). Same schema as lane-master task files.
 - **CHANGELOG.md** (this file).
 
@@ -1915,7 +1934,7 @@ Initial public release.
 ### Added
 
 - 4 slash commands: `/kingdom:doctor`, `/kingdom:init`, `/kingdom:new`, `/kingdom:start`.
-- 6 role docs in `templates/role-files/`: `index.md`, `kings.md`, `workers.md`, `co-workers.md`, `watchmans.md`, `git.md`.
+- 6 role docs in `templates/role-files/`: `index.md`, `king.md`, `worker.md`, `co-worker.md`, `watchman.md`, `git.md`.
 - `kingdom.json.template` config template.
 - `CMUX-Guide.md` (manaflow/cmux reference).
 - `TMUX-Guide.md` (tmux 101 for the fallback path).

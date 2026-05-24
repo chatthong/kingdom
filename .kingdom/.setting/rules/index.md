@@ -30,7 +30,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 
 **Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
 
-Tier 1 = 10. Tier 2 ≈ 33. Tier 3 = 5. Total = 48 rules (R46-R50 added in v0.32.0 for story pods).
+Tier 1 = 10. Tier 2 = 35. Tier 3 = 5. Total = 50 rules.
 
 ---
 

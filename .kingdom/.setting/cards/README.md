@@ -43,7 +43,7 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 
 ## Variable substitution
 
-Each card defines its variables in a `## Variables` table. Helper `render_card` in [`../_primitives.md`](../_primitives.md) loads the template, substitutes `${VAR}` from the calling shell, then prints. Variables that resolve to empty string are dropped along with their line so cards don't render with hollow rows.
+Each card defines its variables in a `## Variables` table. Helper `render_card` in [`../functions/render_card.sh`](../functions/render_card.sh) loads the template, substitutes `${VAR}` from the calling shell, then prints. Variables that resolve to empty string are dropped along with their line so cards don't render with hollow rows.
 
 ## Width
 

@@ -1,7 +1,7 @@
 # conflict-detected
 
 **Fires when:** King's FINAL conflict check (`git merge-tree --write-tree --no-messages origin/develop ${LANE}`) finds conflict markers at push time.
-**Used by:** [`kings.md`](../kings.md) push approval gate Step 4.
+**Used by:** [`king.md`](../roles/king.md) push approval gate Step 4.
 
 ## Template
 

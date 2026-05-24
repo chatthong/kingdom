@@ -1,7 +1,7 @@
 # watchman-alert
 
 **Fires when:** Watchman's `/loop` body emits one of the 8 canonical notification events.
-**Used by:** [`watchmans.md`](../watchmans.md) `/loop` body; receiver is the King's chat (via `cmux notify` to King's workspace).
+**Used by:** [`watchman.md`](../roles/watchman.md) `/loop` body; receiver is the King's chat (via `cmux notify` to King's workspace).
 
 ## Template
 
@@ -40,7 +40,7 @@
 
 ## 8 canonical events
 
-(Defined in [cmux.md § Notification system](../cmux.md#notification-system))
+(Defined in [cmux.md § Notification system](../reference/cmux.md#notification-system))
 
 | Event | Severity | Example summary |
 |---|---|---|

@@ -263,7 +263,7 @@ export OPEN_PR_COUNT=$(echo "$OPEN_PRS" | jq length)
 render_card "session-saved"
 ```
 
-**`session-saved` card template** (inline — no separate card file required; King renders it directly):
+**`session-saved` card** — rendered via `render_card "session-saved"` (template in [`../.kingdom/.setting/cards/session-saved.md`](../.kingdom/.setting/cards/session-saved.md)). Reference template:
 
 ```markdown
 > [!TIP]

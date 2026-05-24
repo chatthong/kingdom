@@ -1,4 +1,4 @@
-# seniors.md — the Senior role (story-pod sub-orchestrator + reviewer)
+# senior.md — the Senior role (story-pod sub-orchestrator + reviewer)
 
 > **Read this if you are a Senior-N**, or if you are the King deciding how to run a multi-worker story. New in v0.32.0. Governed by R46-R50 and the R30 delegated-dispatch amendment.
 
@@ -26,7 +26,7 @@ The Senior vs watchman boundary: the **watchman** does cheap per-lane mechanical
 
 ## Workspace + worktree
 
-- Spawned by the King with `spawn_senior_workspace` (see [`_primitives.md`](_primitives.md)). Color: Teal (`kingdom.json.cmux.workspaceColors.senior`).
+- Spawned by the King with `spawn_senior_workspace` (see [`_primitives.md`](../_primitives.md)). Color: Teal (`kingdom.json.cmux.workspaceColors.senior`).
 - Worktree at `.worktrees/senior-N/`, checked out on the Senior's current `story/<id>` branch (created off `git.base` by `create_story_branch`).
 - Runs a `/loop` (dispatched by `spawn_senior_loop`) scoped to its story. The loop ends when the story is pushed (or blocked + escalated).
 
@@ -48,8 +48,8 @@ The King assigns the Senior a story and a set of worker lanes (the pod). A worke
 
 1. **Discover + plan** (first tick): R45 doc orientation, split the story, write the story task file, dispatch sub-tasks to the pod.
 2. **Collect:** when a pod worker signals done and its **Tier-1** (lane typecheck) passed, merge its branch into `story/<id>` with `senior_merge_worker_into_story`. Resolve any integration conflict (R49); if unresolvable, mark the story `blocked`, record the detail, escalate to the King.
-3. **Gate (Tier-2):** when all sub-tasks are merged, run `run_tier2_on_story` (`gate.tests + smoke + lint` on the story branch, when `integration.gateOnStory`). Render the [`story-assembled`](cards/story-assembled.md) card.
-4. **Review (Tier-3 loop):** `senior_review_tick` fans out Sonnet/Haiku reviewers per touched area (bounded by `_bounded_wait`, R42), the Senior synthesizes as Opus. For each issue: write a fix-task, dispatch to the **owning** worker, await its re-merge, re-review. Render the [`senior-verdict`](cards/senior-verdict.md) card each iteration.
+3. **Gate (Tier-2):** when all sub-tasks are merged, run `run_tier2_on_story` (`gate.tests + smoke + lint` on the story branch, when `integration.gateOnStory`). Render the [`story-assembled`](../cards/story-assembled.md) card.
+4. **Review (Tier-3 loop):** `senior_review_tick` fans out Sonnet/Haiku reviewers per touched area (bounded by `_bounded_wait`, R42), the Senior synthesizes as Opus. For each issue: write a fix-task, dispatch to the **owning** worker, await its re-merge, re-review. Render the [`senior-verdict`](../cards/senior-verdict.md) card each iteration.
    - Loop cap: `integration.reviewLoopCap` (default 3). On exhaustion, escalate the story to the human with the outstanding findings rather than looping forever.
 5. **Hand back:** when Tier-2 is green and review is clean, write `SENIOR_<UTC>__story-<id>.md` (verdict + what was reviewed + fixes routed), drop the push-eligible sentinel `<LOGS>/done/<UTC>__senior-N__<story-id>.flag`, and notify the King. The Senior does **not** push (R1).
 
@@ -80,7 +80,7 @@ The Senior owns Tier-2 (on the story branch) and Tier-3 (review). It is a **soft
 
 ## Live workspace description (PRIMARY mode)
 
-After each loop transition the Senior updates its cmux workspace description (see [`_primitives.md` § cmux_set_state](_primitives.md)):
+After each loop transition the Senior updates its cmux workspace description (see [`_primitives.md` § cmux_set_state](../_primitives.md)):
 
 ```bash
 cmux_set_state "▶" "story/<id> · split + dispatching pod"
@@ -130,7 +130,7 @@ The Senior runs the 4-step closer on story completion (push-eligible or blocked)
 
 - **R30** (amended): delegated dispatch — King + Seniors dispatch; Seniors in-pod + visible only.
 - **R46**: story integration branch. **R47**: three-tier gate. **R48**: Senior sole within-story reviewer. **R49**: within-story conflict ownership. **R50**: King owns cross-story.
-- [`_primitives.md`](_primitives.md): `create_story_branch`, `spawn_senior_workspace`, `spawn_senior_loop`, `senior_merge_worker_into_story`, `run_tier2_on_story`, `senior_review_tick`, `guard_senior_dispatch_scope`.
-- [`kings.md`](kings.md): how the King assigns stories, partitions scopes, sequences, and resolves cross-story drift (R50).
-- [`workers.md`](workers.md): how a pod worker receives sub-tasks + fix-tasks from a Senior.
-- [`docs/story-pods.md`](../../docs/story-pods.md): the full pod model + when to use a pod vs the solo path.
+- [`_primitives.md`](../_primitives.md): `create_story_branch`, `spawn_senior_workspace`, `spawn_senior_loop`, `senior_merge_worker_into_story`, `run_tier2_on_story`, `senior_review_tick`, `guard_senior_dispatch_scope`.
+- [`king.md`](king.md): how the King assigns stories, partitions scopes, sequences, and resolves cross-story drift (R50).
+- [`worker.md`](worker.md): how a pod worker receives sub-tasks + fix-tasks from a Senior.
+- [`docs/story-pods.md`](../../../docs/story-pods.md): the full pod model + when to use a pod vs the solo path.

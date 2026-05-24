@@ -33,7 +33,7 @@ King (orchestrator, sole pusher, your chat)
 | `story/<id>` | only as the final `story/<id> -> develop` PR |
 | `feature/<topic>` | yes (solo PRs) |
 
-The story branch lives in the Senior's worktree (`.worktrees/senior-N/`), branched off `develop`, with real merge commits. Review happens in place; only the final PR is pushed. See [`.kingdom/.setting/git.md`](../.kingdom/.setting/git.md).
+The story branch lives in the Senior's worktree (`.worktrees/senior-N/`), branched off `develop`, with real merge commits. Review happens in place; only the final PR is pushed. See [`.kingdom/.setting/reference/git.md`](../.kingdom/.setting/reference/git.md).
 
 ## The three-tier gate
 
@@ -51,4 +51,4 @@ Then the human push (R1) is the final, single gate.
 
 ## Rules
 
-R46 (story branch), R47 (three-tier gate), R48 (Senior sole within-story reviewer), R49 (Senior owns within-story conflicts), R50 (King owns cross-story); R30 amended for delegated dispatch. See [`.kingdom/.setting/rules.md`](../.kingdom/.setting/rules.md) and the role spec [`.kingdom/.setting/seniors.md`](../.kingdom/.setting/seniors.md).
+R46 (story branch), R47 (three-tier gate), R48 (Senior sole within-story reviewer), R49 (Senior owns within-story conflicts), R50 (King owns cross-story); R30 amended for delegated dispatch. See [`.kingdom/.setting/rules.md`](../.kingdom/.setting/rules.md) and the role spec [`.kingdom/.setting/roles/senior.md`](../.kingdom/.setting/roles/senior.md).

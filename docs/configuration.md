@@ -72,7 +72,7 @@ Plural forms (`workers=`, `seniors=`, …) are accepted; the docs show singular.
 - `gate.*` command lists: what King runs before every push. Keys are arbitrary. Dev stacks use `typecheck`/`tests`/`smoke`/`lint`; finance work might use `validate`/`audit`; science work might use `reproduce`/`peer-review`. Rename / add / remove freely.
 - `git.base`: your PR target branch (default `develop`; many repos use `main`).
 
-That's the entire customisation surface. **Workers are generic capacity**, no preset focus or path locks. The King assigns each task at dispatch time (see [`kings.md`](../.kingdom/.setting/kings.md) → "Dispatch brief schema"), so `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, financial-model audit the day after.
+That's the entire customisation surface. **Workers are generic capacity**, no preset focus or path locks. The King assigns each task at dispatch time (see [`king.md`](../.kingdom/.setting/roles/king.md) → "Dispatch brief schema"), so `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, financial-model audit the day after.
 
 > **Re-running `/kingdom:init <project>` on an existing project** shows the existing config and asks before overwriting. Re-running replaces the whole file, back up your `gate.*` customisations first if you've filled them in.
 
@@ -108,7 +108,7 @@ The King reads this at spawn-time (invoked by `/kingdom:work`) to:
 
 ### Skill routing
 
-**Skill routing.** The workspace copy of [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md) is the canonical keyword → skill mapping table. Add project-specific entries (Vue/Nuxt keywords pointing to your Vue skill, internal DSL keywords pointing to org-specific skills, etc). Matcher reads workspace copy at every dispatch — no King restart needed.
+**Skill routing.** The workspace copy of [`.kingdom/.setting/reference/skill-routing.md`](../.kingdom/.setting/reference/skill-routing.md) is the canonical keyword → skill mapping table. Add project-specific entries (Vue/Nuxt keywords pointing to your Vue skill, internal DSL keywords pointing to org-specific skills, etc). Matcher reads workspace copy at every dispatch — no King restart needed.
 
 ## Watchman config
 

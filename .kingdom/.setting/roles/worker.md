@@ -1,8 +1,8 @@
-# workers.md — Worker role + 4-step closer
+# worker.md — Worker role + 4-step closer
 
 Workers are the autonomous task-execution lanes (`worker-1`, `worker-2`, …). Each runs a long-lived Claude Code teammate in its own `git worktree` on its own `worker-N` branch. Workers pick claimable sub-tasks from the project's task source, execute via their own sub-agent fleet, and signal the King with the 4-step closer.
 
-See [`index.md`](index.md) for entry-point context, [`kings.md`](kings.md) for who dispatches and gates worker work, [`co-workers.md`](co-workers.md) and [`watchmans.md`](watchmans.md) for the other lane roles, [`git.md`](git.md) for branch model.
+See [`index.md`](../index.md) for entry-point context, [`king.md`](king.md) for who dispatches and gates worker work, [`co-worker.md`](co-worker.md) and [`watchman.md`](watchman.md) for the other lane roles, [`git.md`](../reference/git.md) for branch model.
 
 ---
 
@@ -81,7 +81,7 @@ Configured in `kingdom.json.cmux.subAgentPool`:
 
 Master initialises the pool at spawn time (background, non-blocking):
 
-> Helper definitions: see [`_primitives.md § init_subagent_pool / spawn_pool_slot / spawn_subagent_from_pool`](_primitives.md#init_subagent_pool). Three helpers, one home.
+> Helper definitions: see [`_primitives.md § init_subagent_pool / spawn_pool_slot / spawn_subagent_from_pool`](../functions/init_subagent_pool.sh). Three helpers, one home.
 >
 > - `init_subagent_pool` — call once at master spawn; fans out `perMasterPoolSize` hidden tabs running `claude -p 'AWAITING_DISPATCH'`.
 > - `spawn_pool_slot` — internal; spawns one hidden tab + appends its surface ref to the pool list file.
@@ -147,7 +147,7 @@ echo "worker-1 | $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOGS/claims/$SUBTASK_ID.lan
 - Cleared when the lane's PR is merged
 - King checks `<LOGS>/claims/` before picking any new task — if a claim exists, skip that sub-task
 
-Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt — see [`kings.md`](kings.md) → "Dispatch brief schema" for what King sends to each worker.
+Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt — see [`king.md`](king.md) → "Dispatch brief schema" for what King sends to each worker.
 
 ### Pod membership (v0.32.0+, R46/R48)
 
@@ -155,7 +155,7 @@ A worker may be assigned to a **Senior's story pod**. When it is:
 
 - Its sub-tasks (and any fix-tasks) come from its **Senior**, not the King (the King delegated the story per R30's delegated-dispatch amendment). The work is identical: do the sub-task on `worker-N`, pass Tier-1, signal done.
 - It does **not** merge its own branch. The Senior merges `worker-N` into the story branch (R49) and runs the review. If the Senior routes a fix-task back, fix on the same `worker-N` branch and signal done again; the Senior re-merges and re-reviews.
-- A worker belongs to at most one pod at a time. See [`seniors.md`](seniors.md).
+- A worker belongs to at most one pod at a time. See [`senior.md`](senior.md).
 
 ---
 
@@ -234,7 +234,7 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 
 > **The "lazy implementor antidote" rule (v0.17.2+):** Before deciding "no existing pattern exists" or "I'll invent a new approach", the worker MUST exhaustively grep the project for existing references, conventions, env handling, scripts, and doc comments. Capacity is unlimited — fan out 5-10 Haiku scanners in parallel if needed. Default stance: **the project HAS a pattern; my job is to find it. Burden of proof is on me to demonstrate one doesn't exist.**
 
-- [ ] **Doc orientation FIRST (R45, v0.31.1+):** before any code grep, call `haiku_read_docs_orientation "<lane>" "$PROJ" "$LOGS"` (see [`_primitives.md`](_primitives.md) § Orientation). The helper fans out up to 10 Haiku in parallel, reads root + `docs/` markdown (wayfinding first: every `readme.md` / `index.md` / `todo*.md`; then the 20 newest others), and writes a consolidated digest to `<LOGS>/.<lane>_<UTC>_doc_context.md`. Read that digest, not the originals. Docs encode the project's documented conventions, which **override** code patterns when they conflict — finding the code pattern first risks reinforcing drift.
+- [ ] **Doc orientation FIRST (R45, v0.31.1+):** before any code grep, call `haiku_read_docs_orientation "<lane>" "$PROJ" "$LOGS"` (see [`_primitives.md`](../_primitives.md) § Orientation). The helper fans out up to 10 Haiku in parallel, reads root + `docs/` markdown (wayfinding first: every `readme.md` / `index.md` / `todo*.md`; then the 20 newest others), and writes a consolidated digest to `<LOGS>/.<lane>_<UTC>_doc_context.md`. Read that digest, not the originals. Docs encode the project's documented conventions, which **override** code patterns when they conflict — finding the code pattern first risks reinforcing drift.
 - [ ] **Pattern grep — fan-out N× Agent(haiku) in parallel:**
   - [ ] `grep -rln "<key-term>" --include='*.{ts,tsx,js,py,sh,yml,yaml,json,md,env,env.example}' .` (any file types relevant)
   - [ ] Read every `.env*` and `.env.example` in the relevant subtree — these encode env conventions
@@ -293,7 +293,7 @@ The status checkboxes are flipped sequentially as work progresses. Each Layer's 
 
 After every checkbox flip / layer transition, the worker updates its own cmux workspace description so the sidebar shows current state at a glance:
 
-> Helper definition: see [`_primitives.md § cmux_set_state`](_primitives.md#cmux_set_state--update-workspace-description-live-status-line). Worker's usage patterns below.
+> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux_set_state.sh). Worker's usage patterns below.
 
 ```bash
 # At Step 0 (task file just created)
@@ -312,7 +312,7 @@ cmux_set_state "✅" "$SUBTASK_ID done · sentinel written"
 cmux_set_state "🐾" "Awaiting dispatch"
 ```
 
-Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
+Description updates are **optional but recommended** — failures are silent and don't block work. See [`cmux.md`](../reference/cmux.md) → § "Dynamic workspace descriptions" for the full schema (state-emoji vocabulary, progress-bar convention, update-site table per role).
 
 **Lifecycle:**
 - **Created** in Step 0 of every task. Lane never starts sub-agent dispatch without writing the task file first.
@@ -327,7 +327,7 @@ Description updates are **optional but recommended** — failures are silent and
 
 ## Spawn rights inside a lane — NO ECO MODE (applies to ALL models)
 
-**The lane master itself runs Opus** (high-quality coding inside the lane). The sub-agents it spawns follow the P1/P2/P3 chain: **Sonnet** by default (P1), **Haiku** for bulk reads (P2), **Opus** for sensitive files (P3). The lane master's model is separate from the sub-agent chain.
+**The lane master itself runs Opus** (high-quality coding inside the lane). The sub-agents it spawns follow the P1/P2/P3 chain — canonical definition (what each tier means + when to use it) in [`index.md`](../index.md) → Sub-agent model priority. The lane master's model is separate from the sub-agent chain.
 
 Each lane master is a full Claude Code process and has the **Agent tool available**. Inside a single task it can:
 
@@ -341,7 +341,7 @@ Each lane master is a full Claude Code process and has the **Agent tool availabl
 
 Each layer's spawn pattern is captured in the task file's plan section (see Multi-layer planning below).
 
-The only spawn rules binding a lane master are the P1/P2/P3 model-selection rules (see [`index.md`](index.md) → Sub-agent model priority), the 4-step closer (below), and R38 (sub-agents spawn as tabs or lane dispatch in kingdom mode — not in-process `Agent()` by default).
+The only spawn rules binding a lane master are the P1/P2/P3 model-selection rules (see [`index.md`](../index.md) → Sub-agent model priority), the 4-step closer (below), and R38 (sub-agents spawn as tabs or lane dispatch in kingdom mode — not in-process `Agent()` by default).
 
 ---
 
@@ -376,7 +376,7 @@ Sequence:
 3. Lane master spawns its sub-agents — parallel where independent, sequential where dependent.
 4. Lane master synthesizes sub-agent outputs, makes edits to the lane's worktree, updates task file progress notes and checkboxes.
 5. Lane master finalises the task file (writes Final summary, flips status → done/blocked), then runs the 4-step closer.
-6. King polls the sentinel flag, runs pre-commit gate → push approval (see [`kings.md`](kings.md) → Push approval gate).
+6. King polls the sentinel flag, runs pre-commit gate → push approval (see [`king.md`](king.md) → Push approval gate).
 7. Lane master receives `/compact` from King, then the next task brief — back to step 0.
 
 Task lifecycle within a lane:
@@ -424,7 +424,7 @@ Lanes never receive a "queue" of multiple tasks; the King serialises task-to-lan
 
 ### Format-discovery first (R8 applied to reports)
 
-Per [R8](rules.md#r8) (pattern grep before implementation), look at how the dir is already organised before writing anything. Hand-rolling a new report shape would defeat the whole point.
+Per [R8](../rules/R08-pattern-grep-before-implementation.md) (pattern grep before implementation), look at how the dir is already organised before writing anything. Hand-rolling a new report shape would defeat the whole point.
 
 ```bash
 REPORTS_DIR="$PROJ/docs/test-reports"
@@ -621,7 +621,7 @@ cmux tab-action --action close --surface "$CMUX_SURFACE_ID" 2>/dev/null
 # tab close succeeds.
 ```
 
-**Orphan tab sweep:** Watchman has a duty (since v0.14.9) to detect tabs that DID write a sentinel but DIDN'T close — sweeps them every `/loop` tick. Belt-and-suspenders for the rare case where Step 5 fails (cmux unreachable, network glitch, killed process). See [`watchmans.md`](watchmans.md) → "Orphan-tab sweep".
+**Orphan tab sweep:** Watchman has a duty (since v0.14.9) to detect tabs that DID write a sentinel but DIDN'T close — sweeps them every `/loop` tick. Belt-and-suspenders for the rare case where Step 5 fails (cmux unreachable, network glitch, killed process). See [`watchman.md`](watchman.md) → "Orphan-tab sweep".
 
 For **Agent-spawned** sub-agents (the cheap-fan-out exception — background, no UI), Step 5 is a no-op because `$CMUX_SURFACE_ID` isn't set in the Agent's process context.
 
@@ -693,7 +693,7 @@ flag     <LOGS>/done/<ID>__<sub>-<lane-name>.flag    ← sentinel
 
 ## Path / ID helpers (master generates IDs; worker uses paths in its prompt)
 
-> Helper definitions: see [`_primitives.md` § make_artifact_id / raw_path / curated_path](../.kingdom/.setting/_primitives.md). Usage examples below.
+> Helper definitions: see [`_primitives.md` § make_artifact_id / raw_path / curated_path](../_primitives.md). Usage examples below.
 
 There is no `log_master` helper — master writes nothing. The worker prompt embeds its own `echo … >> master_agent.log` line as step 3 of the closer.
 
@@ -764,7 +764,7 @@ Reply with only: saved: <CURATED>
 """)
 ```
 
-After issuing, master blocks on the done flag (see [`kings.md`](kings.md) → Master idle policy).
+After issuing, master blocks on the done flag (see [`king.md`](king.md) → Master idle policy).
 
 ### Kingdom-mode variant (lane runs inside a worktree)
 
@@ -781,7 +781,7 @@ curated   <WS>/.kingdom/<project>/logs/<ID>.md
 flag      <WS>/.kingdom/<project>/logs/done/<ID>__opus-worker-1.flag
 ```
 
-After the flag appears, the King decides: `cmux merge` (if commits to keep + the user approves push) → carve `feature/<topic>` → push. See [`git.md`](git.md) → Commit flow.
+After the flag appears, the King decides: `cmux merge` (if commits to keep + the user approves push) → carve `feature/<topic>` → push. See [`git.md`](../reference/git.md) → Commit flow.
 
 ---
 
@@ -849,7 +849,7 @@ If a worker runs and produces any reasoning / analysis / file content, **all fou
 
 | ❌ Forbidden for workers | ✅ Belongs to King |
 |---|---|
-| `git push` | King runs all pushes — see [`kings.md`](kings.md) → Push approval gate |
+| `git push` | King runs all pushes — see [`king.md`](king.md) → Push approval gate |
 | `feature/*` branch creation | King carves `feature/<topic>` from lane branch tip |
 | `gh pr create` | King opens PRs after the user's "push" OK + FINAL conflict check |
 | FINAL conflict check against `origin/develop` | King runs `git merge-tree` after the user approves |

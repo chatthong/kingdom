@@ -2,7 +2,7 @@
 
 When King dispatches a task to a lane, the dispatch-brief carries a `## Suggested skills` block listing 0-3 Claude Code skills the lane should invoke for this specific task. **Skills are per-task, not per-lane-lifetime.** Worker-2 doing a Supabase task today gets `supabase:supabase`; the same worker-2 doing a shadcn task tomorrow gets `shadcn:shadcn-ui`. Previous-task skills don't persist.
 
-This file is the canonical **keyword → skill** mapping table that `pick_skills_for_task` (helper in [`_primitives.md`](_primitives.md)) reads on every dispatch.
+This file is the canonical **keyword → skill** mapping table that `pick_skills_for_task` (helper in [`_primitives.md`](../_primitives.md)) reads on every dispatch.
 
 ## How the matcher works
 
@@ -97,7 +97,7 @@ When King sees `skill=<name>[,<name>...]` in the user's instruction, it short-ci
 
 ## Customising the table
 
-Edit `<workspace>/.kingdom/.setting/skill-routing.md` (the workspace copy, not the plugin source) to add project-specific mappings. The matcher reads the workspace copy at every dispatch, so changes are picked up on the next task without restarting the King.
+Edit `<workspace>/.kingdom/.setting/reference/skill-routing.md` (the workspace copy, not the plugin source) to add project-specific mappings. The matcher reads the workspace copy at every dispatch, so changes are picked up on the next task without restarting the King.
 
 Common additions for specific projects:
 

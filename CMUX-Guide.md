@@ -3,7 +3,7 @@
 > This guide is about [manaflow-ai/cmux](https://github.com/manaflow-ai/cmux), the
 > macOS terminal app that is the kingdom's primary outer host. For raw tmux (the
 > fallback path), see TMUX-Guide.md. For per-lane git worktrees, see
-> .kingdom/.setting/git.md — the kingdom uses plain `git worktree` directly.
+> .kingdom/.setting/reference/git.md — the kingdom uses plain `git worktree` directly.
 
 ## What is manaflow/cmux?
 
@@ -141,7 +141,7 @@ cmux list-panes --workspace "$CMUX_WORKSPACE_ID" --json | jq '.[].handle'
 ## See also
 
 - TMUX-Guide.md — raw tmux 101 (the fallback path when not inside cmux.app)
-- .kingdom/.setting/git.md — git worktree usage (plain `git worktree`, no external tool)
-- .kingdom/.setting/kings.md — King's spawn checklist (uses everything above)
+- .kingdom/.setting/reference/git.md — git worktree usage (plain `git worktree`, no external tool)
+- .kingdom/.setting/roles/king.md — King's spawn checklist (uses everything above)
 - .kingdom/.setting/index.md — workspace rules, priority chain, three-tier logging,
   worker dispatch, 4-step closer template, archivist merge

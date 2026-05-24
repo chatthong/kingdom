@@ -74,7 +74,7 @@ What landed:
 - 🏢 **Workspace per master** in PRIMARY mode (`cmux new-workspace --command "claude"`)
 - 📑 **Tab spawn for visible sub-agents** with 5-step closer auto-close
 - 🪟 **Split layout for watchman** (top: claude, bottom: `gh pr list --watch`)
-- 📄 **`.kingdom/.setting/cmux.md`** — central reference for every role
+- 📄 **`.kingdom/.setting/reference/cmux.md`** — central reference for every role
 - 🔧 Doctor Check 1 verifies the 9 specific cmux commands kingdom uses
 - 🐛 Fixed: `cmux claude-teams`, `cmux pin-pane`, `cmux current-workspace`, `cmux send --lane` — all wrong refs replaced
 
@@ -129,8 +129,8 @@ The single highest-impact thing we can take from Composio. They use it for auton
 **Files to edit:**
 
 - `.kingdom/templates/kingdom.json.template` — add the `reactions` block with the defaults above.
-- `.kingdom/.setting/watchmans.md` — new "Reactions detection" section in `/loop` body: detect CI fail / review comments / develop break / mergeable; write WATCH artifacts; post `cmux notify` events tagged with the reaction type.
-- `.kingdom/.setting/kings.md` — new "Reaction handling" section: King reads tagged `cmux notify` events + `WATCH_*.md` reports; applies the policy from `kingdom.json.reactions.*`; logs each reaction-driven dispatch in `master_agent.log` with a `[reaction: ciFail]` tag.
+- `.kingdom/.setting/roles/watchman.md` — new "Reactions detection" section in `/loop` body: detect CI fail / review comments / develop break / mergeable; write WATCH artifacts; post `cmux notify` events tagged with the reaction type.
+- `.kingdom/.setting/roles/king.md` — new "Reaction handling" section: King reads tagged `cmux notify` events + `WATCH_*.md` reports; applies the policy from `kingdom.json.reactions.*`; logs each reaction-driven dispatch in `master_agent.log` with a `[reaction: ciFail]` tag.
 - `commands/start.md` — Phase 1 reads + reports the `reactions.*` policy in the resolved plan output.
 - `commands/init.md` — pass the reactions block through (just inherits from template).
 - `README.md` — new section in role descriptions: how watchman → King reactions work; example flow.
@@ -195,7 +195,7 @@ Next suggested action:
   → Address 1 review-comment on PR #234 (reactions=ask)
 ```
 
-One command, fleet visibility, no daemon. Composio gives you a web tab; we give you a chat line. The `--watch` flag uses a single blocking Bash loop (zero idle tokens while waiting; see `kings.md` → "Master idle policy").
+One command, fleet visibility, no daemon. Composio gives you a web tab; we give you a chat line. The `--watch` flag uses a single blocking Bash loop (zero idle tokens while waiting; see `king.md` → "Master idle policy").
 
 **Files to add/edit:**
 
@@ -230,8 +230,8 @@ Composio integrates with Slack/Discord; we currently rely on `cmux notify`. Add 
 **Files to add/edit:**
 
 - `.kingdom/templates/kingdom.json.template` — add `notifiers` block (optional; defaults to empty).
-- `.kingdom/.setting/watchmans.md` — new "Webhook notifiers" section: post structured events.
-- `.kingdom/.setting/kings.md` — same for King-level alerts (push success, gate fail).
+- `.kingdom/.setting/roles/watchman.md` — new "Webhook notifiers" section: post structured events.
+- `.kingdom/.setting/roles/king.md` — same for King-level alerts (push success, gate fail).
 - `commands/init.md` — interactive prompt for webhook URLs (optional; skip if user just presses enter).
 - `README.md` — notifier section in install/setup.
 - `CHANGELOG.md` — `[0.15.0]` entry.

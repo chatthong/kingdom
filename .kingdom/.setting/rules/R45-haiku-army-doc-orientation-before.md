@@ -1,6 +1,6 @@
 ### R45. Haiku-army doc orientation before big-picture work — Tier 2 (v0.31.1+)
 
-**Every role** (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` (in [`_primitives.md`](_primitives.md) § Orientation) when it needs the project's big picture — not piecemeal, not "just grep what I need." The fan-out is cheap (Haiku tokens, parallel) and the cost of acting on a stale mental model of the project is high (drift PRs, contradicted conventions, doc-mismatched commits).
+**Every role** (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` (in [`_primitives.md`](../_primitives.md) § Orientation) when it needs the project's big picture — not piecemeal, not "just grep what I need." The fan-out is cheap (Haiku tokens, parallel) and the cost of acting on a stale mental model of the project is high (drift PRs, contradicted conventions, doc-mismatched commits).
 
 **The unified protocol — 4 phases:**
 
@@ -25,7 +25,7 @@
 | Doc-orientation fan-out (R45 itself) | **Haiku** | Many short reads, cheap, parallel — Haiku 4.5 is sufficient |
 | Lane sub-agents (worker-N spawning helpers) | **Sonnet** | One logical chunk each; Sonnet 4.6 is the cost/quality sweet spot |
 | Sensitive design review | **Opus** | When the lane explicitly needs the heavier model — call out in the brief |
-| Lane masters themselves | **Opus** (worker/co-worker), **Sonnet** (watchman) | Already established in `workers.md` / `watchmans.md` |
+| Lane masters themselves | **Opus** (worker/co-worker), **Sonnet** (watchman) | Already established in `worker.md` / `watchman.md` |
 
 **Cap:** `HAIKU_CAP=10` hard ceiling per call. The helper enforces it; callers cannot raise it past 10 without splitting into multiple calls.
 

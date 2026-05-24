@@ -1,7 +1,7 @@
 # senior-verdict
 
 **Fires when:** a Senior finishes a review-loop iteration on its story branch (v0.32.0+). Clean = story is push-eligible; otherwise fixes were routed back to workers.
-**Used by:** [`seniors.md`](../seniors.md) review loop; [`commands/work.md`](../../../commands/work.md) Step 5 (King renders the final clean verdict before the story push-prompt).
+**Used by:** [`senior.md`](../roles/senior.md) review loop; [`commands/work.md`](../../../commands/work.md) Step 5 (King renders the final clean verdict before the story push-prompt).
 
 ## Template
 

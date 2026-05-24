@@ -43,4 +43,4 @@ Post-merge state = "everything done, checked, kingdom matches develop, ready for
 
 **Why Tier 2 not Tier 1:** Skipping this doesn't lose data (worktrees + branches are local), but the next overlay round starts from a stale base → King replays already-merged commits, conflicts on the next merge, wastes a gate cycle. Trigger condition: any time `gh pr view <N>` flips to `MERGED` while kingdom still points at the pre-merge develop SHA.
 
-Helper: `kingdom_resync_after_merge` in [`_primitives.md`](_primitives.md) wraps steps 2-7 — King calls it once per merged PR.
+Helper: `kingdom_resync_after_merge` in [`_primitives.md`](../_primitives.md) wraps steps 2-7 — King calls it once per merged PR.

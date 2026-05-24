@@ -1,7 +1,7 @@
 # push-prompt
 
-**Fires when:** Tier-2 gate passes; King needs Ter's explicit "push" word per [rules.md R1](../rules.md#r1-push-approval-is-single-shot--pr-specific).
-**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5 auto-gate-poll loop; [`kings.md`](../kings.md) push approval gate.
+**Fires when:** Tier-2 gate passes; King needs Ter's explicit "push" word per [rules.md R1](../rules/R01-push-approval-is-single-shot.md).
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 5 auto-gate-poll loop; [`king.md`](../roles/king.md) push approval gate.
 
 ## Template
 

@@ -219,7 +219,7 @@ Useful for showing live task progress: as the worker moves through layers, renam
 Mandatory 5-step closer step for tab-spawned sub-agents. **Only run inside a tab-spawned context** — `$CMUX_SURFACE_ID` is auto-set there.
 
 ```bash
-# Step 5 of the 5-step closer (workers.md → "5-step closer for tab-spawned sub-agents")
+# Step 5 of the 5-step closer (worker.md → "5-step closer for tab-spawned sub-agents")
 cmux tab-action --action close --surface "$CMUX_SURFACE_ID"
 ```
 
@@ -413,7 +413,7 @@ cmux capture-pane --workspace "$WORKER_WS_1" --lines 100 --scrollback
 cmux read-screen --workspace "$WORKER_WS_1"
 ```
 
-Watchman uses `capture-pane` every `/loop` tick to detect lanes blocked on interactive permission prompts. Pattern match `Do you want to proceed\?`, `Esc to cancel`, `\[y/N\]`, `allow .* during this session`, `Press Enter` → fire `cmux notify` so the user knows which lane needs attention (otherwise the lane silently stalls while cmux.app still reports it as "Running"). Full detail in [`watchmans.md`](watchmans.md) → § "Blocked-lane scan".
+Watchman uses `capture-pane` every `/loop` tick to detect lanes blocked on interactive permission prompts. Pattern match `Do you want to proceed\?`, `Esc to cancel`, `\[y/N\]`, `allow .* during this session`, `Press Enter` → fire `cmux notify` so the user knows which lane needs attention (otherwise the lane silently stalls while cmux.app still reports it as "Running"). Full detail in [`watchman.md`](../roles/watchman.md) → § "Blocked-lane scan".
 
 For pre-emption (preferred over detection), expand the workspace `.claude/settings.json` `permissions.allow` to include path-scoped entries for `.kingdom/**` and `.worktrees/**` so lanes can read/write within those without prompting. `/kingdom:self-care` Check 10 + `/kingdom:init` Step 4.5 both apply this expansion automatically.
 

@@ -10,16 +10,17 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
 | [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R50`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
-| [`kings.md`](kings.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
-| [`workers.md`](workers.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
-| [`co-workers.md`](co-workers.md) | Co-worker (user-paired) interactive protocol |
-| [`watchmans.md`](watchmans.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, cross-story drift scan, lifecycle, dual-view layout |
-| [`seniors.md`](seniors.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
-| [`git.md`](git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
-| [`cmux.md`](cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
-| [`functions/`](functions/) | **Shared bash helpers (v0.34.0: one function per file)** — 42 helpers, one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader (`source _load.sh; load <names>`). A role/feature spec lists the function names it calls. (`_primitives.md` is now a pointer to this folder.) |
-| [`cards/`](cards/) | **Card display library** (v0.22.0+) — 19 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
-| [`skill-routing.md`](skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
+| [`king.md`](roles/king.md) | King role: planning fan-out, dispatch (cmux send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
+| [`worker.md`](roles/worker.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
+| [`co-worker.md`](roles/co-worker.md) | Co-worker (user-paired) interactive protocol |
+| [`watchman.md`](roles/watchman.md) | Watchman `/loop` body, WATCH_*.md report naming, smoke + PR babysitting, cross-story drift scan, lifecycle, dual-view layout |
+| [`senior.md`](roles/senior.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
+| [`git.md`](reference/git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
+| [`cmux.md`](reference/cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
+| [`functions/`](functions/) | **Shared bash helpers (v0.34.0: one function per file)** — 42 helpers, one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. (`_primitives.md` is now a pointer to this folder.) |
+| [`manifest.json`](manifest.json) | **Feature registry (v0.35.0)** — each feature (`core`, `senior`, `watchman`, …) lists the rules + functions it owns + its deps + the `kingdom.json` config flag that activates it. `source functions/_load.sh; load_feature senior` sources that feature's functions + deps; **don't `load_feature` a feature to leave it out**. This is the composability layer: features plug in/out with no edits to core. |
+| [`cards/`](cards/) | **Card display library** (v0.22.0+) — 24 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
+| [`skill-routing.md`](reference/skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
 
 ---
 
@@ -31,7 +32,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | 🎓 Senior | story task file, `SENIOR_*` reports, push-eligible sentinel, story-branch merges | everything (its story + pod) | its pod's workers (in-pod, visible only) + sub-agents (review fan-out) | ❌ (marks push-eligible; King pushes) | ❌ never (routes fixes to workers) | ✅ writes the story task file; assigns sub-tasks |
 | 👷 Worker | own task file, raw, curated, log entry, sentinel flag | everything (logs + tasks + project tree) | sub-agents (P1/P2/P3 chain — Sonnet/Haiku/Opus) | ❌ | ✅ on its `worker-N` branch within scope assigned by King or its Senior per-task (no preset `ownsPaths`) | ✅ creates one per assigned task |
 | 🧑‍💼 Co-worker | own task file, raw, curated, log entry, sentinel flag | everything | sub-agents (P1/P2/P3 chain) | ❌ | ✅ on its `co-worker-N` branch within scope assigned by King per-task | ✅ creates one per task (the user often dictates the brief) |
-| 🕵️ Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchmans.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
+| 🕵️ Watchman | WATCH_*.md reports, `WATCH_DOCS_AUDIT.md`, `watchman_state.json`, `cmux notify` events, low-risk fixes in own project's `tasks/`+`logs/` during idle docs audit (see `watchman.md` § Docs audit duty) | logs, tasks (for situational awareness + audit scan), `gh pr list` state, develop tip | none (read-only role) | ❌ | ❌ on project source | ❌ no per-task work |
 | 🐱 Sub-agent | own raw + curated + log + flag (4-step closer) | logs, tasks (for context from parent lane master) | none (one-shot leaf) | ❌ | ✅ via Edit/Write tools when assigned | ❌ executes against the task file its parent wrote |
 
 If any role file's procedural section contradicts this table, **this table wins.** Role files document HOW each role does its job; this table defines WHAT each role can do.
@@ -65,7 +66,7 @@ Example: `2026-05-17T1430Z__worker-1__BE-P0-CICD.1.md`
 
 **Writer:** lane master only (one writer per file — avoids race conditions). Sub-agents read but never write to task files.
 
-**Schema:** title + status checkboxes + brief + multi-layer plan + progress notes + final summary. See [`workers.md`](workers.md) → "Task file template" for the canonical schema.
+**Schema:** title + status checkboxes + brief + multi-layer plan + progress notes + final summary. See [`worker.md`](roles/worker.md) → "Task file template" for the canonical schema.
 
 **Lifecycle:**
 - **Created** by the lane master immediately after receiving a task brief from King (before any sub-agent dispatch).
@@ -122,7 +123,7 @@ Example: `2026-05-17T1430Z__worker-1__BE-P0-CICD.1.md`
 
 ## Operating rules for agents
 
-1. **`index.md` (this file) controls everything cross-cutting** — workspace layout, priority chain, mode detection, agent roles. Read first when entering a session. Re-read role-specific files (`kings.md` / `workers.md` / `co-workers.md` / `watchmans.md` / `git.md`) before the first dispatch.
+1. **`index.md` (this file) controls everything cross-cutting** — workspace layout, priority chain, mode detection, agent roles. Read first when entering a session. Re-read role-specific files (`king.md` / `worker.md` / `co-worker.md` / `watchman.md` / `git.md`) before the first dispatch.
 2. **Inside a project, the per-project `CLAUDE.md` wins** for local rules (stack, commands, project-internal conventions). Re-read whenever switching projects.
 3. **Don't mix conventions across projects** unless explicitly told.
 4. **The owner's personal notes file (`<NAME>.md` or `NOTES.md`) is private** — only append, never delete, never paste verbatim into chat unless asked.
@@ -131,7 +132,7 @@ Example: `2026-05-17T1430Z__worker-1__BE-P0-CICD.1.md`
    - **Tier 1 (always):** `<workspace-root>/.kingdom/<project>/logs/master_agent.log` — 1 line per task. Decide from here whether to open anything else.
    - **Tier 2 (on demand):** `<workspace-root>/.kingdom/<project>/logs/<ID>.md` — curated digest. Use `Read(file_path, limit=15)` to peek `## TL;DR` first.
    - **Tier 3 (banned):** `<workspace-root>/.kingdom/<project>/logs/raw/*` — never read directly. Spawn a digester sub-agent (Sonnet by default, Haiku for bulk reads) if needed.
-7. **4-step closer is mandatory.** Every worker task ends with four writes (raw, curated, log, flag), all under `<workspace-root>/.kingdom/<project>/logs/`. Master writes nothing under that path. See [`workers.md`](workers.md) → 4-step closer.
+7. **4-step closer is mandatory.** Every worker task ends with four writes (raw, curated, log, flag), all under `<workspace-root>/.kingdom/<project>/logs/`. Master writes nothing under that path. See [`worker.md`](roles/worker.md) → 4-step closer.
 
 ### Bootstrap a new project — inject pointer into project CLAUDE.md
 
@@ -149,7 +150,7 @@ grep -q "kingdom/.setting/index.md" "$PROJ/CLAUDE.md" 2>/dev/null || \
 When acting as master-agent in this project, before dispatching any worker:
 
 1. `Read(/Users/ter/Desktop/Bonfire/.kingdom/.setting/index.md)` — workspace rules + role file map
-2. Read the relevant role file from `.kingdom/.setting/` per the task at hand (kings.md / workers.md / co-workers.md / watchmans.md / git.md)
+2. Read the relevant role file per the task at hand (`roles/king.md` / `roles/worker.md` / `roles/co-worker.md` / `roles/watchman.md` / `roles/senior.md`; reference guides in `reference/git.md` / `reference/cmux.md`)
 
 The kingdom is a Claude-only fleet. Don't reconstruct prompts from memory — re-read each session before first dispatch.
 POINTER
@@ -175,7 +176,7 @@ At session start, master decides mode first:
   - tmux is available
   - the user wants the watch-panes UX
 
-  Spawns a tmux session named `kingdom`. Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol. See [`kings.md`](kings.md) → Spawning the kingdom (fallback).
+  Spawns a tmux session named `kingdom`. Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol. See [`king.md`](roles/king.md) → Spawning the kingdom (fallback).
 
 - **Standalone mode:** default for everything else. No worktrees, no teammates. Master spawns parallel sub-agents via the `Agent` tool — multiple Agent calls in one message run concurrently.
 
@@ -212,11 +213,11 @@ Model selection in the kingdom is a two-tier decision:
 | **P2** | **Haiku** (`Agent(model="haiku")`) | Massive file reads / parallel doc-digest fan-outs (≥3 files, or any file >500 lines being skimmed). |
 | **P3** | **Opus** (`Agent(model="opus")`) | **Sensitive files only.** Production secrets, security-critical auth code, compliance-flagged code. Narrow scope. |
 
-**Picking N (parallel count):** spawn as many sub-agents as the WORK STRUCTURE needs — not 1:1 with files. Sometimes 1-2 agents handling 12 files with shared context gives better coherence than 12 isolated agents. All three models support unbounded parallel spawn; coherence > raw parallelism when work has cross-file dependencies. See [`workers.md`](workers.md) → Spawn rights for examples.
+**Picking N (parallel count):** spawn as many sub-agents as the WORK STRUCTURE needs — not 1:1 with files. Sometimes 1-2 agents handling 12 files with shared context gives better coherence than 12 isolated agents. All three models support unbounded parallel spawn; coherence > raw parallelism when work has cross-file dependencies. See [`worker.md`](roles/worker.md) → Spawn rights for examples.
 
 **Picking P3 (Opus as worker):** default answer is "no, use Sonnet." Reach for Opus only when the file is (a) production secrets/credentials, (b) authentication / authorization / cryptography boundary, or (c) the user explicitly flags as sensitive.
 
-**Multi-layer planning:** Lane masters plan BEFORE executing. A typical task has 2-4 layers in its task file — Discovery (read files via Haiku fan-out), Strategy (synthesise findings, decide approach), Execution (parallel Sonnet edits), Verification (typecheck + self-review). Each layer is a fan-out + synthesise step. Depth >4 is usually a sign of unclear scope. Full pattern in [`workers.md`](workers.md) → "Multi-layer planning."
+**Multi-layer planning:** Lane masters plan BEFORE executing. A typical task has 2-4 layers in its task file — Discovery (read files via Haiku fan-out), Strategy (synthesise findings, decide approach), Execution (parallel Sonnet edits), Verification (typecheck + self-review). Each layer is a fan-out + synthesise step. Depth >4 is usually a sign of unclear scope. Full pattern in [`worker.md`](roles/worker.md) → "Multi-layer planning."
 
 ---
 
@@ -249,11 +250,11 @@ graph TB
     class LOGS store
 ```
 
-- **King** runs in the project's primary checkout on branch `kingdom` (a local-only integration view that merges develop + all lane tips). King never edits files; orchestrates only. See [`kings.md`](kings.md).
-- **Workers** run autonomous task work picked from the project's task source (CSV / GH issues / TODO doc — declared in `kingdom.json.taskSource` once Tier 4 is enabled). See [`workers.md`](workers.md).
-- **Co-workers** are user-paired interactive lanes. Dormant until the user signals. See [`co-workers.md`](co-workers.md).
-- **Watchmen** are `/loop` agents that continuously track `origin/develop` + babysit open PRs. See [`watchmans.md`](watchmans.md).
-- **Branches & PRs** — lane branches are local-only; only `feature/<topic>` is pushed. King is the sole pusher. See [`git.md`](git.md).
+- **King** runs in the project's primary checkout on branch `kingdom` (a local-only integration view that merges develop + all lane tips). King never edits files; orchestrates only. See [`king.md`](roles/king.md).
+- **Workers** run autonomous task work picked from the project's task source (CSV / GH issues / TODO doc — declared in `kingdom.json.taskSource` once Tier 4 is enabled). See [`worker.md`](roles/worker.md).
+- **Co-workers** are user-paired interactive lanes. Dormant until the user signals. See [`co-worker.md`](roles/co-worker.md).
+- **Watchmen** are `/loop` agents that continuously track `origin/develop` + babysit open PRs. See [`watchman.md`](roles/watchman.md).
+- **Branches & PRs** — lane branches are local-only; only `feature/<topic>` is pushed. King is the sole pusher. See [`git.md`](reference/git.md).
 
 ### Lane count is N-configurable (per project)
 
@@ -291,9 +292,9 @@ Workspace project registry. Keep current — agents read it to know which projec
 
 | Role | Tool / spawn mechanism | What it does | Detail |
 |---|---|---|---|
-| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds the user's conversation; runs pre-commit gate; cross-story coordination; SOLE PUSHER. | [`kings.md`](kings.md) |
-| **Senior (Opus)** | Long-lived Claude session in `.worktrees/senior-N/` on its `story/<id>` branch; runs a story-scoped `/loop`. | Per-story sub-orchestrator: owns a worker pod, merges into the story branch, sole within-story reviewer, marks push-eligible. Never pushes, never writes feature code. | [`seniors.md`](seniors.md) |
-| **Worker (Opus)** | Long-lived Claude teammate in `.worktrees/worker-N/`, spawned via `cmux claude-teams` (primary) or raw tmux (fallback); worktree created via `git worktree add`. | Autonomous task work; 4-step closer per task; spawns own sub-agents (no eco cap). | [`workers.md`](workers.md) |
-| **Co-worker (Opus)** | Same spawn as worker, in `.worktrees/co-worker-N/`; worktree created via `git worktree add`. | user-paired interactive work; dormant by default. | [`co-workers.md`](co-workers.md) |
-| **Watchman (Sonnet)** | Long-lived Claude session in `.worktrees/watchman-N/`, worktree via `git worktree add`; runs `/loop` continuously. | Passive monitor — smoke + PR babysitting; writes WATCH_*.md; no edits, no push. | [`watchmans.md`](watchmans.md) |
-| **Sub-agent (Sonnet/Haiku/Opus)** | `Agent(model="...")` invoked by King or a lane master. | One-shot work per call; 4-step closer; slug `<sub>-<lane-name>.<tag>`. | [`workers.md`](workers.md) → Slug convention |
+| **King (Opus)** | Primary Claude session in the project's primary checkout. Dispatches via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless). | Orchestration; holds the user's conversation; runs pre-commit gate; cross-story coordination; SOLE PUSHER. | [`king.md`](roles/king.md) |
+| **Senior (Opus)** | Long-lived Claude session in `.worktrees/senior-N/` on its `story/<id>` branch; runs a story-scoped `/loop`. | Per-story sub-orchestrator: owns a worker pod, merges into the story branch, sole within-story reviewer, marks push-eligible. Never pushes, never writes feature code. | [`senior.md`](roles/senior.md) |
+| **Worker (Opus)** | Long-lived Claude teammate in `.worktrees/worker-N/`, spawned via `cmux claude-teams` (primary) or raw tmux (fallback); worktree created via `git worktree add`. | Autonomous task work; 4-step closer per task; spawns own sub-agents (no eco cap). | [`worker.md`](roles/worker.md) |
+| **Co-worker (Opus)** | Same spawn as worker, in `.worktrees/co-worker-N/`; worktree created via `git worktree add`. | user-paired interactive work; dormant by default. | [`co-worker.md`](roles/co-worker.md) |
+| **Watchman (Sonnet)** | Long-lived Claude session in `.worktrees/watchman-N/`, worktree via `git worktree add`; runs `/loop` continuously. | Passive monitor — smoke + PR babysitting; writes WATCH_*.md; no edits, no push. | [`watchman.md`](roles/watchman.md) |
+| **Sub-agent (Sonnet/Haiku/Opus)** | `Agent(model="...")` invoked by King or a lane master. | One-shot work per call; 4-step closer; slug `<sub>-<lane-name>.<tag>`. | [`worker.md`](roles/worker.md) → Slug convention |

@@ -20,7 +20,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
-![Version](https://img.shields.io/badge/version-0.34.0-success)
+![Version](https://img.shields.io/badge/version-0.35.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -194,7 +194,7 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 - **Native cmux.app feel:** every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
 - **Full audit trail:** every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
 - **Zero new runtime:** cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text
-- **Skill-aware:** King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
+- **Skill-aware:** King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/reference/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
 
 ---
 
@@ -292,12 +292,12 @@ Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere
 
 | Role | Model | What it does | Spec |
 |---|---|---|---|
-| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Owns cross-story coordination. Never edits files. | [`kings.md`](.kingdom/.setting/kings.md) |
-| 🎓 **Senior** | Opus | Per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into a story branch, reviews in a loop, marks push-eligible. Never pushes, never edits. | [`seniors.md`](.kingdom/.setting/seniors.md) |
-| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents (no eco cap). | [`workers.md`](.kingdom/.setting/workers.md) |
-| 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-workers.md`](.kingdom/.setting/co-workers.md) |
-| 🕵️ **Watchman** | Sonnet | Passive monitor (`/loop`, 5-15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchmans.md`](.kingdom/.setting/watchmans.md) |
-| 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`workers.md`](.kingdom/.setting/workers.md) |
+| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Owns cross-story coordination. Never edits files. | [`king.md`](.kingdom/.setting/roles/king.md) |
+| 🎓 **Senior** | Opus | Per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into a story branch, reviews in a loop, marks push-eligible. Never pushes, never edits. | [`senior.md`](.kingdom/.setting/roles/senior.md) |
+| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents (no eco cap). | [`worker.md`](.kingdom/.setting/roles/worker.md) |
+| 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-worker.md`](.kingdom/.setting/roles/co-worker.md) |
+| 🕵️ **Watchman** | Sonnet | Passive monitor (`/loop`, 5-15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchman.md`](.kingdom/.setting/roles/watchman.md) |
+| 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
 
 Full role write-ups: [`docs/roles.md`](docs/roles.md).
 

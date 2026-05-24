@@ -1,7 +1,7 @@
 # watchman-tick
 
 **Fires when:** Watchman `/loop` tick completes its fan-out duty run and surfaces findings worth user attention.
-**Used by:** [`watchmans.md`](../watchmans.md) `/loop` body — rendered to King's chat after all Haiku sub-agents report back.
+**Used by:** [`watchman.md`](../roles/watchman.md) `/loop` body — rendered to King's chat after all Haiku sub-agents report back.
 
 ## Template
 

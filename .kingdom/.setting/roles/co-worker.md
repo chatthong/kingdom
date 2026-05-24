@@ -1,8 +1,8 @@
-# co-workers.md — Co-worker (user-paired) lanes
+# co-worker.md — Co-worker (user-paired) lanes
 
 Co-worker lanes (`co-worker-1`, `co-worker-2`, …) are the **interactive user-paired** track. Same Claude-teammate spawn mechanics as workers, but the dispatch flow is different: **the user drives, the co-worker assists**.
 
-See [`workers.md`](workers.md) for the shared 4-step closer / dispatch / spawn-rights protocol (everything below builds on it). See [`kings.md`](kings.md) for King-only operations (push, gates). See [`git.md`](git.md) for branch model.
+See [`worker.md`](worker.md) for the shared 4-step closer / dispatch / spawn-rights protocol (everything below builds on it). See [`king.md`](king.md) for King-only operations (push, gates). See [`git.md`](../reference/git.md) for branch model.
 
 ---
 
@@ -11,14 +11,14 @@ See [`workers.md`](workers.md) for the shared 4-step closer / dispatch / spawn-r
 - **Dormant by default.** No autonomous task picking. The pane exists in the kingdom layout but stays idle until the user signals. **Co-worker is the ONE role that "waits for user dictation" — this is correct behaviour here (R32). Workers auto-claim and are never dormant; watchman runs `/loop` continuously.**
 - **Activates when the user says** "pair on co-worker-1", "UI work on co-worker", "I'll drive co-worker-1", or similar.
 - **Co-worker master is interactive:** the user drives the editing (typing into the lane pane, selecting which files to touch, making design calls); the Claude session inside the lane assists (suggests, refactors, runs tests, reads context).
-- **Co-worker lane master runs Opus** (same default as autonomous workers). Sub-agents it spawns follow the P1/P2/P3 chain (Sonnet default).
+- **Co-worker lane master runs Opus** (same default as autonomous workers). Sub-agents it spawns follow the P1/P2/P3 chain (Sonnet default — definition in [`index.md`](../index.md) → Sub-agent model priority).
 - **4-step closer still applies** for any reasoning/output the co-worker session produces — same artifact layout as workers, just with slug `co-worker-N`.
 
 ---
 
 ## Lane setup (pre-spawned at kingdom startup)
 
-The co-worker's pane and worktree are created as part of the kingdom spawn checklist (see [`kings.md`](kings.md) → Spawning the kingdom). At session start:
+The co-worker's pane and worktree are created as part of the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom). At session start:
 
 - `.worktrees/co-worker-N/` exists (created via `git worktree add -b "co-worker-N" "$PROJ/.worktrees/co-worker-N" "origin/develop"`), branch `co-worker-N` checked out.
 - A Claude session is running in that pane (via `cmux claude-teams` teammate slot in primary mode, or a raw tmux pane in fallback mode).
@@ -69,7 +69,7 @@ flowchart TB
 
 ## Task file (same as workers, with user-dictated briefs)
 
-Co-workers follow the same task file convention as autonomous workers (see [`workers.md`](workers.md) → "Task file template", R22/R23/R24/R25). One file per task; lane master is sole writer; sub-agents read only.
+Co-workers follow the same task file convention as autonomous workers (see [`worker.md`](worker.md) → "Task file template", R22/R23/R24/R25). One file per task; lane master is sole writer; sub-agents read only.
 
 **Path:** `<workspace>/.kingdom/<project>/tasks/<UTC>__co-worker-N__<sub-task-id>.md`
 
@@ -97,18 +97,11 @@ Other than that, the schema, lifecycle, and read/write rules are identical to wo
 
 ## 4-step closer still applies
 
-Even though dispatch is interactive, the **artifact protocol is unchanged**. When the co-worker produces any reasoning, file edits, or analysis, it runs the 4-step closer:
+Even though dispatch is interactive, the **artifact protocol is unchanged** — the 4-step closer (raw → curated → log → sentinel, plus the mandatory Step-4 `cmux notify` pair) is defined canonically in [`worker.md`](worker.md) → "The 4-step closer". Co-workers run it identically, with only these differences:
 
-```text
-<LOGS>/raw/<ID>__opus-co-worker-N.md      ← raw output
-<LOGS>/<ID>.md                              ← curated digest (## TL;DR top)
-<LOGS>/master_agent.log                     ← appended 1-line status
-<LOGS>/done/<ID>__opus-co-worker-N.flag    ← sentinel
-```
-
-Slug = `co-worker-N`. Master polls the flag the same way it does for autonomous workers.
-
-When the user says "we're done with this UI task on co-worker-1", the co-worker fires the closer and signals the King. The closer Step 4 ALSO fires mandatory notifications (PRIMARY mode):
+- **Slug** = `co-worker-N` — so artifacts are `raw/<ID>__opus-co-worker-N.md`, `done/<ID>__opus-co-worker-N.flag`, etc. Master polls the flag the same way it does for autonomous workers.
+- **Trigger** is interactive: the closer fires when the user says "we're done with this UI task on co-worker-1", not on autonomous task completion.
+- **Notify titles** use the 🧑‍💼 emoji + co-worker slug (the worker version uses 👷):
 
 ```bash
 cmux notify --surface "$CMUX_SURFACE_ID" \
@@ -117,7 +110,7 @@ cmux notify --workspace "$KING_WS" \
   --title "🧑‍💼 co-worker-1 done" --subtitle "$ID" --body "$(head -1 $LOGS/$ID.md)"
 ```
 
-The co-worker's own pane gets a blue ring; the King's sidebar gets a badge. Then the user can ask for the pre-commit gate + push. See [`workers.md`](workers.md) → "4-step closer" and [`cmux.md`](cmux.md) → § Notification system for the targeting reference.
+The co-worker's own pane gets a blue ring; the King's sidebar gets a badge. Then the user can ask for the pre-commit gate + push. See [`cmux.md`](../reference/cmux.md) → § Notification system for the targeting reference.
 
 ---
 
@@ -125,10 +118,10 @@ The co-worker's own pane gets a blue ring; the King's sidebar gets a badge. Then
 
 When the user declares a co-worker's work ready:
 
-1. King runs the pre-commit gate inside `.worktrees/co-worker-N/` — same checks (typecheck + tests + dry-merge + cross-lane overlap). See [`kings.md`](kings.md) → Pre-commit gate.
+1. King runs the pre-commit gate inside `.worktrees/co-worker-N/` — same checks (typecheck + tests + dry-merge + cross-lane overlap). See [`king.md`](king.md) → Pre-commit gate.
 2. King writes the test report to `<project>/docs/test-reports/KING_<UTC>__co-worker-N__<topic>.md`.
 3. King reports to the user: "co-worker-N ready. Test report at … Push?"
-4. The user says "push" → King carves `feature/<topic>` from `co-worker-N` + FINAL conflict check + `git push` + `gh pr create`. See [`git.md`](git.md) → Push approval gate.
+4. The user says "push" → King carves `feature/<topic>` from `co-worker-N` + FINAL conflict check + `git push` + `gh pr create`. See [`git.md`](../reference/git.md) → Push approval gate.
 5. After PR merge: King cleans up — `git worktree remove "$PROJ/.worktrees/co-worker-N" --force; git branch -D "co-worker-N" 2>/dev/null || true` + then `git worktree add -b "co-worker-N" "$PROJ/.worktrees/co-worker-N" "origin/develop"` (reset for next pair-up).
 
 The King is still the sole pusher. Co-worker masters never push, just like workers don't.
@@ -139,7 +132,7 @@ The King is still the sole pusher. Co-worker masters never push, just like worke
 
 Because co-workers DON'T consume claims from `<LOGS>/claims/`, their file edits may intentionally (or accidentally) overlap with autonomous workers' work.
 
-The King's pre-commit gate **detects overlap** when running the cross-lane file-overlap check (see [`kings.md`](kings.md) → Pre-commit gate, step d). If overlap is detected, the King reports it:
+The King's pre-commit gate **detects overlap** when running the cross-lane file-overlap check (see [`king.md`](king.md) → Pre-commit gate, step d). If overlap is detected, the King reports it:
 
 ```text
 Test report — co-worker-1 — <task>
@@ -167,11 +160,11 @@ Each gets its own slot in the cmux layout + its own worktree on a separate `co-w
 
 ## What co-workers DO
 
-Same as workers (see [`workers.md`](workers.md) → Spawn rights inside a lane):
+Same as workers (see [`worker.md`](worker.md) → Spawn rights inside a lane):
 
 - Read project files.
 - Edit + commit locally to `co-worker-N`.
-- Lane master itself runs **Opus** (high-quality coding inside the lane). Sub-agents it spawns follow the P1/P2/P3 chain: **Sonnet** by default (P1), **Haiku** for bulk reads (P2), **Opus** for sensitive files (P3). The lane master's model is separate from the sub-agent chain. No eco cap; parallel allowed.
+- Lane master itself runs **Opus** (high-quality coding inside the lane). Sub-agents it spawns follow the P1/P2/P3 chain — canonical definition in [`index.md`](../index.md) → Sub-agent model priority. The lane master's model is separate from the sub-agent chain. No eco cap; parallel allowed.
 - Run the 4-step closer when the task chunk is complete.
 - Use `cmux notify` to ping King/the user when something needs attention.
 - Write the task file (mandatory, Step 0 of any task).
@@ -179,13 +172,4 @@ Same as workers (see [`workers.md`](workers.md) → Spawn rights inside a lane):
 
 ## What co-workers DO NOT do
 
-Same forbidden list as workers (see [`workers.md`](workers.md) → What workers DO NOT do):
-
-- ❌ No `git push` — King is the sole pusher.
-- ❌ No `feature/*` branch creation.
-- ❌ No `gh pr create`.
-- ❌ No FINAL conflict check.
-- ❌ No authoritative pre-commit gate.
-- ❌ Reuse task files across tasks. New task = new task file.
-
-All remote-touching git operations remain King-only.
+The forbidden-ops list is canonical in [`worker.md`](worker.md) → "What workers DO NOT do (King-only operations)" — `git push`, `feature/*` branch creation, `gh pr create`, the FINAL conflict check, the authoritative pre-commit gate, and task-file reuse. It applies to co-workers **identically**: there are no co-worker-specific exceptions, and all remote-touching git operations remain King-only.

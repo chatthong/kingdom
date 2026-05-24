@@ -1,7 +1,7 @@
 # story-assembled
 
 **Fires when:** a Senior has merged all of its pod's sub-tasks into the story branch and run Tier-2, just before the review loop begins (v0.32.0+).
-**Used by:** [`seniors.md`](../seniors.md) story lifecycle (step 3 -> step 4 transition).
+**Used by:** [`senior.md`](../roles/senior.md) story lifecycle (step 3 -> step 4 transition).
 
 ## Template
 

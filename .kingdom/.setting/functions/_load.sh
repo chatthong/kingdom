@@ -34,3 +34,19 @@ load_all () {
     source "$f"
   done
 }
+
+# load_feature <name>… — source a whole feature (its functions + deps) from manifest.json.
+# A feature = an entry in ../manifest.json. `load_feature senior` pulls the 7 senior helpers
+# (+ its deps, e.g. core). Don't load_feature a feature to leave it out entirely.
+_KMANIFEST="$_KFN_DIR/../manifest.json"
+load_feature () {
+  local feat dep fn
+  for feat in "$@"; do
+    for dep in $(jq -r --arg f "$feat" '.features[$f].deps[]?' "$_KMANIFEST" 2>/dev/null); do
+      load_feature "$dep"
+    done
+    for fn in $(jq -r --arg f "$feat" '.features[$f].functions[]?' "$_KMANIFEST" 2>/dev/null); do
+      load "$fn"
+    done
+  done
+}

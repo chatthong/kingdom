@@ -4,9 +4,9 @@
 
 **Where this is already documented (but was being skipped):**
 
-- [`kings.md`](kings.md) § Push approval gate Step 8: `git restore .` OR `git reset --hard origin/develop`
-- [`_primitives.md`](_primitives.md) § `carve_and_push_feature` calls `kingdom_discard_overlay` as its FINAL action
-- [`_primitives.md`](_primitives.md) § `kingdom_discard_overlay` helper
+- [`king.md`](../roles/king.md) § Push approval gate Step 8: `git restore .` OR `git reset --hard origin/develop`
+- [`_primitives.md`](../_primitives.md) § `carve_and_push_feature` calls `kingdom_discard_overlay` as its FINAL action
+- [`_primitives.md`](../_primitives.md) § `kingdom_discard_overlay` helper
 
 **Required sequence after the LAST PR in a push batch goes out:**
 
@@ -20,7 +20,7 @@ git -C "$WORKTREE" status                         # MUST print "nothing to commi
 
 **Why this is Tier 2 not Tier 1:** Skipping it doesn't lose data (work lives on `feature/*` remotes + `worker-N` locals). But the next gate-pass overlay attempts `git apply --3way` on top of stale leftover → double-application, conflict errors, or false-positive "lane has new changes" detection. It's a correctness rule, not a safety rule.
 
-**Incident that motivated this rule (2026-05-18):** another King session pushed 4 PRs (#255 + #257 + #258 + #259) to bfg-swt successfully, but skipped this step. the user opened GitHub Desktop, saw 18 stale uncommitted files on kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes, it should. Step 8 was in `kings.md` but not enforced via `rules.md`, so the lane-spawned King missed it.
+**Incident that motivated this rule (2026-05-18):** another King session pushed 4 PRs (#255 + #257 + #258 + #259) to bfg-swt successfully, but skipped this step. the user opened GitHub Desktop, saw 18 stale uncommitted files on kingdom branch, and asked "shouldn't kingdom be clean after push?" — yes, it should. Step 8 was in `king.md` but not enforced via `rules.md`, so the lane-spawned King missed it.
 
 **Distinguished from R26:**
 

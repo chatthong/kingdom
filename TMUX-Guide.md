@@ -84,7 +84,7 @@ tmux capture-pane -t work:1.2 -p                     # current visible content
 tmux capture-pane -t work:1.2 -p -S -300             # last 300 lines of scrollback
 ```
 
-`-p` prints to stdout. Use this for visual peeking; for completion signals prefer file-based sentinels (see .kingdom/.setting/kings.md → "Pattern A — done-sentinel file").
+`-p` prints to stdout. Use this for visual peeking; for completion signals prefer file-based sentinels (see .kingdom/.setting/roles/king.md → "Pattern A — done-sentinel file").
 
 ---
 

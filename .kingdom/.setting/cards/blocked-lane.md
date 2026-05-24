@@ -1,7 +1,7 @@
 # blocked-lane
 
-**Fires when:** Watchman's `/loop` body detects a lane stuck on a permission prompt (per [watchmans.md § Blocked-lane scan](../watchmans.md#blocked-lane-scan)).
-**Used by:** [`watchmans.md`](../watchmans.md) `/loop` body.
+**Fires when:** Watchman's `/loop` body detects a lane stuck on a permission prompt (per [watchman.md § Blocked-lane scan](../roles/watchman.md#blocked-lane-scan)).
+**Used by:** [`watchman.md`](../roles/watchman.md) `/loop` body.
 
 ## Template
 
@@ -33,7 +33,7 @@
 
 ## Prompt pattern matchers
 
-The watchman matches against capture-pane output using these regexes (full list in [watchmans.md](../watchmans.md)):
+The watchman matches against capture-pane output using these regexes (full list in [watchman.md](../roles/watchman.md)):
 
 | Regex | Maps to `${PROMPT_KIND}` |
 |---|---|

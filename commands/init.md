@@ -57,31 +57,25 @@ Wait for confirmation. On `no`, skip to Step 3 (do NOT re-copy).
 On `yes` OR if `SETTING_MISSING`, run:
 
 ```bash
-mkdir -p "$PWD/.kingdom/.setting/"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/index.md"      "$PWD/.kingdom/.setting/index.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/kings.md"      "$PWD/.kingdom/.setting/kings.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/workers.md"    "$PWD/.kingdom/.setting/workers.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/co-workers.md" "$PWD/.kingdom/.setting/co-workers.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/watchmans.md"  "$PWD/.kingdom/.setting/watchmans.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/seniors.md"   "$PWD/.kingdom/.setting/seniors.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/git.md"        "$PWD/.kingdom/.setting/git.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cmux.md"       "$PWD/.kingdom/.setting/cmux.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/_primitives.md" "$PWD/.kingdom/.setting/_primitives.md"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/rules.md"       "$PWD/.kingdom/.setting/rules.md"
+SRC="${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting"
+DST="$PWD/.kingdom/.setting"
+mkdir -p "$DST/roles" "$DST/reference" "$DST/rules" "$DST/functions" "$DST/cards"
 
-# v0.22.0+: card library
-mkdir -p "$PWD/.kingdom/.setting/cards"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/cards/"*.md "$PWD/.kingdom/.setting/cards/"
+# top-level files (index + the two back-compat pointers + the feature manifest)
+cp "$SRC/index.md"        "$DST/index.md"
+cp "$SRC/manifest.json"   "$DST/manifest.json"     # v0.35.0: feature registry for load_feature
+cp "$SRC/rules.md"        "$DST/rules.md"           # pointer -> rules/index.md
+cp "$SRC/_primitives.md"  "$DST/_primitives.md"     # pointer -> functions/index.md
 
-# v0.23.0+: per-task skill routing
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/skill-routing.md" "$PWD/.kingdom/.setting/skill-routing.md"
+# the one-file-each directories (copy whole dirs so sub-docs like king-*/watchman-* + *.sh come along)
+cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior + king-*/watchman-* sub-docs
+cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing
+cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R50 + index.md
+cp "$SRC/functions/"*     "$DST/functions/"         # 42 *.sh + index.md + _load.sh
+cp "$SRC/cards/"*.md      "$DST/cards/"
 
-# v0.34.0+: rules and functions are one-file-each directories (rules.md / _primitives.md are now pointers)
-mkdir -p "$PWD/.kingdom/.setting/rules" "$PWD/.kingdom/.setting/functions"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/rules/"*.md       "$PWD/.kingdom/.setting/rules/"
-cp "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/functions/"*       "$PWD/.kingdom/.setting/functions/"
-
-wc -l "$PWD/.kingdom/.setting/"*.md
+echo "Scaffolded .setting/: $(find "$DST" -name '*.md' -o -name '*.sh' -o -name '*.json' | wc -l | tr -d ' ') files"
+ls -1 "$DST"
 ```
 
 Print the file list with line counts.
@@ -117,7 +111,7 @@ Proposed change to .claude/settings.json (workspace-scoped):
 Apply? [y/N]
 ```
 
-> The path-scoped entries eliminate the most common interactive permission prompts: lanes reading task files at `.kingdom/<project>/tasks/` or worktree files at `.worktrees/<lane>/`. Without them, Claude Code blocks the lane on each unfamiliar path until you approve. Watchman's blocked-lane scan (see `.kingdom/.setting/watchmans.md`) catches any prompts that still fire.
+> The path-scoped entries eliminate the most common interactive permission prompts: lanes reading task files at `.kingdom/<project>/tasks/` or worktree files at `.worktrees/<lane>/`. Without them, Claude Code blocks the lane on each unfamiliar path until you approve. Watchman's blocked-lane scan (see `.kingdom/.setting/roles/watchman.md`) catches any prompts that still fire.
 
 On `y`, merge with `jq` (preserves any existing keys + dedupes):
 

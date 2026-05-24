@@ -115,7 +115,7 @@ Push approval requires Tier-2 pass. The single-lane Tier-1 gate is fast feedback
 
 **Integration surface** (`kingdom`) = the local staging area where all in-flight lane work integrates as UNCOMMITTED working-tree changes before any byte reaches origin. Tier-2 gate runs against the overlay. You review file-by-file in GitHub Desktop's Changes tab (or any diff tool). After push, the overlay is discarded. The `kingdom` branch itself never accumulates commits, never gets pushed.
 
-Full commit flow + push gate + FINAL conflict check details: [`git.md`](../.kingdom/.setting/git.md) and [`kings.md`](../.kingdom/.setting/kings.md).
+Full commit flow + push gate + FINAL conflict check details: [`git.md`](../.kingdom/.setting/reference/git.md) and [`king.md`](../.kingdom/.setting/roles/king.md).
 
 ## See also
 

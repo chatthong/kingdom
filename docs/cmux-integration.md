@@ -47,7 +47,7 @@ graph TB
 | 🔔 **Sidebar badge** | Watchman alerts, push-ready prompts, cross-workspace events | The workspace card that has news |
 | 📋 **Bell-icon panel** | Auto-aggregated | Scrollable list at top of sidebar, jump-to-most-recent |
 
-cmux fires native macOS notifications too. The kingdom always passes role-emoji-prefixed titles (`👷 worker-1 done`, `🕵️ watchman-1 · develop RED`, `👑 King · push?`) so the bell panel stays scan-able. Notifications fire on **8 canonical events**; full schema in [`cmux.md`](../.kingdom/.setting/cmux.md) § Notification system.
+cmux fires native macOS notifications too. The kingdom always passes role-emoji-prefixed titles (`👷 worker-1 done`, `🕵️ watchman-1 · develop RED`, `👑 King · push?`) so the bell panel stays scan-able. Notifications fire on **8 canonical events**; full schema in [`cmux.md`](../.kingdom/.setting/reference/cmux.md) § Notification system.
 
 ## Three-tier visual hierarchy
 
@@ -128,4 +128,4 @@ Note: spawn is Step 0.4 of `/kingdom:work` — it runs automatically when you in
 
 - [`branch-model.md`](branch-model.md): lifecycle + integration model
 - [`roles.md`](roles.md): what each lane actually does
-- [`../.kingdom/.setting/cmux.md`](../.kingdom/.setting/cmux.md): full cmux command reference for all roles
+- [`../.kingdom/.setting/reference/cmux.md`](../.kingdom/.setting/reference/cmux.md): full cmux command reference for all roles

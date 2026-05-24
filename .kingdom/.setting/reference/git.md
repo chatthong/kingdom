@@ -1,6 +1,6 @@
 # git.md — Branch model + commit flow + PR conventions
 
-Git workflow for the kingdom. See [`index.md`](index.md) for the entry-point overview and [`kings.md`](kings.md) for who actually runs each git operation.
+Git workflow for the kingdom. See [`index.md`](../index.md) for the entry-point overview and [`king.md`](../roles/king.md) for who actually runs each git operation.
 
 ---
 
@@ -151,10 +151,10 @@ graph TB
 
 ## Commit flow (sequence)
 
-1. Lane works on `<role>-<n>` (in its git worktree at `.worktrees/<role>-<n>/`). Sub-agents spawn freely per the P1/P2/P3 chain — see [`workers.md`](workers.md) → Spawn rights.
+1. Lane works on `<role>-<n>` (in its git worktree at `.worktrees/<role>-<n>/`). Sub-agents spawn freely per the P1/P2/P3 chain — see [`worker.md`](../roles/worker.md) → Spawn rights.
 2. Lane completes a sub-task → 4-step closer fires (raw + curated + log + sentinel flag). Task file at `.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md` is updated with final summary (lane master wrote it before dispatch; sub-agents read only).
 3. King polls the sentinel flag → reads the curated TL;DR → decides.
-4. King runs the **pre-commit gate** inside the lane's worktree — typecheck + tests + dry-merge vs `origin/develop` + cross-lane file-overlap. See [`kings.md`](kings.md) → Pre-commit gate. Commands come from `kingdom.json.gate.*`.
+4. King runs the **pre-commit gate** inside the lane's worktree — typecheck + tests + dry-merge vs `origin/develop` + cross-lane file-overlap. See [`king.md`](../roles/king.md) → Pre-commit gate. Commands come from `kingdom.json.gate.*`.
 5. King writes a `KING_<UTC>__<lane-name>__<sub-task-id>.md` test report to `<project>/docs/test-reports/`.
 6. King reports to chat: "Lane ready. Test report at … Proposed PR title: … Proposed PR branch: feature/<topic>. Push?"
 7. The user says **push** (or holds with reasoning).
@@ -184,7 +184,7 @@ graph TB
 
 **Push authority lives with the King alone. Lane masters NEVER push.** Lane masters do their work, run the 4-step closer, drop the sentinel flag — that's it. No `git push`, no `feature/*` branch creation, no `gh pr create`. All remote-touching git operations are King-only, gated by the user's explicit approval and the King's FINAL conflict check.
 
-Full sequence in [`kings.md`](kings.md) → Push approval gate.
+Full sequence in [`king.md`](../roles/king.md) → Push approval gate.
 
 **Why not push lane branches directly?** Lane branches are persistent identities (`worker-1` always = worker-1) — pushing them would mix lane-rotation hygiene with remote-branch hygiene. Carving `feature/<topic>` keeps the PR surface descriptive and one-shot, and lets you reset lanes between PR batches without any remote-side cleanup.
 

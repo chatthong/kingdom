@@ -33,4 +33,4 @@ Even though each branch's edit hits the SAME file (TODO_Webshop.md), the work IS
 
 For these, **one at a time, explicit prompt, explicit OK.** No batching.
 
-Helper: `pattern_grep_fanout` + `parallel_edit_fanout` in [`_primitives.md`](_primitives.md). `parallel_edit_fanout` lands in v0.30.0; takes `<search> <replace> <lane=pr-spec> [glob]` and handles MERGED/CLOSED skip, amend, and `--force-with-lease` per lane.
+Helper: `pattern_grep_fanout` + `parallel_edit_fanout` in [`_primitives.md`](../_primitives.md). `parallel_edit_fanout` lands in v0.30.0; takes `<search> <replace> <lane=pr-spec> [glob]` and handles MERGED/CLOSED skip, amend, and `--force-with-lease` per lane.

@@ -4,7 +4,7 @@ Per-role idle behaviour:
 
 | Role | Idle behaviour |
 |---|---|
-| 👷 **Worker** | **Auto-claim** from queue per `kings.md` § Lane utilisation. If queue empty, lane shows `🐾 Idle` but King keeps polling for new pending tasks (Step 5c of `/kingdom:work` poll loop). Worker NEVER sits "awaiting your dictation". |
+| 👷 **Worker** | **Auto-claim** from queue per `king.md` § Lane utilisation. If queue empty, lane shows `🐾 Idle` but King keeps polling for new pending tasks (Step 5c of `/kingdom:work` poll loop). Worker NEVER sits "awaiting your dictation". |
 | 🧑‍💼 **Co-worker** | **Dormant by default.** Activates only when user says `pair on co-worker-N`. Shows `💤 staged · awaiting pair-on signal`. This is the ONLY role where "waiting for user input" is correct. |
 | 🕵️ **Watchman** | **Always runs `/loop`.** Never idle, never waiting. Dynamic-pacing (5-15 min) means it's "asleep until next tick" — that's different from "waiting on user." |
 

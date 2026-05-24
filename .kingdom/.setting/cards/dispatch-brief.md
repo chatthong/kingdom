@@ -1,7 +1,7 @@
 # dispatch-brief
 
 **Fires when:** King dispatches a task to a lane via `cmux send` / `tmux send-keys` / `claude -p`.
-**Used by:** [`kings.md`](../kings.md) dispatch flow; this is the prompt template sent TO lanes (NOT shown in user chat).
+**Used by:** [`king.md`](../roles/king.md) dispatch flow; this is the prompt template sent TO lanes (NOT shown in user chat).
 
 ## Template
 

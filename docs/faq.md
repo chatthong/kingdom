@@ -26,7 +26,7 @@ Edit `kingdom.json` → `gate.*` arrays per project. The King runs whatever you 
 <details>
 <summary><strong>How does the King pick which skills to invoke?</strong></summary>
 
-R41 (v0.29.3+) made skill-aware execution mandatory. Resolution is three steps: (1) the King calls `pick_skills_for_task` against the keyword → skill mapping table in [`.kingdom/.setting/skill-routing.md`](../.kingdom/.setting/skill-routing.md) — domain skills (Next.js, Prisma, Supabase, etc) are matched here; (2) if no routing match, the system-reminder skill list is scanned as a fallback; (3) if still no match, the task proceeds without a skill invocation — that's valid. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) are always evaluated independently of domain matching. To add project-specific keywords, edit `.kingdom/.setting/skill-routing.md` — no restart needed. Full rule: [R41](../.kingdom/.setting/rules.md#r41-auto-discover-and-use-the-right-skill-before-any-work-tier-1-v0293).
+R41 (v0.29.3+) made skill-aware execution mandatory. Resolution is three steps: (1) the King calls `pick_skills_for_task` against the keyword → skill mapping table in [`.kingdom/.setting/reference/skill-routing.md`](../.kingdom/.setting/reference/skill-routing.md) — domain skills (Next.js, Prisma, Supabase, etc) are matched here; (2) if no routing match, the system-reminder skill list is scanned as a fallback; (3) if still no match, the task proceeds without a skill invocation — that's valid. Process skills (`superpowers:test-driven-development`, `superpowers:systematic-debugging`, `superpowers:verification-before-completion`) are always evaluated independently of domain matching. To add project-specific keywords, edit `.kingdom/.setting/reference/skill-routing.md` — no restart needed. Full rule: [R41](../.kingdom/.setting/rules/R41-auto-discover-and-use.md).
 
 </details>
 
@@ -61,7 +61,7 @@ Yes. `kingdom.json` → `git.mergeStyle` can be `merge-commit` (default) or `squ
 <details>
 <summary><strong>What's a task file?</strong></summary>
 
-Every assignment to a lane creates one at `.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`. It's a checkbox markdown doc with the multi-layer plan, progress notes, and final summary. Lane master writes; sub-agents and you can read it to follow along. Never deleted, never reused. Full schema in [`workers.md`](../.kingdom/.setting/workers.md) → "Task file".
+Every assignment to a lane creates one at `.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`. It's a checkbox markdown doc with the multi-layer plan, progress notes, and final summary. Lane master writes; sub-agents and you can read it to follow along. Never deleted, never reused. Full schema in [`worker.md`](../.kingdom/.setting/roles/worker.md) → "Task file".
 
 </details>
 
@@ -89,7 +89,7 @@ Yes. `/kingdom:work` auto-detects what's available. If cmux.app isn't running, i
 <details>
 <summary><strong>Does the watchman edit my files?</strong></summary>
 
-Only audit artifacts under `.kingdom/<project>/{tasks,logs}/`, and only for **low-risk** fixes (tick a stale checkbox when a matching commit is found, backfill a missing log line, fix a dead `[[name]]` link). It NEVER edits project source code, role specs, `kingdom.json`, or `.git/`. **High-risk** changes (digest rewrites, task-file merges, archive moves) are flagged to `WATCH_DOCS_AUDIT.md`, King decides + acts. Full split in [`watchmans.md`](../.kingdom/.setting/watchmans.md) → "Docs audit duty".
+Only audit artifacts under `.kingdom/<project>/{tasks,logs}/`, and only for **low-risk** fixes (tick a stale checkbox when a matching commit is found, backfill a missing log line, fix a dead `[[name]]` link). It NEVER edits project source code, role specs, `kingdom.json`, or `.git/`. **High-risk** changes (digest rewrites, task-file merges, archive moves) are flagged to `WATCH_DOCS_AUDIT.md`, King decides + acts. Full split in [`watchman.md`](../.kingdom/.setting/roles/watchman.md) → "Docs audit duty".
 
 </details>
 
