@@ -229,6 +229,7 @@ kingdom drives one terminal workspace per lane. Two supported setups:
 - ❌ Pushes: never without your explicit "push?" approval
 - ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks: zero modifications
 - ❌ Your `.gitignore`: kingdom adds ONE line (`.worktrees/`) and stops there
+- ❌ Plugin updates: `/kingdom:update` re-syncs the kit + adds new config keys but never touches your `tasks/`, `logs/`, `state.json`, tuned `kingdom.json` values, or memory (memory lives outside the workspace)
 - ✅ `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, branches survive intact
 
 ---
@@ -311,9 +312,10 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 | Command | What it does |
 |---|---|
 | **`/kingdom:work [<project>] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. **Shape:** either per-role (`worker=` / `co-worker=` / `watchman=` / `senior=`, plural also accepted) or `lane=N` for a total budget the King auto-composes. **Limits:** `pr-limit=N` (stop after N PRs) and `pod-limit=N` (stop after N pods = units of work); both count things that become a PR, not sub-tasks. The one command you type every morning. |
-| `/kingdom:init [<project>]` | **Scaffold only, no flags.** Creates the workspace + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later at `/kingdom:work` or by editing `kingdom.json`. See [`docs/configuration.md`](docs/configuration.md). |
-| `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys. Re-run anytime. |
+| `/kingdom:init [<project>]` | **Scaffold a NEW workspace, no flags.** Creates the workspace + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later at `/kingdom:work` or by editing `kingdom.json`. To *upgrade an existing* workspace after a plugin update, use `/kingdom:update`. See [`docs/configuration.md`](docs/configuration.md). |
+| `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys — plus kit version-drift (recommends `/kingdom:update` when behind). Re-run anytime. |
 | `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes; those go through the normal push-approval gate. |
+| **`/kingdom:update [<project>]`** | **Migrate a live workspace after a plugin update (v0.38.0).** Re-syncs the kit (`.kingdom/.setting/`) and additively merges new schema keys into each `kingdom.json` (your values always win), while leaving `tasks/`, `logs/`, `state.json`, and memory completely untouched. Previews the full delta and asks for an explicit `update` before any write; backs up everything first. Optional `<project>` scopes the config migration. |
 
 ---
 
