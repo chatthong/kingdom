@@ -20,7 +20,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
-![Version](https://img.shields.io/badge/version-0.38.0-success)
+![Version](https://img.shields.io/badge/version-0.40.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -196,6 +196,7 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 - **One conversation:** you talk to the King; the King talks to the lanes; you never juggle panes
 - **Native cmux.app feel:** every role gets its own colour-coded workspace; notifications fire as blue rings, badges, and bell-panel entries
 - **Full audit trail:** every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag
+- **Smart watchman (v0.40.0):** more than a monitor — a Sonnet `/loop` running 8 surveillance duties (incl. migration/sequence-collision, config-drift, and missing-test detection) through a findings ledger that dedups, escalates unactioned issues, auto-resolves, and surfaces one actionable "King's next action" per tick
 - **Zero new runtime:** cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text
 - **Skill-aware:** King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `superpowers:test-driven-development`, etc) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/reference/skill-routing.md), with auto-discovery fallback when the routing table doesn't match.
 
@@ -300,7 +301,7 @@ Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere
 | 🎓 **Senior** | Opus | Per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into a story branch, reviews in a loop, marks push-eligible. Never pushes, never edits. | [`senior.md`](.kingdom/.setting/roles/senior.md) |
 | 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents (no eco cap). | [`worker.md`](.kingdom/.setting/roles/worker.md) |
 | 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-worker.md`](.kingdom/.setting/roles/co-worker.md) |
-| 🕵️ **Watchman** | Sonnet | Passive monitor (`/loop`, 5-15 min). Smoke + PR babysitting. Never edits, never pushes. | [`watchman.md`](.kingdom/.setting/roles/watchman.md) |
+| 🕵️ **Watchman** | Sonnet | Autonomous `/loop` safety net (5-15 min): develop-health + PR babysitting, plus 8 Haiku surveillance duties (review · CVE · cross-lane conflict · cross-story drift · **sequence-collision** · **config/secret parity** · **missing-tests** · git hygiene) feeding a findings ledger (dedup, escalate, auto-resolve) that hands the King one actionable "next action" per tick. Read-only; never edits, never pushes. | [`watchman.md`](.kingdom/.setting/roles/watchman.md) |
 | 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
 
 Full role write-ups: [`docs/roles.md`](docs/roles.md).
@@ -313,9 +314,10 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 |---|---|
 | **`/kingdom:work [<project>] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. **Shape:** either per-role (`worker=` / `co-worker=` / `watchman=` / `senior=`, plural also accepted) or `lane=N` for a total budget the King auto-composes. **Limits:** `pr-limit=N` (stop after N PRs) and `pod-limit=N` (stop after N pods = units of work); both count things that become a PR, not sub-tasks. The one command you type every morning. |
 | `/kingdom:init [<project>]` | **Scaffold a NEW workspace, no flags.** Creates the workspace + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later at `/kingdom:work` or by editing `kingdom.json`. To *upgrade an existing* workspace after a plugin update, use `/kingdom:update`. See [`docs/configuration.md`](docs/configuration.md). |
-| `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys — plus kit version-drift (recommends `/kingdom:update` when behind). Re-run anytime. |
+| `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys — plus kit version-drift (Check 12, recommends `/kingdom:update` when behind) and project-memory drift (Check 13, read-only: flags memory that snapshots kingdom mechanics or names an old version). Re-run anytime. |
 | `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces. Keeps King's workspace by default. No commits or pushes; those go through the normal push-approval gate. |
 | **`/kingdom:update [<project>]`** | **Migrate a live workspace after a plugin update (v0.38.0).** Re-syncs the kit (`.kingdom/.setting/`) and additively merges new schema keys into each `kingdom.json` (your values always win), while leaving `tasks/`, `logs/`, `state.json`, and memory completely untouched. Previews the full delta and asks for an explicit `update` before any write; backs up everything first. Optional `<project>` scopes the config migration. |
+| **`/kingdom:self-<role>`** — `self-king` · `self-worker` · `self-co-worker` · `self-watchman` · `self-senior` | **Re-ground a role from disk (v0.39.0, R52).** Re-reads the canonical kingdom rules + that role's spec from `.kingdom/.setting/` and prints a grounding card. The King injects the matching one as each lane's **first message at spawn**, so a lane never inherits the King's drift; and you can run it yourself any time a role has wandered — e.g. `/kingdom:self-king` after a long multi-day session. Read-only (reads + prints; never edits, dispatches, or pushes). |
 
 ---
 

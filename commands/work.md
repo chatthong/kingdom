@@ -218,11 +218,24 @@ for lane in $LANES_EXPECTED; do
     label="$emoji $lane"
     ref=$(spawn_master_workspace "$label" "$PROJ/.worktrees/$lane" "$color")
     [ -n "$ref" ] && echo "${lane}_WS=$ref" >> "$REFS_FILE"
-    # v0.31.0 R39: watchmen are autonomous — auto-dispatch /loop on spawn.
-    # Without this, watchman sits at a shell prompt; the kingdom appears half-alive
-    # until the user manually notices and asks "watchman why do nothing".
+    # R52: a freshly-spawned lane grounds itself FROM DISK before any task brief.
+    # Inject /kingdom:self-<role> as the lane's first message — it re-reads the
+    # canonical rules + its role spec from .kingdom/.setting/ (pull, not push), so
+    # the lane's rule-knowledge can't inherit the King's drift. The later task
+    # brief (Step 4 / Step 3.5) then carries only the task, not the rules.
+    if [ -n "$ref" ]; then
+      case "$lane" in
+        senior-*)    cmux_send "$ref" "/kingdom:self-senior" ;;
+        worker-*)    cmux_send "$ref" "/kingdom:self-worker" ;;
+        co-worker-*) cmux_send "$ref" "/kingdom:self-co-worker" ;;
+        watchman-*)  cmux_send "$ref" "/kingdom:self-watchman" ;;
+      esac
+    fi
+    # v0.31.0 R39: watchmen are autonomous — auto-dispatch /loop on spawn (AFTER the
+    # self-ground above). Without this, watchman sits at a shell prompt; the kingdom
+    # appears half-alive until the user notices and asks "watchman why do nothing".
     case "$lane" in
-      watchman-*) [ -n "$ref" ] && spawn_watchman_loop "$ref" ;;
+      watchman-*) [ -n "$ref" ] && spawn_loop "$ref" "/loop" ;;
     esac
   ) &
   SPAWN_PIDS="$SPAWN_PIDS $!"
@@ -449,13 +462,13 @@ if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
     BRANCH=$(create_story_branch "$PROJ" "$STORY_ID" "$BASE" "$SENIOR")
 
     # 3. Assign the pod to the Senior + hand cross-cutting conventions, then start
-    #    its autonomous loop. guard_senior_dispatch_scope (called inside the Senior)
+    #    its autonomous loop. guard_dispatch_scope (called inside the Senior)
     #    keeps the Senior in-pod + visible-only (R30 amendment).
     SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" | cut -d= -f2)
     guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
     cmux_send "$SENIOR_WS" \
       "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push."
-    spawn_senior_loop "$SENIOR_WS" "$STORY_ID"
+    spawn_loop "$SENIOR_WS" "/loop"   # kick the senior's autonomous story loop (self-senior already grounded it at spawn, R52)
     echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
   done
 fi
@@ -563,7 +576,7 @@ while true; do
       SENIOR=$(echo "$FLAG_BASE" | sed 's/.*__\(senior-[0-9]*\)__.*/\1/')
       ls "$PWD/${project}/docs/test-reports/KING_"*"__${SENIOR}__${STORY_ID}.md" >/dev/null 2>&1 && continue
       # Cross-story drift check (R50): consume the watchman's signal across story branches
-      DRIFT=$(watchman_cross_story_scan "$PROJ")
+      DRIFT=$(cross_story_scan "$PROJ")
       echo "$DRIFT" | grep -q 'drift:' && echo "⚠️ ${DRIFT} — King coordinates rebase of story/${STORY_ID} before PR"
       # NO re-review of internals (R48). Show the Senior's clean verdict, then the
       # story-PR push-prompt, and wait (R1).

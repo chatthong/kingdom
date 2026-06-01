@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# kingdom function: watchman_cross_story_scan
+# kingdom function: cross_story_scan
 
-watchman_cross_story_scan () {
+cross_story_scan () {
   # Inputs: $1 = PROJ. Pairwise git merge-tree across in-flight story branches.
   # Echoes a drift summary the King consumes at push time. Cheap; runs each watchman tick.
   local proj="$1" out="" i j

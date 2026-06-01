@@ -30,7 +30,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 
 **Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
 
-Tier 1 = 10. Tier 2 = 36. Tier 3 = 5. Total = 51 rules.
+Tier 1 = 10. Tier 2 = 37. Tier 3 = 5. Total = 52 rules.
 
 ---
 
@@ -94,6 +94,7 @@ Violating Tier 1 = kingdom is worse than running solo.
 | R49 | 2 | Senior owns within-story integration-conflict resolution | [R49-senior-owns-within-story-integration.md](R49-senior-owns-within-story-integration.md) |
 | R50 | 2 | King owns cross-story coordination | [R50-king-owns-cross-story-coordination.md](R50-king-owns-cross-story-coordination.md) |
 | R51 | 2 | Every lane master + King fans heavy work out to parallel sub-agents (soft target ~10; sonnet/haiku/opus by work type) | [R51-lane-roles-fan-out-sub-agents.md](R51-lane-roles-fan-out-sub-agents.md) |
+| R52 | 2 | Role-grounding is pull-from-disk: King injects `/kingdom:self-<role>` first at spawn; any role re-runs it to re-ground | [R52-role-grounding-pull-from-disk.md](R52-role-grounding-pull-from-disk.md) |
 
 ## Conflict resolution
 

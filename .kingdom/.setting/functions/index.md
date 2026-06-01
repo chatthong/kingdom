@@ -1,10 +1,10 @@
 # functions — index
 
-> One bash helper per file. Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder. 82 functions total.
+> One bash helper per file. Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder. 80 functions total.
 
-> Layout: flat files = backend-agnostic mechanics; **`cmux/`** = the cmux.app backend — one wrapper per `cmux` subcommand **plus the `browser_*` wrappers** (cmux.app's built-in browser is unavailable under Ghostty+tmux, so a future **`tmux/`** backend folder won't include them). Features: **core** (always) deps **cmux** (always); **browser** loads on demand; **senior**/**watchman** gated by `kingdom.json`.
+> Layout: flat files = backend-agnostic mechanics, all in feature **core**; **`cmux/`** = the cmux.app backend (one wrapper per `cmux` subcommand + the `browser_*` wrappers). Function NAMES are action-based, not role-based (v0.40.0) — any role loads any helper. Features group by BACKEND/CAPABILITY only: **core** (always) deps **cmux** (always); **browser** loads on demand.
 
-## core (42)
+## core (49)
 | function | purpose | file |
 |---|---|---|
 | `_bounded_wait` | — | [_bounded_wait.sh](_bounded_wait.sh) |
@@ -13,15 +13,18 @@
 | `compute_gate_duration` | — | [compute_gate_duration.sh](compute_gate_duration.sh) |
 | `compute_ready_for_fresh_work` | — | [compute_ready_for_fresh_work.sh](compute_ready_for_fresh_work.sh) |
 | `compute_task_duration` | — | [compute_task_duration.sh](compute_task_duration.sh) |
+| `create_story_branch` | — | [create_story_branch.sh](create_story_branch.sh) |
+| `cross_story_scan` | — | [cross_story_scan.sh](cross_story_scan.sh) |
 | `curated_path` | — | [curated_path.sh](curated_path.sh) |
 | `extract_pr_title_from_task_file` | — | [extract_pr_title_from_task_file.sh](extract_pr_title_from_task_file.sh) |
 | `fetch_weather_line` | — | [fetch_weather_line.sh](fetch_weather_line.sh) |
 | `find_ungated_sentinels` | — | [find_ungated_sentinels.sh](find_ungated_sentinels.sh) |
 | `generate_pr_body_from_task_file` | — | [generate_pr_body_from_task_file.sh](generate_pr_body_from_task_file.sh) |
 | `get_pr_title_from_task_file` | — | [get_pr_title_from_task_file.sh](get_pr_title_from_task_file.sh) |
+| `guard_commit_branch` | — | [guard_commit_branch.sh](guard_commit_branch.sh) |
+| `guard_dispatch_scope` | — | [guard_dispatch_scope.sh](guard_dispatch_scope.sh) |
 | `guard_lane_workspace_exists` | — | [guard_lane_workspace_exists.sh](guard_lane_workspace_exists.sh) |
-| `guard_no_king_session_worktree_cd` | — | [guard_no_king_session_worktree_cd.sh](guard_no_king_session_worktree_cd.sh) |
-| `guard_worker_commit_branch` | — | [guard_worker_commit_branch.sh](guard_worker_commit_branch.sh) |
+| `guard_no_worktree_cd` | — | [guard_no_worktree_cd.sh](guard_no_worktree_cd.sh) |
 | `haiku_read_docs_orientation` | — | [haiku_read_docs_orientation.sh](haiku_read_docs_orientation.sh) |
 | `init_subagent_pool` | — | [init_subagent_pool.sh](init_subagent_pool.sh) |
 | `kingdom_discard_overlay` | — | [kingdom_discard_overlay.sh](kingdom_discard_overlay.sh) |
@@ -31,6 +34,7 @@
 | `kingdom_review_surface` | — | [kingdom_review_surface.sh](kingdom_review_surface.sh) |
 | `latest_test_report` | — | [latest_test_report.sh](latest_test_report.sh) |
 | `make_artifact_id` | — | [make_artifact_id.sh](make_artifact_id.sh) |
+| `merge_into_story` | — | [merge_into_story.sh](merge_into_story.sh) |
 | `parallel_edit_fanout` | — | [parallel_edit_fanout.sh](parallel_edit_fanout.sh) |
 | `pattern_grep_fanout` | — | [pattern_grep_fanout.sh](pattern_grep_fanout.sh) |
 | `pick_next_task_for` | — | [pick_next_task_for.sh](pick_next_task_for.sh) |
@@ -40,9 +44,12 @@
 | `raw_path` | — | [raw_path.sh](raw_path.sh) |
 | `read_session_state` | — | [read_session_state.sh](read_session_state.sh) |
 | `render_card` | — | [render_card.sh](render_card.sh) |
+| `review_tick` | — | [review_tick.sh](review_tick.sh) |
 | `run_tier1_gate` | — | [run_tier1_gate.sh](run_tier1_gate.sh) |
 | `run_tier2_gate` | — | [run_tier2_gate.sh](run_tier2_gate.sh) |
+| `run_tier2_on_story` | — | [run_tier2_on_story.sh](run_tier2_on_story.sh) |
 | `save_session_state` | — | [save_session_state.sh](save_session_state.sh) |
+| `spawn_loop` | — | [spawn_loop.sh](spawn_loop.sh) |
 | `spawn_master_workspace` | — | [spawn_master_workspace.sh](spawn_master_workspace.sh) |
 | `spawn_pool_slot` | — | [spawn_pool_slot.sh](spawn_pool_slot.sh) |
 | `spawn_subagent_from_pool` | — | [spawn_subagent_from_pool.sh](spawn_subagent_from_pool.sh) |
@@ -88,21 +95,4 @@
 | `browser_screenshot` | Best-effort PNG capture for review evidence. browser_screenshot <surface> <out_path>. | [cmux/browser_screenshot.sh](cmux/browser_screenshot.sh) |
 | `browser_snapshot` | Snapshot the page's interactive accessibility tree (JSON with element refs) — the basis for | [cmux/browser_snapshot.sh](cmux/browser_snapshot.sh) |
 | `browser_verify` | Composite UI smoke check any role can call: open <url>, wait, assert <expect> (text or | [cmux/browser_verify.sh](cmux/browser_verify.sh) |
-
-## senior (7)
-| function | purpose | file |
-|---|---|---|
-| `create_story_branch` | — | [create_story_branch.sh](create_story_branch.sh) |
-| `guard_senior_dispatch_scope` | — | [guard_senior_dispatch_scope.sh](guard_senior_dispatch_scope.sh) |
-| `run_tier2_on_story` | — | [run_tier2_on_story.sh](run_tier2_on_story.sh) |
-| `senior_merge_worker_into_story` | — | [senior_merge_worker_into_story.sh](senior_merge_worker_into_story.sh) |
-| `senior_review_tick` | — | [senior_review_tick.sh](senior_review_tick.sh) |
-| `spawn_senior_loop` | — | [spawn_senior_loop.sh](spawn_senior_loop.sh) |
-| `spawn_senior_workspace` | — | [spawn_senior_workspace.sh](spawn_senior_workspace.sh) |
-
-## watchman (2)
-| function | purpose | file |
-|---|---|---|
-| `spawn_watchman_loop` | — | [spawn_watchman_loop.sh](spawn_watchman_loop.sh) |
-| `watchman_cross_story_scan` | — | [watchman_cross_story_scan.sh](watchman_cross_story_scan.sh) |
 

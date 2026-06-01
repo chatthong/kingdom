@@ -2,6 +2,8 @@
 
 Watchman is a self-scheduling agent. King NEVER blocks waiting on watchman, never dispatches work to watchman, and never sends watchman briefs via `cmux send`.
 
+**Spawn-time exception (R52 + spawn flow):** the one-time boot sequence — `/kingdom:self-watchman` self-ground plus the `/loop` kickoff via `spawn_loop` — is the watchman's boot, not ongoing task dispatch. After spawn the watchman is fully autonomous and the King never dispatches tasks to it again.
+
 **Watchman's scheduling is pull-based, not push-based:**
 
 - Watchman owns its own `/loop` with dynamic pacing of 5-15 minutes per tick, calibrated at runtime based on lane activity, PR volume, and prior-tick findings.

@@ -8,6 +8,8 @@ Watchmen are **passive, continuous monitors**. NOT task workers. They run Claude
 
 See [`index.md`](../index.md) for the entry-point overview, [`king.md`](king.md) for the King's gate (which is separate from Watchman monitoring), [`worker.md`](worker.md) for the 4-step closer pattern that Watchman ALSO follows for state-change reports, [`git.md`](../reference/git.md) for branch model.
 
+This is the single, complete Watchman spec: role + model, the `/loop` tick body, the autonomous per-tick Haiku surveillance duties (Duty 1–8 + Haiku cap + the cross-tick findings ledger + tick aggregation), PR-number backfill, the idle-time docs audit, the read-only scans (orphan-tab, blocked-lane, on-demand verification), the `WATCH_*.md` report naming convention, and lifecycle / multi-watchman.
+
 ---
 
 ## Rule cross-reference
@@ -15,8 +17,8 @@ See [`index.md`](../index.md) for the entry-point overview, [`king.md`](king.md)
 Three rules govern Watchman's relationship with the rest of the kingdom — keep these in mind before adding any new Watchman authority:
 
 - **R39 — King never dispatches to Watchman.** Watchman is self-scheduling (via `/loop`) and autonomous. King does not queue work for it, does not send it prompts mid-session, and does not treat it as a worker lane. The only King→Watchman interaction is the one-time spawn at kingdom startup (see § Dispatch below).
-- **R11 — Watchman is read-mostly on project source.** It may read any project file for situational awareness; it may run smoke/test commands; it may NOT edit project source code. Write authority is confined to `WATCH_*.md` reports, `watchman_state.json`, and low-risk kingdom-doc fixes (see [`watchman-docs-audit.md`](watchman-docs-audit.md)).
-- **R27 — Watchman owns PR-number backfill.** Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick. King never does this work. See [`watchman-pr-backfill.md`](watchman-pr-backfill.md).
+- **R11 — Watchman is read-mostly on project source.** It may read any project file for situational awareness; it may run smoke/test commands; it may NOT edit project source code. Write authority is confined to `WATCH_*.md` reports, `watchman_state.json`, and low-risk kingdom-doc fixes (see § Docs audit duty).
+- **R27 — Watchman owns PR-number backfill.** Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick. King never does this work. See § PR-number backfill duty.
 
 ---
 
@@ -159,19 +161,13 @@ jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
 # Dynamic pacing: 5 min if any transition this tick, 15 min if quiet
 ```
 
----
-
-## Autonomous Haiku fan-out (v0.29.0+, per rules.md R39 + R40)
-
-Each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10) across five parallel surveillance duties — **Duty 1** senior-dev review with doc cross-check (R31), **Duty 2** CVE scan, **Duty 3** cross-lane conflict scan, **Duty 4** git hygiene scan, **Duty 5** cross-story drift scan (R50) — then writes a `WATCH_TICK_<UTC>.md` aggregation and fires `cmux_notify` on any `severity: urgent` finding. All duties are advisory (Tier 2): they inform, never block.
-
-→ Full duty specs, Haiku prompts, `haiku_cap_per_tick` enforcement, and the tick-aggregation schema: [`watchman-duties.md`](watchman-duties.md).
+In addition to these 8 steps, every tick also runs the autonomous Haiku surveillance fan-out (§ Per-tick autonomous duties), the PR-number backfill (§ PR-number backfill duty), the orphan-tab sweep, the blocked-lane scan, the on-demand verification pickup, and — when the tick is otherwise quiet — the idle-time docs audit. All of these are detailed below.
 
 ---
 
 ## Dispatch (King spawns this once at kingdom startup)
 
-Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux_send` (or `tmux send-keys -l` in fallback mode):
+Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux_send` (or `tmux send-keys -l` in fallback mode). The watchman `/loop` is auto-dispatched via the `spawn_loop` helper (see [`../functions/index.md`](../functions/index.md)):
 
 ```bash
 HANDLE=$(cmux_list_panes "$WS_ID" | jq -r '.[] | select(.title=="watchman-1") | .id')
@@ -205,149 +201,496 @@ cmux_send "$HANDLE" "$LANE_WATCHMAN_PROMPT"
 
 ---
 
-## WATCH_*.md report naming convention
+## Per-tick autonomous duties (Haiku fan-out, v0.29.0+, per rules.md R39 + R40)
 
-Watchman writes `WATCH_*` reports to `.kingdom/<project>/logs/watch/` — monitoring heartbeats stay out of the project git tree so they don't pollute PRs or appear as dirty files on the integration branch. PR-evidence reports (`SMOKE_*`, `SENIOR_*`, `KING_*`) still go to `<project>/docs/test-reports/`.
+Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents in parallel across its surveillance duties:
 
-```text
-.kingdom/<project>/logs/watch/                     ← all Watchman heartbeats/monitoring reports
-├── WATCH_<UTC>__develop_green.md                  ← heartbeat / develop pass
-├── WATCH_<UTC>__develop_RED__<short-reason>.md    ← develop break detected
-├── WATCH_<UTC>__pr-<N>_CI_failed.md               ← PR CI just turned red
-├── WATCH_<UTC>__pr-<N>_CI_green.md                ← PR CI just turned green (log only, no notify)
-├── WATCH_<UTC>__pr-<N>_lead_approved.md           ← lead just approved a PR
-├── WATCH_<UTC>__pr-<N>_ready_to_merge.md          ← PR green + approved + idle ≥30 min
-└── WATCH_<UTC>__verify-<slug>.md                  ← on-demand verification report
+- **Duty 1** — senior-dev review with doc cross-check (R31)
+- **Duty 2** — CVE scan
+- **Duty 3** — cross-lane conflict scan
+- **Duty 4** — git hygiene scan
+- **Duty 5** — cross-story drift scan (R50)
+- **Duty 6** — sequence-collision scan (parallel numbered-file collisions — migrations/ADRs/changelog) — v0.40.0
+- **Duty 7** — config/secret parity scan (new env/config key with no home; committed secret) — v0.40.0
+- **Duty 8** — missing-tests heuristic (new source files, no matching tests) — v0.40.0
 
-<project>/docs/test-reports/                       ← PR-evidence only (rides PRs, visible to reviewers)
-├── KING_<UTC>__<lane-name>__<sub-task-id>.md      ← King's per-lane pre-commit gate (one per push-decision)
-└── (existing) SMOKE_*.md / SENIOR_*.md / DEBUG_*.md / POSTMORTEM_*.md  ← human-written / Senior reviews
+Each duty is independently toggleable in `kingdom.json.watchman.duties` (all default on). It then writes a `WATCH_TICK_<UTC>.md` aggregation and fires `cmux_notify` on any `severity: urgent` finding. All duties are advisory (Tier 2): they inform, never block.
+
+**Two things make the duties *helpful* and not just noisy (v0.40.0):**
+- **Every finding carries a one-line `suggested action`** — not just "X is wrong" but "→ worker-2 renumbers its migration to 0007 and rebases." The King (or you) can act without re-deriving the fix.
+- **Findings flow through the cross-tick findings ledger** (§ Findings ledger) — the watchman remembers what it already reported, so it never re-flags the same issue every 5 minutes, escalates a finding only if it persists unactioned, and auto-resolves (with a log line) when an issue disappears.
+
+These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux_tab_action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All duties run in parallel at every tick; no duty waits for another.
+
+**R41 — Skill-aware (v0.29.3+):** Watchman Haiku sub-agents may optionally invoke domain skills to strengthen their analysis. Duty 1 (code review) may use `code-review:code-review`; Duty 2 (CVE scan) may use `security-review`. Invocation is optional — skip if the skill adds no material benefit for a shallow diff or trivial audit file. No cap beyond the normal 3-skill-per-brief limit.
+
+### `haiku_cap_per_tick` enforcement
+
+Read from `kingdom.json.watchman.haikuCapPerTick`. Default: `5`. Maximum: `10`.
+
+```bash
+HAIKU_CAP=$(jq -r '.watchman.haikuCapPerTick // 5' "$KJSON")
+# Clamp to [1, 10]
+if [ "$HAIKU_CAP" -gt 10 ]; then
+  HAIKU_CAP=10
+  echo "[$(date -u +%Y-%m-%dT%H%MZ)] WARN haiku_cap_per_tick clamped to 10 (configured value exceeded max)" \
+    >> "$LOGS/master_agent.log"
+fi
+if [ "$HAIKU_CAP" -lt 1 ]; then
+  HAIKU_CAP=1
+fi
 ```
 
-`<UTC>` = `YYYY-MM-DDTHHMMZ` (no colons, trailing `Z`).
-
-The Watchman's reports follow the same TL;DR-first header schema as the rest of the kingdom — first 15 lines must give the master enough to decide whether to read further.
+Count all Haiku sub-agents spawned this tick across all duties. If the combined count would exceed `HAIKU_CAP`, reduce the code-review fan-out first (it generates the most agents), then skip lower-priority duties in this order: git hygiene, conflict scan, CVE scan (CVE scan is rarely urgent mid-day; skip last). Log a one-line warning to `master_agent.log` whenever clamping occurs.
 
 ---
 
-## PR transition state machine
+### Duty 1 — Senior-dev review fan-out (with doc cross-check) — v0.31.1+
 
-State machine: the transitions Watchman watches for on each open PR, and the alert it fires at each transition.
+For each lane that has new commits since the last tick — **worker-N**, **co-worker-N**, AND the **King's overlay state on kingdom** — spawn one Haiku sub-agent that reads the diff plus the project's documented architecture, and writes a one-page senior-dev review.
 
-```mermaid
-stateDiagram-v2
-    [*] --> pending : PR opened
+**Trigger:** `git log --oneline <last-tick-sha>..<lane>-HEAD` returns at least one commit, OR (for King) the kingdom working tree shows uncommitted changes against `origin/$BASE`.
 
-    pending --> CI_green : CI passes
-    pending --> CI_failed : CI fails
+**Doc context — read ONCE per tick, reused across lanes (R28 parallel-safe).** Before fan-out, gather the project's architectural ground truth:
 
-    CI_failed --> pending : dev pushes fix\n(re-runs CI)
-    CI_green --> approved : lead approves
-
-    approved --> idle : no activity ≥ 30 min
-    idle --> ready_to_merge : mergeable + green\n+ approved + idle ≥30 min
-
-    ready_to_merge --> [*] : Ter merges
-
-    pending --> CI_failed : CI fails (re-run)
-    CI_green --> pending : new commit pushed\n(CI re-runs)
-
-    note right of CI_failed
-        cmux_notify King\n"CI failed on PR #N"
-    end note
-    note right of approved
-        cmux_notify Ter\n"PR #N approved"
-    end note
-    note right of ready_to_merge
-        cmux_notify Ter\n"PR #N ready to merge"
-    end note
-```
-
-## Watchman state snapshot
-
-Watchman maintains its own state file (NOT mixed with master_agent.log):
-
-```text
-<LOGS>/watchman_state.json
-```
-
-Schema:
-
-```json
+```bash
+# Tick-level setup — one-time read for the whole fan-out.
+# v0.31.1: prefer the unified haiku_read_docs_orientation helper if you want
+# the full R45 protocol (Phase 1 wayfinding + Phase 2 broader docs). For the
+# narrower per-tick code-review context, the lightweight scan below is enough.
+DOC_CONTEXT_FILE="$LOGS/.watchman_doc_context_${UTC}.txt"
 {
-  "develop_sha": "abc1234...",
-  "last_smoke_ts": "2026-05-17T10:30:00Z",
-  "pr_states": {
-    "247": { "ci": "green", "reviews": "approved", "mergeable": true, "first_ready_at": "2026-05-17T09:55:00Z" },
-    "248": { "ci": "red", "reviews": "pending", "mergeable": true },
-    "249": { "ci": "pending", "reviews": "pending", "mergeable": true }
-  }
-}
+  # Root-level docs (CLAUDE.md, README.md, AGENTS.md, CONTRIBUTING.md, etc.).
+  # Hard-cap at 10 files to keep the per-lane prompt under ~50k tokens.
+  find "$PROJ" -maxdepth 1 -name "*.md" -type f 2>/dev/null | head -10
+
+  # docs/ tree — same hard cap, prefer recently-modified.
+  if [ -d "$PROJ/docs" ]; then
+    find "$PROJ/docs" -name "*.md" -type f -not -path "*/test-reports/*" 2>/dev/null \
+      | while IFS= read -r f; do
+          mtime=$(stat -f '%m' "$f" 2>/dev/null || stat -c '%Y' "$f" 2>/dev/null)
+          [ -n "$mtime" ] && printf '%s\t%s\n' "$mtime" "$f"
+        done | sort -rn | head -10 | cut -f2-
+  fi
+} > "$DOC_CONTEXT_FILE"
+
+# v0.31.1 fix: DON'T collapse to space-separated — that splits paths with
+# spaces (e.g., `docs/My Architecture.md`). Pass the file LIST as-is and let
+# the Haiku read it line by line.
 ```
 
-Watchman writes; King reads (for alert context); no human edit. Cleared/reset when watchman is torn down.
+**Per-lane Haiku prompt:**
+
+```bash
+LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
+NEW_SHA=$(git -C "$WORKTREES/$LANE" rev-parse HEAD 2>/dev/null)
+[ "$LAST_SHA" = "$NEW_SHA" ] && continue   # no new commits — skip
+
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+# K10 (v0.37.0): WATCH_REVIEW artifacts go to $LOGS/watch/, not the project tree
+mkdir -p "$LOGS/watch"
+REVIEW_FILE="$LOGS/watch/WATCH_REVIEW_${UTC}__${LANE}.md"
+
+Agent(
+  model="haiku",
+  prompt="You are a SENIOR DEVELOPER reviewing this lane's recent work. Your job is two-fold:
+(1) standard code review and (2) cross-check the changes against the project's
+documented architecture, conventions, and decisions.
+
+== Project documentation (architectural ground truth) ==
+The file paths to read are listed (one per line, may contain spaces) in:
+  $DOC_CONTEXT_FILE
+Use your Read tool on each path in that file (do NOT use cat — Read returns
+line-numbered content with cleaner cap behavior). Build your mental model of
+how this project is *supposed* to be structured BEFORE you open the diff.
+
+Pay special attention to:
+- README.md / docs/architecture.md / docs/how-it-works.md — system design
+- CLAUDE.md / AGENTS.md — codebase conventions and project-specific rules
+- CONTRIBUTING.md / docs/style.md — naming, patterns, file organization
+- docs/branch-model.md or docs/git-workflow.md — git conventions
+- Any 'decisions' / 'ADR' / 'rfc' files — locked-in architectural choices
+
+== Lane diff (the work to review) ==
+git -C $WORKTREES/$LANE diff $LAST_SHA..$NEW_SHA
+
+== Output file ==
+$REVIEW_FILE
+
+== Review schema ==
+## TL;DR
+- **Severity:** urgent | warn | info
+- **Lane:** $LANE
+- **Verdict:** <one sentence — does this change align with the project's documented direction?>
+
+## Doc cross-check (NEW — senior-dev lens)
+For each meaningful change in the diff, locate the relevant doc anchor and verify:
+- Does the change follow the documented pattern? (e.g., README says 'all DB calls go through repo/, this PR adds a direct DB call in route handler' → urgent)
+- Does the change contradict a documented decision? (e.g., docs/decisions/01-auth.md says 'JWT in httpOnly cookie', PR uses localStorage → urgent)
+- Is the change in the right architectural layer? (e.g., business logic in a UI component → warn)
+- Does the change need a doc update that wasn't made? (e.g., new env var added but README setup section unchanged → warn)
+Cite the doc file + line/section when you flag a mismatch.
+
+## Code review (the existing dimensions)
+- Missing or thin test coverage (any function >20 LOC with zero test calls)
+- Large untested chunks (>50 LOC change with no matching test file change)
+- Security smells (raw SQL, unescaped user input, hardcoded secrets, unsafe evals)
+- Style outliers (naming, file length, unusual patterns vs the rest of the lane's history)
+
+## Recommendations
+A short bulleted list — what should change before this is ready for King's gate?
+If nothing needs to change, write 'LGTM — aligns with documented architecture.'
+
+Severity ladder:
+- urgent — contradicts a documented decision, security smell, or breaks a documented invariant
+- warn   — drifts from documented patterns, missing doc update, missing tests for >50 LOC chunk
+- info   — minor style/naming, suggestion only
+
+Write ONLY the review file — no other edits."
+)
+```
+
+**King overlay review (the new third reviewee).** Once per tick, after lane fan-out, also review what's currently overlaid on kingdom (if anything):
+
+```bash
+KINGDOM_DIRTY=$(git -C "$PROJ" status --porcelain 2>/dev/null | head -1)
+if [ -n "$KINGDOM_DIRTY" ] && [ "$(git -C "$PROJ" branch --show-current)" = "kingdom" ]; then
+  # K10 (v0.37.0): king-overlay WATCH_REVIEW goes to $LOGS/watch/, not the project tree.
+  # mkdir here too — this block can run on a tick where no lane review fired first.
+  mkdir -p "$LOGS/watch"
+  KING_REVIEW_FILE="$LOGS/watch/WATCH_REVIEW_${UTC}__king-overlay.md"
+  Agent(
+    model="haiku",
+    prompt="Review King's current kingdom-branch overlay against the docs above.
+Diff: git -C $PROJ diff origin/$BASE
+Same schema as the lane review, but the lane name is 'king-overlay'.
+Extra check: is the overlay consistent across the lanes it stitched together?
+(e.g., two lanes adding the same env var with different default values)
+Output file: $KING_REVIEW_FILE"
+  )
+fi
+```
+
+Update `watchman_state.json` after fan-out: `lane_shas["$LANE"] = $NEW_SHA`.
+
+**Why this is Tier 2, not Tier 1:** the senior-dev review is advisory — it does NOT block the King's gate. R11 still applies: watchman never edits project source. If watchman flags `urgent` doc-drift, King reads the report at gate time and decides whether to dispatch a fix-up task to the lane. The user retains final say at push time.
 
 ---
 
-## Why Watchman doesn't replace King's per-lane pre-commit gate
+### Duty 2 — CVE scan
 
-- **Gate is lane-specific + blocking:** runs against `<role>-<n>` (which has the lane's commits not yet in develop), runs once, blocks the push decision. Watchman only knows about develop tip + open PRs — no view of in-flight lane work.
-- **Gate is fresh at push time:** runs after the user's "push" approval (via `git merge-tree` for the FINAL conflict check). Watchman runs at `/loop` ticks; by push time, the last Watchman result could be 15 minutes stale.
-- **Watchman is develop-wide + non-blocking:** catches drift, CI failures on open PRs, lead-review transitions — none of which the King's per-lane gate sees.
+Detect the project's package manager(s) by inspecting the project root. Spawn ONE Haiku per detected manager.
 
-The two complement: **King keeps push-time freshness; Watchman keeps develop-wide visibility.**
+**Detection → audit command map:**
+
+| Indicator file | Audit command |
+|---|---|
+| `package.json` + `pnpm-lock.yaml` | `pnpm audit --json` |
+| `package.json` (no pnpm lock) | `npm audit --json` |
+| `requirements.txt` or `pyproject.toml` | `pip-audit --format json` |
+| `Cargo.toml` | `cargo audit --json` |
+| `go.mod` | `go list -json -m -u all` |
+
+Multiple managers may coexist (e.g., a monorepo with both `pnpm-lock.yaml` and `requirements.txt`). Each gets its own Haiku, but each counts against `haiku_cap_per_tick`.
+
+**Output file:** `$LOGS/watch/WATCH_CVE_<UTC>.md`
+
+**Haiku prompt (per manager):**
+
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+mkdir -p "$LOGS/watch"
+CVE_FILE="$LOGS/watch/WATCH_CVE_${UTC}.md"
+
+Agent(
+  model="haiku",
+  prompt="Run: $AUDIT_CMD in $PROJ
+Parse the JSON output. Write $CVE_FILE with:
+## TL;DR
+- Severity: 'urgent' (any critical/high) | 'warn' (moderate) | 'info' (low/none)
+- Critical: N, High: N, Moderate: N, Low: N
+## Findings
+One row per advisory: package name | installed version | patched version | CVE ID | severity.
+## Remediation
+For each critical/high: recommended update command.
+Write ONLY the CVE file — no other edits."
+)
+```
+
+If no indicator files are found, skip this duty and note in the tick summary.
 
 ---
 
-## Watchman lifecycle
+### Duty 3 — Cross-lane conflict scan
 
-| Action | Trigger | How |
+Build a file-touch matrix across all active lanes since the last tick. Flag cases where two or more lanes have modified the same file.
+
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+mkdir -p "$LOGS/watch"
+CONFLICT_FILE="$LOGS/watch/WATCH_CONFLICTS_${UTC}.md"
+
+# Build per-lane changed-file lists (using last-tick SHA from watchman_state.json)
+declare -A LANE_FILES
+for LANE in worker-1 worker-2 worker-3 co-worker-1; do
+  LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
+  [ -z "$LAST_SHA" ] && continue
+  CHANGED=$(git -C "$WORKTREES/$LANE" diff --name-only "$LAST_SHA"..HEAD 2>/dev/null)
+  LANE_FILES["$LANE"]="$CHANGED"
+done
+
+Agent(
+  model="haiku",
+  prompt="You are given per-lane file-touch lists below. Compute overlaps: any file touched
+by 2+ lanes since last tick is a potential conflict.
+
+Lane file lists:
+$(for L in "${!LANE_FILES[@]}"; do echo "=== $L ==="; echo "${LANE_FILES[$L]}"; done)
+
+Output file: $CONFLICT_FILE
+Format:
+## TL;DR
+- Severity: 'urgent' (same file modified in 2+ lanes) | 'info' (no overlaps)
+- N overlapping file(s) found
+
+## Conflict pairs
+| File | Lane A | Lane B | Risk |
+|---|---|---|---|
+<one row per overlap — Risk = 'merge conflict likely' if both modified; 'watch' if one added, one modified>
+
+Write ONLY the conflicts file — no other edits."
+)
+```
+
+If no overlaps exist, Haiku writes a minimal `## TL;DR — info: no overlaps this tick` file. Watchman still logs it in the tick summary.
+
+---
+
+### Duty 4 — Git hygiene scan
+
+Spawn one Haiku to scan for git-state drift across the kingdom worktree layout.
+
+**What to scan:**
+
+| Item | How to detect | Flag if |
 |---|---|---|
-| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `cmux_send "<self>" "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
-| **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux_send "<self>" "/loop cancel"` |
-| **Resume** | The user says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
-| **Teardown** | Kingdom close | `cmux_send "<self>" "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
+| Stale worktrees | `ls $PROJ/.worktrees/` vs `git worktree list` | Directory exists but `git worktree list` has no matching entry |
+| Orphan branches | `git branch` (local) vs `kingdom.json.shape` lane names | Local branch not in kingdom shape + not `develop`/`main`/`watchman-*` |
+| Unflushed `.lane` claims | `ls $LOGS/claims/*.lane` | Claim file exists but matching sentinel in `$LOGS/done/` also exists |
+| Broken sentinels | `ls $LOGS/done/*.flag` | Sentinel flag exists but no matching task file in `$LOGS/tasks/` |
+| Commit-without-sentinel pairs | `git log --oneline` on each lane vs `$LOGS/done/` | Lane has ≥1 commit since last tick but no new sentinel in `done/` within 5 min of commit time |
 
-The watchman's worktree + branch + state file persist across pauses; only the `/loop` schedule is suspended.
+```bash
+UTC=$(date -u +%Y-%m-%dT%H%MZ)
+mkdir -p "$LOGS/watch"
+GIT_FILE="$LOGS/watch/WATCH_GIT_${UTC}.md"
 
----
+Agent(
+  model="haiku",
+  prompt="Perform a git hygiene scan for project $PROJ.
 
-## Multiple watchmen (one per project area)
+Worktrees dir: $PROJ/.worktrees/
+Kingdom logs: $LOGS/
+Kingdom JSON: $KJSON
 
-`kingdom.json.shape.watchman` can be >1. Use case: per-area smoke — one watchman runs backend smoke + watches backend PRs, another runs frontend smoke + watches frontend PRs:
+Check all five hygiene items (stale worktrees, orphan branches, unflushed .lane claims,
+broken sentinels, commit-without-sentinel pairs). For each issue found, record:
+- Item type
+- Affected path / branch / file
+- Recommended remediation (one line)
 
-```json
-{
-  "shape": { "workers": 3, "co-workers": 1, "watchman": 2 },
-  "watchmen": [
-    { "name": "watchman-1", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:backend"] },
-    { "name": "watchman-2", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:frontend"] }
-  ]
-}
+Output file: $GIT_FILE
+## TL;DR
+- Severity: 'urgent' (broken sentinel or commit-without-sentinel >30 min old) | 'warn' (stale worktree or orphan branch) | 'info' (no issues)
+- N issue(s) found
+
+## Findings
+<bulleted list, one item per finding>
+
+Write ONLY the git hygiene file — no other edits."
+)
 ```
 
-Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the same `origin/develop` tip, but with different PR filter scopes. They write to the same `.kingdom/<project>/logs/watch/` dir but with distinct `WATCH_<UTC>__watchman-<N>__...md` filenames to avoid collision.
+---
+
+### Duty 5 — Cross-story drift scan (v0.32.0+, R50)
+
+When `kingdom.json.watchman.duties.crossStoryScan` is true and story pods are in flight, the watchman runs `cross_story_scan "$PROJ"` (see [`../functions/index.md`](../functions/index.md)) each tick. It does a pairwise `git merge-tree` across all `story/*` branches and emits a drift summary.
+
+This is the King's cross-story signal (R50): the watchman only **detects and reports** drift (it never resolves). The King consumes the latest drift line at push time and coordinates a rebase / re-merge of the affected story branch before opening its PR. The boundary with the Senior holds: the Senior owns *within-story* conflicts (R49); the watchman flags *between-story* drift; the King resolves it. Output severity: `warn` (a documented-decision contradiction across stories may be `urgent`).
 
 ---
 
-## Task file access (read-only)
+### Duty 6 — Sequence-collision scan (v0.40.0)
 
-Watchman does NOT create task files. The watchman role has no per-task work — it's a continuous monitor (`/loop`), not an executor.
+The most valuable catch is the one with **no git conflict**: two lanes that each add a file in the same numbered sequence off the same parent. Classic case — two workers both fork migration `0004_*` from `0003_*`. Different filenames, so `git merge-tree` sees no conflict, but the framework now has two leaf migrations and `migrate` refuses to run. The same trap hits Prisma migrations, ADRs (`docs/adr/NNNN-*.md`), and any `NNNN_*` / `NN-*` sequence. This was the single highest-value catch in the 2026-05-20 consumer run.
 
-Watchman MAY read task files at `<workspace>/.kingdom/<project>/tasks/*.md` for situational awareness:
+When `kingdom.json.watchman.duties.seqCollision` is true (default), one Haiku scans — across all in-flight `worker-*`/`co-worker-*`/`story/*` branches AND open PRs:
 
-- When alerting the King about a develop break, watchman can check whether any in-flight lane's task file is affected (e.g., lane currently editing the broken module).
-- When detecting a PR ready-to-merge, watchman can include in its notification: "PR #N (from `worker-1`, task `BE-P0-CICD.1`) is mergeable + green + idle for 30m." — pulled from the task file's brief.
+```bash
+# Gather every numbered file added on each in-flight branch vs origin/$BASE, then look for
+# duplicate numbers OR multiple leaves sharing a parent.
+SEQ_FILE="$LOGS/watch/WATCH_SEQ_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
+Agent(
+  model="haiku",
+  prompt="Detect parallel numbered-sequence COLLISIONS that git won't flag (different filenames, same slot).
+Scope: for each in-flight branch (git for-each-ref 'refs/heads/worker-*' 'refs/heads/co-worker-*' 'refs/heads/story/*') and each open PR (gh pr list --json number,headRefName), list files ADDED vs origin/$BASE under any migrations dir (Django/Prisma '**/migrations/', raw '**/migrations/*.sql') and any 'docs/adr/NNNN-*' or numbered-changelog sequence.
+Flag, per sequence: (a) the SAME number used by ≥2 branches, or (b) ≥2 migrations declaring the SAME parent (Django 'dependencies =', Prisma's chain) → multiple leaves.
+For Django, parse the dependencies tuple; for Prisma, the migration folder order. severity=urgent if a real collision (it WILL break migrate/merge), else info.
+Write to $SEQ_FILE: TL;DR (status + the colliding number/parent + which branches), then a 'suggested action' line naming WHICH lane should renumber/rebase (rule of thumb: the oldest-claimed lane keeps the slot, the later one bumps to the next free number and rebases). NO edits — flag only."
+)
+```
 
-Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux_notify` events, sidebar status pills. It never writes to task files, raw artifacts, master_agent.log, or anything outside its own WATCH_ namespace.
+Output severity `urgent` on a real collision (surface immediately — it blocks `migrate`/merge). Suggested action always names which lane renumbers.
+
+---
+
+### Duty 7 — Config/secret parity scan (v0.40.0)
+
+Two cheap checks one Haiku runs over each in-flight lane diff when `kingdom.json.watchman.duties.configParity` is true (default):
+
+1. **New config key with no home.** A lane adds or reads a new env var / config key (`process.env.FOO`, `os.environ["FOO"]`, `Deno.env`, a new yaml/`kingdom.json` key) that is NOT declared in any of the project's config sources — configmaps, `.env.example`, `infra/params/*`, helm values, templates. Real miss (2026-05-27): `KEYCLOAK_ISSUER` was added in code but absent from both k8s ConfigMaps; a Senior caught it, the watchman should have. Severity `warn`; suggested action names the config files to add the key to.
+2. **Committed secret.** Regex scan of lane diffs for high-entropy / secret patterns (AWS keys, `-----BEGIN * PRIVATE KEY-----`, `password=`, bearer/API tokens). Severity `urgent`; suggested action: rotate + strip from history. Flag only — the watchman never edits.
+
+```bash
+CFG_FILE="$LOGS/watch/WATCH_CONFIG_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
+Agent(
+  model="haiku",
+  prompt="For each in-flight lane diff (git diff origin/$BASE..<lane>):
+(1) Find newly-referenced env vars / config keys; check whether each is declared in the project's config sources (search configmaps, .env.example, infra/params, helm values, *.template). List any with NO home → severity warn, suggested action = 'add <KEY> to <config files>'.
+(2) Scan the diff for committed secrets (AWS AKIA, PRIVATE KEY blocks, password=/token=/bearer with a literal value). Any hit → severity urgent, suggested action = 'rotate + remove from history'.
+Write TL;DR + findings + suggested actions to $CFG_FILE. Flag only; never edit."
+)
+```
+
+---
+
+### Duty 8 — Missing-tests heuristic (v0.40.0)
+
+When `kingdom.json.watchman.duties.missingTests` is true (default), one Haiku checks each in-flight lane: did it add/modify source files (by the project's source globs) WITHOUT a corresponding test file (the project's convention — `*.test.*`, `*_test.py`, `*_spec.rb`, `tests/`, …)? Real miss (2026-05-20): a lane shipped 5 new modules with zero tests. Flags lanes with new source but no new/changed tests; severity `warn`; suggested action: "worker-N added <N> source files, 0 tests — request a test pass before its PR." This is a heuristic, NOT a gate — some changes legitimately need no tests (docs, config, pure refactors), so the King decides; the watchman only surfaces the gap.
+
+```bash
+TESTGAP_FILE="$LOGS/watch/WATCH_TESTGAP_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
+Agent(
+  model="haiku",
+  prompt="For each in-flight lane (git diff --name-status origin/$BASE..<lane>): count source files added/modified vs test files added/modified, using the project's source + test conventions (infer from the repo — e.g. src/**/*.ts vs *.test.ts / __tests__; *.py vs *_test.py / tests/). Flag any lane with ≥N new/changed source files and 0 new/changed tests → severity warn, suggested action naming the lane + the untested files. Skip docs-only / config-only / pure-refactor diffs (no behavior change). Write TL;DR + per-lane gap list to $TESTGAP_FILE."
+)
+```
+
+---
+
+### Tick aggregation — `WATCH_TICK_<UTC>.md`
+
+At the END of each `/loop` tick (after all fan-out duties complete and their Haiku sub-agents have written their output files), Watchman writes a single tick summary:
+
+**File:** `$LOGS/watch/WATCH_TICK_<UTC>.md`
+
+```markdown
+# Watchman tick summary — <UTC>
+
+## TL;DR
+- Develop SHA: <sha> (moved | unchanged)
+- Smoke: pass | fail | skipped  ·  **develop-health trend: green N ticks | RED N ticks (sustained) | flaky (pass/fail/pass)**
+- Haiku sub-agents spawned: N / <haiku_cap_per_tick>
+- Highest severity this tick: urgent | warn | info
+- **👑 King's next action:** <the single most important thing for the King to do this tick, or "none — all green">
+
+## Duty results
+| Duty | Ran? | Findings | Severity | Output file |
+|---|---|---|---|---|
+| Code review fan-out | yes / no (cap) | N reviews written | urgent/warn/info | WATCH_REVIEW_... |
+| CVE scan | yes / no (no lockfile) | N advisories | urgent/warn/info | WATCH_CVE_... |
+| Cross-lane conflict scan | yes / no (cap) | N overlaps | urgent/warn/info | WATCH_CONFLICTS_... |
+| Git hygiene scan | yes / no (cap) | N issues | urgent/warn/info | WATCH_GIT_... |
+| Cross-story drift scan | yes / no (off) | N drift pairs | warn/urgent/info | (drift summary) |
+| Sequence-collision scan | yes / no (off) | N collisions | urgent/info | WATCH_SEQ_... |
+| Config/secret parity | yes / no (off) | N keys / secrets | urgent/warn/info | WATCH_CONFIG_... |
+| Missing-tests heuristic | yes / no (off) | N lanes with gaps | warn/info | WATCH_TESTGAP_... |
+
+## Lane activity
+| Lane | New commits | Files changed | Conflicts |
+|---|---|---|---|
+| worker-1 | N | N | — |
+...
+
+## New vs carried findings (from the ledger)
+- **New this tick:** <findings first seen now, with suggested actions>
+- **Carried (still open):** <findings flagged before, with tick-age + escalated severity if persisted>
+- **Resolved this tick:** <findings that disappeared since last tick — auto-closed>
+
+## Cap warnings
+<list any duties skipped or trimmed due to haiku_cap_per_tick, or "none">
+```
+
+**The "King's next action" line is the watchman's single most valuable output** — it turns raw monitoring into a decision. The watchman picks it by priority: develop RED (sustained) > urgent finding (sequence collision / committed secret / CI fail on a ready PR) > a PR ready-to-merge > a carried warn that's escalated > "none." One line, the King acts.
+
+**Urgent escalation:** If any duty's output file contains `severity: urgent` (case-insensitive in its TL;DR), Watchman renders a `watchman-tick` card (from the `cards/` directory) and fires `cmux_notify` to both `$KING_WS` and `$WATCHMAN_WS`. Non-urgent ticks are logged only; no notification.
 
 ---
 
 ## PR-number backfill duty (every tick · v0.19.0+ · per [rules.md R27](../rules/R27-watchman-owns-pr-number-backfill.md))
 
-Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Every tick, watchman backfills `(PR #pending) → (PR #<N>)` per-lane via the `parallel_edit_fanout` helper (parallel across lanes under `_bounded_wait 45`, `--force-with-lease`, skip MERGED PRs) — King never does this work. Two side duties ride along: stale `.lane` claim sweep, and a kingdom-task-file `verifying`-checkbox audit (flag-only). Tier 2 — failure is cosmetic, not load-bearing.
+The worker commits TODO/CSV close-suffix as `(PR #pending)` because the PR number doesn't exist at commit time. **Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick** — King never does this work. Two side duties ride along: stale `.lane` claim sweep, and a kingdom-task-file `verifying`-checkbox audit (flag-only). Tier 2 — failure is cosmetic, not load-bearing.
 
-→ Scan logic, the helper call + per-lane fan-out, constraints, and side duties: [`watchman-pr-backfill.md`](watchman-pr-backfill.md).
+**Scan logic (parallel by default, per [rules.md R28](../rules/R28-parallel-by-default-for-scan.md)) — calls the `parallel_edit_fanout` helper from [`../functions/index.md`](../functions/index.md):**
+
+```bash
+# Build feature/<topic> → PR #N map from King's master_agent.log
+declare -A PR_MAP
+while IFS= read -r line; do
+  feat=$(echo "$line" | grep -oE 'feature/[a-z0-9-]+' | head -1)
+  prn=$(echo  "$line" | grep -oE 'PR #[0-9]+'        | grep -oE '[0-9]+' | head -1)
+  [ -n "$feat" ] && [ -n "$prn" ] && PR_MAP["$feat"]="$prn"
+done < "$LOGS/master_agent.log"
+
+# Build the lane=pr spec for the helper. Lane → feature → PR resolution is
+# watchman's local concern; the helper just needs <lane>=<pr> tuples.
+spec=""
+for lane in worker-1 worker-2 worker-3 co-worker-1; do
+  feat=$(jq -r ".dispatch.$lane.feature // empty" "$LOGS/state.json" 2>/dev/null)
+  [ -z "$feat" ] && continue
+  pr="${PR_MAP[$feat]}"
+  [ -z "$pr" ] && continue
+  spec="$spec $lane=$pr"
+done
+
+# One call — handles parallel-across-branches, MERGED/CLOSED skip, amend +
+# --force-with-lease, and master_agent.log line. Per-lane stdout lines reach
+# the WATCH_PR_BACKFILL.md report. (K10 v0.37.0: WATCH_* live in $LOGS/watch/.)
+mkdir -p "$LOGS/watch"
+parallel_edit_fanout "(PR #pending)" "(PR #${pr})" "$spec" > "$LOGS/watch/WATCH_PR_BACKFILL.md" 2>&1
+```
+
+**On per-lane `(PR #${pr})` expansion:** the helper does literal string replace, not shell expansion, so the second argument must already encode the lane's own PR number. The wrapper above is illustrative; in practice watchman calls `parallel_edit_fanout` **once per lane** when PR numbers differ across lanes, or once collectively when the search/replace is identical (e.g. a structural footer change). The library favours the latter — different PR numbers per lane is the watchman-specific edge.
+
+For the common case (one PR per lane), watchman fans out per-lane:
+
+```bash
+FANOUT_PIDS=""
+for unit in $spec; do
+  lane="${unit%=*}"
+  pr="${unit#*=}"
+  parallel_edit_fanout "(PR #pending)" "(PR #$pr)" "$lane=$pr" '**/*.{md,csv}' &
+  FANOUT_PIDS="$FANOUT_PIDS $!"
+done
+# R42: bounded wait — gh + sed + git commit + git push --force-with-lease can each
+# stall on network or remote refs; 45s budget covers the slowest of those × parallelism.
+_bounded_wait 45 $FANOUT_PIDS
+```
+
+This is still parallel **across** lanes, with a hard ceiling so a stuck `gh pr view` or `git push` can't block the watchman tick. The helper itself is no-op-fast when a lane has nothing to flip.
+
+**Constraints:**
+
+- **Skip merged PRs** — `gh pr view <N> --json state -q .state | grep -q MERGED` → no force-push to closed branches (memory rule `check_pr_state_before_force_push`). Watchman opens a separate `feature/post-<N>-cleanup` branch + new PR for the orphan flips.
+- **Each lane writes only to its own worktree** — no cross-lane file contention.
+- **`--force-with-lease` not `--force`** — bails if remote moved since fetch.
+
+**Side duty — stale `.lane` claim sweep:** for every `<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag` sentinel, check `<LOGS>/claims/<lane>__<task-id>.lane` — if both exist, rm the claim. Lane is then free for next dispatch.
+
+**Side duty — kingdom-task-file checkbox audit:** on each tick, walk `.kingdom/<project>/tasks/*.md` and flag any file whose `Status` is `verifying` but whose matching sentinel exists in `<LOGS>/done/` → write to `<LOGS>/watch/WATCH_TASK_AUDIT.md` for King (NOT auto-flip; status is worker's responsibility per R23/R24).
+
+This duty IS Tier 2 maintenance — failure to backfill is cosmetic, not load-bearing. King carries on without it; the TODO files just stay ugly until next tick.
 
 ---
 
@@ -389,6 +732,72 @@ done
 ```
 
 This is BELT-AND-SUSPENDERS — the sub-agent's own Step 5 closes >99% of tabs. Watchman handles the rest. Sweeps are logged to `master_agent.log` so the King can see orphans being cleaned up.
+
+---
+
+## Blocked-lane scan (every tick)
+
+Lanes can silently stall on Claude Code's interactive permission prompts ("Do you want to proceed? 1. Yes / 2. Yes allow … / 3. No") or other TUI input requests. cmux.app shows the workspace as "Running" but the lane is actually idle, waiting for keyboard input. Without intervention you only notice by clicking each lane.
+
+Watchman scans for this every `/loop` tick:
+
+```bash
+# For each lane workspace ref in $LOGS/workspace-refs.env:
+source "$LOGS/workspace-refs.env"
+
+for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
+  WS_REF=$(eval echo "\$$WS_VAR")
+  LANE_LABEL=$(echo "$WS_VAR" | sed 's/_WS_/ /' | tr 'A-Z' 'a-z')   # e.g. "worker 1"
+
+  # Grab the recent surface output
+  OUTPUT=$(cmux_capture_pane "$WS_REF" 30)
+
+  # Patterns that indicate a blocked lane
+  if echo "$OUTPUT" | grep -qE '(Do you want to proceed\?|Esc to cancel|\[y/N\]|allow .* during this session|Press Enter)'; then
+    # Already notified this tick? Skip to avoid spam — state stored in watchman_state.json
+    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
+    if [ "$PREV_BLOCKED" != "true" ]; then
+      # 3-layer state override: badge + description + notify (cmux's auto-state
+      # may still say "Running" but our three signals tell the truth)
+      cmux_workspace_action "$WS_REF" mark-unread
+      cmux_set_state "$WS_REF" "⚠" "Blocked · permission prompt"
+      cmux_notify "" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
+        "Permission prompt or input requested. Click workspace to approve." "$WS_REF"
+      cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
+        "$LANE_LABEL is waiting on a permission prompt. Click its workspace to resolve."
+      # Mark as notified
+      jq ".blocked_lanes[\"$WS_VAR\"] = true" "$LOGS/watchman_state.json" \
+        > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+    fi
+  else
+    # Lane no longer blocked — clear unread marker + restore description + clear state
+    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
+    if [ "$PREV_BLOCKED" = "true" ]; then
+      cmux_workspace_action "$WS_REF" mark-read
+      # Description restored by the lane itself on its next state transition;
+      # watchman doesn't second-guess what the lane should display normally.
+    fi
+    jq "del(.blocked_lanes[\"$WS_VAR\"])" "$LOGS/watchman_state.json" \
+      > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+  fi
+done
+```
+
+The scan is **idempotent + debounced** — `watchman_state.json` tracks which lanes are currently blocked so watchman doesn't re-notify every tick. Once a lane unblocks (output no longer matches the patterns), the state clears and the lane is eligible for re-notification next time it blocks.
+
+A blocked lane may also be surfaced to the King via the `blocked-lane` card (from the `cards/` directory).
+
+Patterns watched:
+
+| Pattern | Triggers |
+|---|---|
+| `Do you want to proceed\?` | Claude Code's standard permission prompt |
+| `Esc to cancel` | Same prompt's footer |
+| `\[y/N\]` | Common interactive y/n confirmations |
+| `allow .* during this session` | The session-scoped permission option |
+| `Press Enter` | Generic "press enter to continue" prompts |
+
+Most of these are pre-empted by the workspace `.claude/settings.json` permissions allow-list (see `commands/init.md` Step 4.5 — kingdom auto-allows `.kingdom/**` and `.worktrees/**`). The scan catches any that slip through.
 
 ---
 
@@ -491,75 +900,247 @@ Heuristic: if the answer is "run these commands and tell me what happened," → 
 
 ---
 
-## Blocked-lane scan (every tick)
+## Docs audit duty (idle-time work)
 
-Lanes can silently stall on Claude Code's interactive permission prompts ("Do you want to proceed? 1. Yes / 2. Yes allow … / 3. No") or other TUI input requests. cmux.app shows the workspace as "Running" but the lane is actually idle, waiting for keyboard input. Without intervention you only notice by clicking each lane.
+When `/loop` is otherwise quiet (no PRs to babysit, no `develop` movement, no smoke break), watchman runs a bounded docs audit pass over `<workspace>/.kingdom/<project>/{tasks,logs}/` — the ONLY place it has WRITE authority, and only on audit artifacts, never project source code. Low-risk fixes (stale checkbox ticks backed by a `git log` commit, `master_agent.log` summary backfills, dead `[[name]]`-link repairs) it applies directly; high-risk changes (digest rewrites, task-file merges, role-doc rewrites, >30d archives) plus project-state `Gap A`/`Gap B` findings are flag-only to `WATCH_DOCS_AUDIT.md` for King. When unsure, default to flagging.
 
-Watchman scans for this every `/loop` tick:
+### Split by risk
 
-```bash
-# For each lane workspace ref in $LOGS/workspace-refs.env:
-source "$LOGS/workspace-refs.env"
+| Action | Risk | Watchman does | King reviews |
+|---|---|---|---|
+| Tick a stale checkbox when a matching commit is found in `git log` | Low | ✅ writes (`tasks/*.md`) | informed via WATCH_*.md |
+| Backfill a missing summary line in `master_agent.log` | Low | ✅ writes | informed |
+| Fix dead `[[name]]` link / formatting drift | Low | ✅ writes | informed |
+| Re-understand & rewrite a digest from raw | **High** | ❌ flag only | ✅ dispatches Opus sub-agent |
+| Merge two task files into one | **High** | ❌ flag only | ✅ decides + dispatches |
+| Rewrite role doc to match landed code | **High** | ❌ flag only | ✅ decides |
+| Archive task files older than 30 days | **High** | ❌ flag only | ✅ moves to `tasks/archive/` |
 
-for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
-  WS_REF=$(eval echo "\$$WS_VAR")
-  LANE_LABEL=$(echo "$WS_VAR" | sed 's/_WS_/ /' | tr 'A-Z' 'a-z')   # e.g. "worker 1"
+Low-risk: watchman just does it; one-line note in its next `WATCH_*.md` report.
+High-risk: watchman writes findings to `WATCH_DOCS_AUDIT.md` (single rolling file per project) — King's next attention pulls from it.
 
-  # Grab the recent surface output
-  OUTPUT=$(cmux_capture_pane "$WS_REF" 30)
+### Project state scan (idle, bounded)
 
-  # Patterns that indicate a blocked lane
-  if echo "$OUTPUT" | grep -qE '(Do you want to proceed\?|Esc to cancel|\[y/N\]|allow .* during this session|Press Enter)'; then
-    # Already notified this tick? Skip to avoid spam — state stored in watchman_state.json
-    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
-    if [ "$PREV_BLOCKED" != "true" ]; then
-      # 3-layer state override: badge + description + notify (cmux's auto-state
-      # may still say "Running" but our three signals tell the truth)
-      cmux_workspace_action "$WS_REF" mark-unread
-      cmux_set_state "$WS_REF" "⚠" "Blocked · permission prompt"
-      cmux_notify "" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
-        "Permission prompt or input requested. Click workspace to approve." "$WS_REF"
-      cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Lane blocked · $LANE_LABEL" \
-        "$LANE_LABEL is waiting on a permission prompt. Click its workspace to resolve."
-      # Mark as notified
-      jq ".blocked_lanes[\"$WS_VAR\"] = true" "$LOGS/watchman_state.json" \
-        > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
-    fi
-  else
-    # Lane no longer blocked — clear unread marker + restore description + clear state
-    PREV_BLOCKED=$(jq -r ".blocked_lanes[\"$WS_VAR\"] // empty" "$LOGS/watchman_state.json" 2>/dev/null)
-    if [ "$PREV_BLOCKED" = "true" ]; then
-      cmux_workspace_action "$WS_REF" mark-read
-      # Description restored by the lane itself on its next state transition;
-      # watchman doesn't second-guess what the lane should display normally.
-    fi
-    jq "del(.blocked_lanes[\"$WS_VAR\"])" "$LOGS/watchman_state.json" \
-      > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
-  fi
-done
+In addition to scanning `tasks/` + `logs/`, watchman also performs a **bounded** project-state scan during idle ticks. Same pattern as `/kingdom:work` audit phase Step 3.0, but smaller: at most 5 project doc files per tick (newest by mtime), `.md` + `.txt` + `.csv`. For each, watchman extracts completion markers and cross-refs against `master_agent.log`. Findings are **flag-only** → appended to `WATCH_DOCS_AUDIT.md` under `## Gap A` / `## Gap B`. Watchman NEVER edits project source code based on a gap — only flags. King runs `/kingdom:work` audit phase for a full sweep when the gap list grows.
+
+This keeps the doc-audit honest without making watchman expensive — full project scans happen on demand via `/kingdom:work` audit phase, not on every `/loop` tick.
+
+### `WATCH_DOCS_AUDIT.md` schema
+
+```text
+# Docs audit findings — <project>
+
+Last scan: <UTC>
+
+## Digest re-understanding candidates
+- `logs/<ID>.md` — raw mentions X which is now load-bearing (X was added <YYYY-MM-DD> to <file>)
+
+## Merge candidates
+- `tasks/<UTC-a>__worker-1__feat-x.md` + `tasks/<UTC-b>__worker-2__feat-x-followup.md` — overlap on the same module
+
+## Archive candidates
+- `tasks/<UTC>__co-worker-1__redesign.md` — all boxes checked, last edit 2026-04-10 (>30d)
+
+## Suspect (checked but no commit)
+- `tasks/<UTC>__co-worker-1__redesign.md`: item "wire up auth" — no commit trace
+
+## Gap A — project says done, kingdom has no record
+- `docs/STEP.md:42` claims "Phase 0 API smoke shipped 2026-04-28" — no master_agent.log entry on that date for `phase0-api-smoke`
+
+## Gap B — kingdom done, docs don't reflect it
+- `master_agent.log:89` shipped `kc26-script-patches` 2026-04-28T2110Z — `STEP.md` still lists it as pending
 ```
 
-The scan is **idempotent + debounced** — `watchman_state.json` tracks which lanes are currently blocked so watchman doesn't re-notify every tick. Once a lane unblocks (output no longer matches the patterns), the state clears and the lane is eligible for re-notification next time it blocks.
+King reviews → dispatches `/kingdom:work` audit phase or a targeted sub-agent. Watchman never edits high-risk items, never edits project source code; the Gap sections are flag-only.
 
-Patterns watched:
+### Boundary
 
-| Pattern | Triggers |
-|---|---|
-| `Do you want to proceed\?` | Claude Code's standard permission prompt |
-| `Esc to cancel` | Same prompt's footer |
-| `\[y/N\]` | Common interactive y/n confirmations |
-| `allow .* during this session` | The session-scoped permission option |
-| `Press Enter` | Generic "press enter to continue" prompts |
+Watchman's write authority is scoped to `<workspace>/.kingdom/<project>/{tasks,logs}/` only. It NEVER touches:
+- Project source code
+- `.kingdom/.setting/*.md` (role specs)
+- `kingdom.json`
+- `.git/` or branches
 
-Most of these are pre-empted by the workspace `.claude/settings.json` permissions allow-list (see `commands/init.md` Step 4.5 — kingdom auto-allows `.kingdom/**` and `.worktrees/**`). The scan catches any that slip through.
+If watchman is unsure whether something is low- or high-risk, default to flagging. Cost of a missed audit fix is zero (King catches it next round, or `/kingdom:work` audit phase sweeps it); cost of a wrong autonomous edit is reputational.
+
+### Cadence
+
+Watchman runs the docs audit at most once per `/loop` tick, only when ALL other tick steps are quiet (no PR transitions, no develop advance, no smoke needed). Scan is bounded — newest 20 task files + newest 20 curated digests. Older artifacts are swept by `/kingdom:work` audit phase (explicit) rather than continuously.
 
 ---
 
-## Docs audit duty (idle-time work)
+## WATCH_*.md report naming convention
 
-When `/loop` is otherwise quiet (no PRs to babysit, no `develop` movement, no smoke break), watchman runs a bounded docs audit over `<workspace>/.kingdom/<project>/{tasks,logs}/` — the ONLY place it has WRITE authority, and only on audit artifacts, never project source. Low-risk fixes (stale checkbox ticks backed by a `git log` commit, `master_agent.log` summary backfills, dead `[[name]]`-link repairs) it applies directly; high-risk changes (digest rewrites, task-file merges, role-doc rewrites, >30d archives) plus project-state `Gap A`/`Gap B` findings are flag-only to `WATCH_DOCS_AUDIT.md` for King. When unsure, default to flagging.
+Watchman writes `WATCH_*` reports to `.kingdom/<project>/logs/watch/` — monitoring heartbeats stay out of the project git tree so they don't pollute PRs or appear as dirty files on the integration branch. PR-evidence reports (`SMOKE_*`, `SENIOR_*`, `KING_*`) still go to `<project>/docs/test-reports/`.
 
-→ Risk split table, project-state scan, `WATCH_DOCS_AUDIT.md` schema, boundary, and cadence: [`watchman-docs-audit.md`](watchman-docs-audit.md).
+```text
+.kingdom/<project>/logs/watch/                     ← all Watchman heartbeats/monitoring reports
+├── WATCH_<UTC>__develop_green.md                  ← heartbeat / develop pass
+├── WATCH_<UTC>__develop_RED__<short-reason>.md    ← develop break detected
+├── WATCH_<UTC>__pr-<N>_CI_failed.md               ← PR CI just turned red
+├── WATCH_<UTC>__pr-<N>_CI_green.md                ← PR CI just turned green (log only, no notify)
+├── WATCH_<UTC>__pr-<N>_lead_approved.md           ← lead just approved a PR
+├── WATCH_<UTC>__pr-<N>_ready_to_merge.md          ← PR green + approved + idle ≥30 min
+├── WATCH_<UTC>__verify-<slug>.md                  ← on-demand verification report
+├── WATCH_REVIEW_<UTC>__<lane>.md                  ← Duty 1 senior-dev review (per lane + king-overlay)
+├── WATCH_CVE_<UTC>.md                             ← Duty 2 CVE scan
+├── WATCH_CONFLICTS_<UTC>.md                       ← Duty 3 cross-lane conflict scan
+├── WATCH_GIT_<UTC>.md                             ← Duty 4 git hygiene scan
+├── WATCH_TICK_<UTC>.md                            ← per-tick aggregation
+├── WATCH_PR_BACKFILL.md                           ← PR-number backfill report
+├── WATCH_TASK_AUDIT.md                            ← verifying-checkbox audit (flag-only)
+└── WATCH_DOCS_AUDIT.md                            ← rolling idle-time docs-audit findings
+
+<project>/docs/test-reports/                       ← PR-evidence only (rides PRs, visible to reviewers)
+├── KING_<UTC>__<lane-name>__<sub-task-id>.md      ← King's per-lane pre-commit gate (one per push-decision)
+└── (existing) SMOKE_*.md / SENIOR_*.md / DEBUG_*.md / POSTMORTEM_*.md  ← human-written / Senior reviews
+```
+
+`<UTC>` = `YYYY-MM-DDTHHMMZ` (no colons, trailing `Z`).
+
+The Watchman's reports follow the same TL;DR-first header schema as the rest of the kingdom — first 15 lines must give the master enough to decide whether to read further.
+
+---
+
+## PR transition state machine
+
+State machine: the transitions Watchman watches for on each open PR, and the alert it fires at each transition.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : PR opened
+
+    pending --> CI_green : CI passes
+    pending --> CI_failed : CI fails
+
+    CI_failed --> pending : dev pushes fix\n(re-runs CI)
+    CI_green --> approved : lead approves
+
+    approved --> idle : no activity ≥ 30 min
+    idle --> ready_to_merge : mergeable + green\n+ approved + idle ≥30 min
+
+    ready_to_merge --> [*] : Ter merges
+
+    pending --> CI_failed : CI fails (re-run)
+    CI_green --> pending : new commit pushed\n(CI re-runs)
+
+    note right of CI_failed
+        cmux_notify King\n"CI failed on PR #N"
+    end note
+    note right of approved
+        cmux_notify Ter\n"PR #N approved"
+    end note
+    note right of ready_to_merge
+        cmux_notify Ter\n"PR #N ready to merge"
+    end note
+```
+
+---
+
+## Watchman state snapshot
+
+Watchman maintains its own state file (NOT mixed with master_agent.log):
+
+```text
+<LOGS>/watchman_state.json
+```
+
+Schema:
+
+```json
+{
+  "develop_sha": "abc1234...",
+  "last_smoke_ts": "2026-05-17T10:30:00Z",
+  "develop_health": { "trend": ["pass","pass","fail","pass"], "consecutive_red": 0, "flaky": false },
+  "pr_states": {
+    "247": { "ci": "green", "reviews": "approved", "mergeable": true, "first_ready_at": "2026-05-17T09:55:00Z" },
+    "248": { "ci": "red", "reviews": "pending", "mergeable": true },
+    "249": { "ci": "pending", "reviews": "pending", "mergeable": true }
+  },
+  "findings": {
+    "seq-collision:0004-product-variant": {
+      "duty": "seqCollision", "severity": "urgent", "first_seen_tick": "2026-05-17T1015Z",
+      "last_seen_tick": "2026-05-17T1030Z", "ticks_open": 2, "notified": true,
+      "suggested_action": "co-worker-1 renumbers 0004_cart → 0005_cart and rebases",
+      "status": "open"
+    }
+  }
+}
+```
+
+Watchman writes; King reads (for alert context); no human edit. Cleared/reset when watchman is torn down. The same file also carries the per-lane SHA cache (`lane_shas`) used by the Duty 1–8 fan-out, the `blocked_lanes` debounce map, and the `surface_idle_ts` map used by the orphan-tab sweep.
+
+`develop_health.trend` is the last ~12 smoke results (oldest→newest); `consecutive_red` drives the "sustained RED" escalation; `flaky` is set when the trend oscillates pass/fail/pass on an unchanged develop SHA. `findings` is the cross-tick ledger — see below.
+
+---
+
+## Findings ledger (v0.40.0) — memory across ticks so the watchman is signal, not noise
+
+The `findings` map in `watchman_state.json` is keyed by a stable **finding key** (`<duty>:<stable-slug>`, e.g. `seq-collision:0004-product-variant`, `config:KEYCLOAK_ISSUER`, `testgap:worker-2`). Each tick, after the duties run, the watchman reconciles this tick's findings against the ledger:
+
+| Situation | What the watchman does |
+|---|---|
+| **New finding** (key not in ledger) | Add it (`first_seen_tick`, `ticks_open: 1`, `status: open`); `cmux_notify` if severity ≥ warn; include in the tick's "New this tick" + the `WATCH_*` report. |
+| **Carried finding** (key already open) | Increment `ticks_open`; do **NOT** re-notify (dedup — this is what kills the "same urgent flag every 5 min" noise). **Escalate** severity one step (info→warn→urgent) once `ticks_open` crosses a threshold (default: warn after 3 ticks, urgent after 6) — a problem nobody fixed for 30 min deserves louder. Re-notify only on an escalation step, not every tick. |
+| **Resolved finding** (key in ledger, absent this tick) | Mark `status: resolved`, write a one-line "✅ resolved: <finding> (was open N ticks)" to the tick summary + `master_agent.log`, then drop it next tick. Auto-close = the watchman tells you when it fixed itself, instead of silently forgetting. |
+
+**Notify fallback (the dead-notification fix).** Every `cmux_notify` the watchman fires also appends the finding (key + severity + suggested action) to `<LOGS>/king-inbox/WATCH_<UTC>__<key>.md`. So if cmux can't deliver (the 2026-05-20 run: `workspace-refs.env` was empty for 24+ ticks → every alert was lost), the King still picks it up from king-inbox at its next decision point. A finding is never *only* a sidebar badge.
+
+**Suggested action is mandatory.** Every ledger entry carries `suggested_action` — a one-line, lane-named fix. The tick's "King's next action" line is just the highest-priority open finding's suggested action.
+
+---
+
+## Why Watchman doesn't replace King's per-lane pre-commit gate
+
+- **Gate is lane-specific + blocking:** runs against `<role>-<n>` (which has the lane's commits not yet in develop), runs once, blocks the push decision. Watchman only knows about develop tip + open PRs — no view of in-flight lane work.
+- **Gate is fresh at push time:** runs after the user's "push" approval (via `git merge-tree` for the FINAL conflict check). Watchman runs at `/loop` ticks; by push time, the last Watchman result could be 15 minutes stale.
+- **Watchman is develop-wide + non-blocking:** catches drift, CI failures on open PRs, lead-review transitions — none of which the King's per-lane gate sees.
+
+The two complement: **King keeps push-time freshness; Watchman keeps develop-wide visibility.**
+
+---
+
+## Task file access (read-only)
+
+Watchman does NOT create task files. The watchman role has no per-task work — it's a continuous monitor (`/loop`), not an executor.
+
+Watchman MAY read task files at `<workspace>/.kingdom/<project>/tasks/*.md` for situational awareness:
+
+- When alerting the King about a develop break, watchman can check whether any in-flight lane's task file is affected (e.g., lane currently editing the broken module).
+- When detecting a PR ready-to-merge, watchman can include in its notification: "PR #N (from `worker-1`, task `BE-P0-CICD.1`) is mergeable + green + idle for 30m." — pulled from the task file's brief.
+
+Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux_notify` events, sidebar status pills. It never writes to task files (except the low-risk idle-time docs-audit edits scoped to `tasks/` + `logs/`), raw artifacts, master_agent.log (except its own sweep/clamp log lines), or anything outside its own WATCH_ namespace.
+
+---
+
+## Watchman lifecycle
+
+| Action | Trigger | How |
+|---|---|---|
+| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `spawn_loop` auto-dispatch of `cmux_send "<self>" "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
+| **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux_send "<self>" "/loop cancel"` |
+| **Resume** | The user says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
+| **Teardown** | Kingdom close | `cmux_send "<self>" "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |
+
+The watchman's worktree + branch + state file persist across pauses; only the `/loop` schedule is suspended.
+
+---
+
+## Multiple watchmen (one per project area)
+
+`kingdom.json.shape.watchman` can be >1. Use case: per-area smoke — one watchman runs backend smoke + watches backend PRs, another runs frontend smoke + watches frontend PRs:
+
+```json
+{
+  "shape": { "workers": 3, "co-workers": 1, "watchman": 2 },
+  "watchmen": [
+    { "name": "watchman-1", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:backend"] },
+    { "name": "watchman-2", "cadence": "dynamic", "watches": ["origin/develop", "PRs with label:component:frontend"] }
+  ]
+}
+```
+
+Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the same `origin/develop` tip, but with different PR filter scopes. They write to the same `.kingdom/<project>/logs/watch/` dir but with distinct `WATCH_<UTC>__watchman-<N>__...md` filenames to avoid collision.
 
 ---
 
@@ -569,11 +1150,16 @@ When `/loop` is otherwise quiet (no PRs to babysit, no `develop` movement, no sm
 - Run smoke / typecheck / test commands from `kingdom.json.gate.*`.
 - Query `gh pr list` / `gh pr view` / `gh pr checks`.
 - Write `WATCH_*.md` reports + `WATCH_DOCS_AUDIT.md`.
+- Fan out up to `haikuCapPerTick` Haiku sub-agents per tick across the eight surveillance duties (Duty 1–8): senior-dev review, CVE, cross-lane conflict, git hygiene, cross-story drift, **sequence-collision** (migrations/ADRs), **config/secret parity**, **missing-tests** (v0.40.0).
+- Maintain the cross-tick **findings ledger** (dedup, persistence-escalation, auto-resolve, notify-fallback to king-inbox) and attach a **suggested action** + a per-tick **"King's next action"** line so every finding is actionable, not just noise (v0.40.0).
+- Track the **develop-health trend** (sustained-RED vs one-off, flaky-test detection).
+- Backfill `(PR #pending) → (PR #N)` on TODO/CSV close-suffixes (R27).
+- Render the `watchman-alert` / `watchman-tick` / `blocked-lane` cards (from the `cards/` directory) on alert-worthy events.
 - Call `cmux_notify` to alert King / the user.
 - Update `cmux_set_state` for sidebar visibility.
 - Maintain `<LOGS>/watchman_state.json`.
 - Read task files (`<workspace>/.kingdom/<project>/tasks/`) for situational awareness when issuing alerts.
-- Apply **low-risk** fixes to `tasks/` + `logs/` during idle docs audit (see [`watchman-docs-audit.md`](watchman-docs-audit.md)).
+- Apply **low-risk** fixes to `tasks/` + `logs/` during idle docs audit (see § Docs audit duty).
 
 ## What watchmen DO NOT do
 
@@ -585,7 +1171,7 @@ When `/loop` is otherwise quiet (no PRs to babysit, no `develop` movement, no sm
 | `gh pr create` | King-only |
 | Authoritative gate | That's King's pre-commit gate; Watchman just informs |
 | Read `<LOGS>/raw/*` directly | Tier-3 banned for everyone — including watchman |
-| Apply **high-risk** docs fixes (digest rewrite, task-file merge, role-doc rewrite, archive) | Flag-only — King decides; see [`watchman-docs-audit.md`](watchman-docs-audit.md) |
+| Apply **high-risk** docs fixes (digest rewrite, task-file merge, role-doc rewrite, archive) | Flag-only — King decides; see § Docs audit duty |
 | Edit `.kingdom/.setting/*.md`, `kingdom.json`, or `.git/` | Out of scope; watchman writes only to its own audit-artifact namespace |
 
 Watchman is **read-only on source + test runner + alerter + low-risk audit janitor**. Nothing more.

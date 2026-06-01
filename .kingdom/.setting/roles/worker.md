@@ -554,7 +554,7 @@ echo "✅ smoke-test report written: $REPORT"
 
 Before the 4-step closer fires, the lane stages and commits its work on its **own lane branch** (`worker-N`). The commit lands all three things in one atom: the project source change, the project task-ledger update (per R25), and the kingdom task-file update.
 
-**MANDATORY:** call `guard_worker_commit_branch "$PWD"` BEFORE every `git commit`. The helper is in `_primitives.md § Hard gates` and refuses to proceed if:
+**MANDATORY:** call `guard_commit_branch "$PWD"` BEFORE every `git commit`. The helper is in `_primitives.md § Hard gates` and refuses to proceed if:
 
 - Current branch is `kingdom` → R4 violation (kingdom never holds commits)
 - Current branch is `feature/<topic>` → R9 violation (feature is carved from `worker-N` at push time, byte-for-byte)
@@ -562,7 +562,7 @@ Before the 4-step closer fires, the lane stages and commits its work on its **ow
 
 ```bash
 # Inside a lane worktree, AT TASK CLOSE-OUT, before any other commit step:
-guard_worker_commit_branch "$PWD" || exit 1   # blocks bad-branch commits
+guard_commit_branch "$PWD" || exit 1   # blocks bad-branch commits
 git -C "$PWD" add <files-touched>
 git -C "$PWD" commit -m "<lane sub-task-id>: <one-line> — closes $SUBTASK_ID (PR #pending)"
 ```

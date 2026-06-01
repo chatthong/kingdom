@@ -4,6 +4,49 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.40.0] — 2026-06-02
+
+Structural cleanup for clarity + flexibility (consumer-directed), plus a smarter watchman.
+
+### Added
+
+- **Watchman: 3 new surveillance duties + a findings ledger (smarter, less noisy).** Grounded in what the real consumer watchman caught and missed: **Duty 6 — sequence-collision scan** (parallel numbered-file collisions with no git conflict — two lanes forking the same migration parent, ADRs, changelog; the single highest-value catch from the 2026-05-20 run); **Duty 7 — config/secret parity** (a new env/config key with no home in configmaps/templates — the `KEYCLOAK_ISSUER` miss — plus a committed-secret regex scan); **Duty 8 — missing-tests heuristic** (new source files with no matching tests). Plus a cross-tick **findings ledger** in `watchman_state.json`: dedup (no more re-flagging the same issue every 5 min), persistence-escalation (info→warn→urgent if unactioned), auto-resolve (logs when an issue disappears), a **notify-fallback to `king-inbox/`** (so alerts survive a dead `cmux_notify` — the empty-`workspace-refs.env` failure), a **suggested-action** line on every finding, a **develop-health trend** (sustained-RED vs one-off, flaky detection), and a per-tick **"King's next action"** line that turns monitoring into one decision. New `kingdom.json.watchman.duties` toggles (`seqCollision`/`configParity`/`missingTests`, default on); all eight duties share the R40 Haiku cap.
+
+### Changed
+
+- **One file per role.** `roles/` collapsed from 12 files to exactly **5** — the `king-auto-gate` / `king-dispatch` / `king-overlay-review` / `king-watchman-integration` sub-docs merged into a single `king.md` (all content preserved), and `watchman-duties` / `watchman-docs-audit` / `watchman-pr-backfill` merged into a single `watchman.md`. Each role is now one complete "what + how" doc. The `/kingdom:self-<role>` bootstrap commands and `reference/role-bootstrap.md` point at the single role file (no sub-doc lists).
+- **Action-named functions; flattened features.** Role-prefixed helpers renamed to action names so **any role can load any function**: `senior_review_tick`→`review_tick`, `senior_merge_worker_into_story`→`merge_into_story`, `watchman_cross_story_scan`→`cross_story_scan`, `guard_senior_dispatch_scope`→`guard_dispatch_scope`, `guard_worker_commit_branch`→`guard_commit_branch`, `guard_no_king_session_worktree_cd`→`guard_no_worktree_cd`; `spawn_senior_loop` + `spawn_watchman_loop` → one generic `spawn_loop`; `spawn_senior_workspace` dropped (use `spawn_master_workspace`). `manifest.json` no longer gates by role — the former `senior`/`watchman` features are gone; every helper lives in `core` (always loaded, deps `cmux`); only `browser` stays on-demand. (`kingdom_*` overlay helpers keep their prefix — it names the overlay action, not a role.)
+- **`kingdom.json.template` is a lean per-project save-slot.** Removed behavior-encoding (`subAgents.modelByWorkType` — that's a fixed R51 default, not per-project config); kept the genuine per-project knobs (shape, git, gate.*, per-lane model, integration/watchman/cmux toggles, `subAgents.parallelTarget`).
+- **All roles render cards.** Reinforced that every role uses `.kingdom/.setting/cards/` for user-facing output (no raw text where a card exists).
+
+### Fixed (from the v0.39.0 recheck)
+
+- R52's broken link to R34; stale `R01…R51` ranges (now R52); the directory-layout `plugin.json` version comment. Plus the R20 command registry, R32/R39 spawn-time `/kingdom:self-<role>` carve-outs, and the `self-watchman` card normalization are addressed in this release's consistency pass.
+
+---
+
+## [0.39.0] — 2026-06-02
+
+### Added
+
+- **Role-bootstrap commands — `/kingdom:self-<role>` (5 new commands).** `self-king`, `self-worker`, `self-co-worker`, `self-watchman`, `self-senior`. Each re-reads the canonical kingdom rules (`rules/index.md` + the 10 Tier-1 in full) and that role's spec (`roles/<role>.md` + sub-docs) straight from `.kingdom/.setting/`, then prints a `role-grounded` card (identity · model · allowed/banned verbs · gate tier · closer · the one "never"). The point: role knowledge becomes **pull-from-disk, not push-from-prompt** — a lane re-reads the versioned source instead of inheriting whatever the King restated from its (possibly drifted) context. Read-only: they read docs and print a card, never edit/dispatch/commit/push.
+- **R52 (Tier 2) — role-grounding is pull-from-disk.** Codifies the above: the King injects `/kingdom:self-<role>` as each freshly-spawned lane's **first** message (before any task brief), so the lane grounds itself; the brief then carries only the task. Any role — including the King via `/kingdom:self-king` — re-runs its bootstrap any time it has drifted (after a long multi-day session, a `/compact`, or before a high-stakes action). Runtime complement to R14 (session-start read) and R34 (rules override memory). Wired into `commands/work.md` Step 0.4 (spawn injection) and `king-dispatch.md`.
+- New `reference/role-bootstrap.md` (shared procedure + per-role read map + summary table) and `cards/role-grounded.md`.
+
+### Changed
+
+- Command surface is now **10** (5 core: work/init/self-care/save/update; 5 role-bootstrap: self-king/worker/co-worker/watchman/senior). Rules: 52 (Tier 2 = 37).
+
+---
+
+## [0.38.1] — 2026-06-02
+
+### Added
+
+- **`/kingdom:self-care` Check 13 — kingdom-mechanics drift in project memory (read-only).** Memory at any scope can drift from the versioned plugin and silently override the rules (R34) — the exact failure that cost a full session (a memory said "spawn helpers are broken, hand-roll cmux_send" long after the bug was fixed). Check 13 scans the workspace's project-memory dir and FLAGS — never edits — files that (a) snapshot kingdom *implementation* (matches function/command-level tokens: `cmux_send`, `cmux_rpc`, `workspace.list`, `spawn_*`, `_load.sh`, `git apply --3way`, … — NOT generic words like "overlay"/"dispatch" that appear in legitimate governance notes), (b) name a kingdom version older than installed, or (c) are duplicate stores created by path-casing (`Bonfire` vs `bonfire`). The plugin never writes to user memory (per the consumer-side no-blind-memory-writes rule); Check 13 lists, you decide. `/kingdom:update` now points to it as a post-migration heads-up. Tested against a real workspace: flags the one true mechanics snapshot with zero false positives.
+
+---
+
 ## [0.38.0] — 2026-06-01
 
 ### Added

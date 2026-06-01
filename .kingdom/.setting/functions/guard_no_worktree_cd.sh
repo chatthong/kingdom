@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# kingdom function: guard_no_king_session_worktree_cd
+# kingdom function: guard_no_worktree_cd
 
-guard_no_king_session_worktree_cd () {
+guard_no_worktree_cd () {
   # Inputs:
   #   $1 = target path being cd'd into
   #   $2 = optional caller role (defaults to whatever $KINGDOM_ROLE is set to; "king" if unset)

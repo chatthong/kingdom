@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# kingdom function: guard_senior_dispatch_scope
+# kingdom function: guard_dispatch_scope
 
-guard_senior_dispatch_scope () {
+guard_dispatch_scope () {
   # Inputs: $1 = senior lane, $2 = target worker lane, $3 = space-separated pod members
   # Returns: 0 dispatch allowed; 1 refused (out-of-pod or no visible workspace)
   local senior="$1" target="$2" pod="$3"

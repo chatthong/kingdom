@@ -18,9 +18,12 @@
 2. **CVE / dependency audit** — one Haiku sub-agent per lockfile changed since last tick (`npm audit` / `pnpm audit` / `pip-audit` / `cargo audit`). Each writes `WATCH_CVE_<lockfile-hash>_<UTC>.md`.
 3. **Cross-lane conflict detection** — one Haiku sub-agent scans all active `worker-N` diffs for overlapping file edits. Writes `WATCH_CONFLICT_<UTC>.md`.
 4. **Git hygiene scan** — one Haiku sub-agent checks for: stale worktrees (no sentinel activity > 2 hours), orphan branches (no matching task file), broken sentinels (done flag missing for a task file marked `done`), unflushed `.lane` claims. Writes `WATCH_GIT_<UTC>.md`.
+5. **Cross-story drift** (R50), **sequence-collision** (parallel numbered-file collisions — migrations/ADRs), **config/secret parity** (new key with no home; committed secret), and **missing-tests** (new source, no tests) scans — one Haiku each (v0.32.0 + v0.40.0). See [`watchman.md` § Per-tick duties](../roles/watchman.md) for all eight.
+
+All eight duties share the same `haikuCapPerTick` budget (priority order above; lower-priority duties are deferred to the next tick when the cap is hit). Findings flow through the watchman's cross-tick **findings ledger** (dedup / escalate / auto-resolve / notify-fallback), so a capped-out tick never loses a finding — it's picked up next tick.
 
 **Aggregation:** watchman collects each sub-agent's sentinel, then writes `WATCH_TICK_<UTC>.md` as the per-tick summary. King reads the latest `WATCH_TICK_*.md` at session start (R14, step 7).
 
-**Where these live (K10, v0.37.0):** ALL `WATCH_*` artifacts above are written to `$LOGS/watch/` (= `.kingdom/<project>/logs/watch/`), never `<project>/docs/test-reports/`. Monitoring heartbeats stay OUT of the project git tree; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` gate reports ride PRs in `docs/test-reports/`. (The `WATCH_CR_`/`WATCH_CONFLICT_` names above are illustrative; the live writers use `WATCH_REVIEW_`/`WATCH_CONFLICTS_` — see [`watchman-duties.md`](../roles/watchman-duties.md).)
+**Where these live (K10, v0.37.0):** ALL `WATCH_*` artifacts above are written to `$LOGS/watch/` (= `.kingdom/<project>/logs/watch/`), never `<project>/docs/test-reports/`. Monitoring heartbeats stay OUT of the project git tree; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` gate reports ride PRs in `docs/test-reports/`. (The `WATCH_CR_`/`WATCH_CONFLICT_` names above are illustrative; the live writers use `WATCH_REVIEW_`/`WATCH_CONFLICTS_` — see [`watchman.md` § Per-tick duties](../roles/watchman.md).)
 
 **Cap enforcement mechanics:** before spawning each sub-agent, watchman checks its internal `spawned_this_tick` counter. If `spawned_this_tick >= haikuCapPerTick`, remaining work items are queued for the next tick — not dropped.

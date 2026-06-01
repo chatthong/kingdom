@@ -32,7 +32,7 @@ spawn_master_workspace () {
   # was unreliable across cmux versions — workspaces frequently came up at a
   # bash prompt and King's subsequent `cmux send -- "<brief>"` landed in the
   # shell. Explicit post-spawn `claude\n` (Step 1b below) replaces it; the
-  # `spawn_watchman_loop` helper already proved this pattern works.
+  # `spawn_loop` helper already proved this pattern works.
   local desc="Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)"
   local ref=$(cmux_new_workspace "$label" "$path" "$desc" "$window_flag")
   [ -z "$ref" ] && { echo "❌ spawn failed for $label (cmux_new_workspace returned no ref)" >&2; return 1; }

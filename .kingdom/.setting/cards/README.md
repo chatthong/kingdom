@@ -31,6 +31,7 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`session-saved.md`](session-saved.md) | `[!TIP]` | `/kingdom:save` completion (v0.29.0+) |
 | [`watchman-tick.md`](watchman-tick.md) | `[!NOTE]` / `[!CAUTION]` | Watchman /loop tick autonomous summary (v0.29.0+) |
 | [`update-report.md`](update-report.md) | `[!IMPORTANT]` | `/kingdom:update` Step 6 — workspace migration complete (v0.38.0+) |
+| [`role-grounded.md`](role-grounded.md) | `[!NOTE]` | `/kingdom:self-<role>` — role re-grounded from disk (v0.39.0, R52) |
 
 ## Alert flavour → colour mapping
 

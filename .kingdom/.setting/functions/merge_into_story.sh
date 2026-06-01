@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# kingdom function: senior_merge_worker_into_story
+# kingdom function: merge_into_story
 
-senior_merge_worker_into_story () {
+merge_into_story () {
   # Inputs: $1 = senior worktree (on story/<id>), $2 = worker branch
   # Returns: 0 merged clean; 1 conflict (Senior resolves per R49; if unresolvable, abort + mark blocked)
   local wt="$1" wb="$2"

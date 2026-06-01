@@ -415,11 +415,53 @@ fi
 
 Informational — never auto-migrates. The actual migration (`/kingdom:update`) previews the full delta and asks for confirmation before any write.
 
+## Check 13 — kingdom-mechanics drift in project memory (v0.38.1+, informational, READ-ONLY)
+
+Memory drifts. A memory note that snapshots kingdom workflow mechanics (kingdom-branch handling, overlay, gate flow, dispatch, spawn helpers, cmux quirks) silently fights the versioned plugin — per **R34** the plugin rules win, and a stale snapshot just misleads (the exact failure that cost a full session: a memory said "spawn helpers are broken, hand-roll cmux_send" long after the bug was fixed). This check **FLAGS — never edits** — such memory so you can review/nuke it. The plugin NEVER writes to your memory (see the consumer-side no-blind-memory-writes rule).
+
+```bash
+# Claude Code keys per-project memory by the launch path (/ → -).
+MEM="$HOME/.claude/projects/$(echo "$PWD" | sed 's#/#-#g')/memory"
+NEW=$(jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null)
+if [ ! -d "$MEM" ]; then
+  echo "  ⓘ no project-memory dir for this workspace — nothing to scan."
+else
+  flagged=0
+  # (a) mechanics snapshots — memory restating kingdom IMPLEMENTATION. Match
+  #     function/command-level tokens only (cmux_send, spawn_*, workspace.list,
+  #     _load.sh, …), NOT generic words like "overlay"/"dispatch" which appear in
+  #     legitimate governance/convention notes — those are facts, not mechanics.
+  while IFS= read -r f; do
+    grep -qiE 'cmux_send|cmux_rpc|cmux_read_screen|workspace\.list|spawn_(master|loop|subagent|pool)|kingdom_overlay|git apply --3way|_load\.sh|load_feature|send-key' "$f" 2>/dev/null && {
+      echo "  ⚠ mechanics snapshot: $(basename "$f") — restates kingdom implementation; that lives in .kingdom/.setting/ (R34: rules override memory). Review; nuke if it's a workflow snapshot."
+      flagged=$((flagged+1))
+    }
+  done < <(find "$MEM" -maxdepth 1 -name '*.md' ! -name 'MEMORY.md' 2>/dev/null)
+  # (b) version-stale — a kingdom-related note naming a version older than installed
+  while IFS= read -r f; do
+    grep -qi 'kingdom' "$f" 2>/dev/null || continue
+    old=$(grep -oE 'v?0\.[0-9]+\.[0-9]+' "$f" 2>/dev/null | tr -d v | head -1)
+    [ -n "$old" ] && [ -n "$NEW" ] && [ "$old" != "$NEW" ] && {
+      echo "  ⚠ version-stale: $(basename "$f") names v$old (plugin is v$NEW) — may describe superseded behavior."
+      flagged=$((flagged+1))
+    }
+  done < <(find "$MEM" -maxdepth 1 -name '*.md' ! -name 'MEMORY.md' 2>/dev/null)
+  # (c) duplicate stores from path-casing (same workspace keyed twice)
+  base=$(basename "$PWD")
+  dupes=$(find "$HOME/.claude/projects" -maxdepth 1 -type d -iname "*-$base" 2>/dev/null | wc -l | tr -d ' ')
+  [ "$dupes" -gt 1 ] && { echo "  ⚠ $dupes memory stores match this workspace name (path-casing dupes, e.g. Bonfire vs bonfire) — they diverge silently. Always open the workspace with ONE canonical path."; flagged=$((flagged+1)); }
+  [ "$flagged" = 0 ] && echo "  ✓ no kingdom-mechanics / version-stale / duplicate-store memory detected." \
+    || echo "  → $flagged flag(s). READ-ONLY: review each yourself; the plugin never edits memory."
+fi
+```
+
+If a flagged file is genuinely a project FACT or governance note (not a workflow snapshot), keep it — the flag is advisory. The boundary: **plugin** (`.kingdom/.setting/`) owns mechanics; **project memory** owns project facts + governance the plugin is silent on; **user memory** owns personal preferences.
+
 ---
 
 ## Final summary
 
-After all 9 checks (including any patch outcomes for Check 6 + import outcomes for Check 9), collect results. Use these result symbols:
+After all checks (including any patch outcomes for Check 6 + import outcomes for Check 9), collect results. Use these result symbols:
 - `OK` = passed or patched
 - `WARN` = optional / informational / skipped by user
 - `FAIL` = missing critical dependency

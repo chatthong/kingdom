@@ -158,7 +158,7 @@ export KIT_BAK=$(basename "$BAK")
 render_card "update-report"
 ```
 
-Then suggest: run `/kingdom:self-care` to verify the migrated kit, then resume normally with `/kingdom:work <project>` — in-flight tasks, the resume queue (R33), and all audit history are exactly as they were.
+Then suggest: run `/kingdom:self-care` to verify the migrated kit — its **Check 13** also flags any project-memory note that snapshots kingdom mechanics or names an older version (a v0.36-era memory describing now-fixed bugs would otherwise mislead the King post-migration, per R34). It's read-only; you review and nuke. Then resume normally with `/kingdom:work <project>` — in-flight tasks, the resume queue (R33), and all audit history are exactly as they were.
 
 ## What this command never does
 

@@ -78,10 +78,10 @@ cp "$SRC/manifest.json"   "$DST/manifest.json"     # v0.35.0: feature registry f
 cp "$SRC/rules.md"        "$DST/rules.md"           # pointer -> rules/index.md
 cp "$SRC/_primitives.md"  "$DST/_primitives.md"     # pointer -> functions/index.md
 
-# the one-file-each directories (copy whole dirs so sub-docs like king-*/watchman-* + *.sh come along)
-cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior + king-*/watchman-* sub-docs
-cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing
-cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R50 + index.md
+# the one-file-each directories (copy whole dirs so every role/reference/rule .md + *.sh come along)
+cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior (one file per role, v0.40.0)
+cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing / role-bootstrap
+cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R52 + index.md
 cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ backend (cmux_* + browser_* wrappers). -R so the cmux/ subfolder comes along (plain cp skips directories).
 cp "$SRC/cards/"*.md      "$DST/cards/"
 

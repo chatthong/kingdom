@@ -1,8 +1,11 @@
 {
-  "_comment": "Feature registry (v0.35.0). Each feature owns rules + functions. `load_feature <name>` (functions/_load.sh) sources a feature's functions plus its deps. A feature is active when always=true or its `config` flag is truthy in kingdom.json. Turn a feature off = don't load_feature it (and unset its config).",
+  "_comment": "Feature registry (v0.40.0). Function NAMES are action-based, not role-based — any role loads any helper it needs. Loading is grouped only by BACKEND/CAPABILITY, not role: core (always; all backend-agnostic mechanics) deps cmux; cmux (always; the cmux.app wrappers); browser (on-demand capability). The former senior/watchman feature gating was removed — their helpers (create_story_branch, merge_into_story, review_tick, run_tier2_on_story, cross_story_scan, guard_dispatch_scope, spawn_loop) are now plain core functions.",
   "features": {
     "core": {
       "always": true,
+      "deps": [
+        "cmux"
+      ],
       "functions": [
         "_bounded_wait",
         "attach_or_create_worktree",
@@ -10,15 +13,18 @@
         "compute_gate_duration",
         "compute_ready_for_fresh_work",
         "compute_task_duration",
+        "create_story_branch",
+        "cross_story_scan",
         "curated_path",
         "extract_pr_title_from_task_file",
         "fetch_weather_line",
         "find_ungated_sentinels",
         "generate_pr_body_from_task_file",
         "get_pr_title_from_task_file",
+        "guard_commit_branch",
+        "guard_dispatch_scope",
         "guard_lane_workspace_exists",
-        "guard_no_king_session_worktree_cd",
-        "guard_worker_commit_branch",
+        "guard_no_worktree_cd",
         "haiku_read_docs_orientation",
         "init_subagent_pool",
         "kingdom_discard_overlay",
@@ -28,6 +34,7 @@
         "kingdom_review_surface",
         "latest_test_report",
         "make_artifact_id",
+        "merge_into_story",
         "parallel_edit_fanout",
         "pattern_grep_fanout",
         "pick_next_task_for",
@@ -37,57 +44,23 @@
         "raw_path",
         "read_session_state",
         "render_card",
+        "review_tick",
         "run_tier1_gate",
         "run_tier2_gate",
+        "run_tier2_on_story",
         "save_session_state",
+        "spawn_loop",
         "spawn_master_workspace",
         "spawn_pool_slot",
         "spawn_subagent_from_pool",
         "spawn_subagent_tab",
         "summarise_gate_failure",
         "wait_for_ter_decision"
-      ],
-      "deps": [
-        "cmux"
-      ]
-    },
-    "watchman": {
-      "config": "shape.watchman",
-      "functions": [
-        "spawn_watchman_loop",
-        "watchman_cross_story_scan"
-      ],
-      "role": "roles/watchman.md",
-      "deps": [
-        "core"
-      ]
-    },
-    "senior": {
-      "config": "integration.enabled",
-      "rules": [
-        "R46",
-        "R47",
-        "R48",
-        "R49",
-        "R50"
-      ],
-      "functions": [
-        "create_story_branch",
-        "spawn_senior_workspace",
-        "spawn_senior_loop",
-        "guard_senior_dispatch_scope",
-        "senior_merge_worker_into_story",
-        "run_tier2_on_story",
-        "senior_review_tick"
-      ],
-      "role": "roles/senior.md",
-      "deps": [
-        "core"
       ]
     },
     "cmux": {
       "always": true,
-      "_comment": "One micro-wrapper per cmux subcommand. Every role/command/function calls these instead of raw `cmux …`. Single source of truth = reference/cmux.md.",
+      "_comment": "One micro-wrapper per cmux subcommand.",
       "functions": [
         "cmux_attention_clear",
         "cmux_attention_override",
@@ -115,19 +88,19 @@
       ]
     },
     "browser": {
-      "_comment": "On-demand built-in-browser verification. Any role: `load_feature browser` then browser_verify/browser_open/… when it needs to SEE a running UI. Not always-loaded.",
-      "functions": [
-        "browser_open",
-        "browser_snapshot",
-        "browser_click",
-        "browser_fill",
-        "browser_eval",
-        "browser_screenshot",
-        "browser_close",
-        "browser_verify"
-      ],
       "deps": [
         "cmux"
+      ],
+      "_comment": "On-demand built-in-browser verification: load_feature browser.",
+      "functions": [
+        "browser_click",
+        "browser_close",
+        "browser_eval",
+        "browser_fill",
+        "browser_open",
+        "browser_screenshot",
+        "browser_snapshot",
+        "browser_verify"
       ]
     }
   }

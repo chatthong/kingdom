@@ -17,7 +17,7 @@
 **Delegated dispatch (v0.32.0+).** The orchestrator-only principle now also governs **Seniors** (see [`senior.md`](../roles/senior.md), R46-R50). For a story pod, the King delegates per-story orchestration to a Senior-N. Both roles are orchestrators, not executors: neither writes feature code. The dispatch chain becomes:
 
 - The King dispatches to **Seniors** (assigns a story) and to **solo workers** (non-pod tasks).
-- A **Senior** dispatches only to the workers in **its own pod**, and only through a **visible** lane workspace, enforced by `guard_senior_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace, preserving the R31/R36/R37 visibility guarantees this rule depends on).
+- A **Senior** dispatches only to the workers in **its own pod**, and only through a **visible** lane workspace, enforced by `guard_dispatch_scope` (refuses out-of-pod targets and targets without a live workspace, preserving the R31/R36/R37 visibility guarantees this rule depends on).
 - A Senior additionally **merges** worker branches into the story branch and **reviews** the assembled story (R48/R49). Merge + review are integration/review work, not feature execution, so they do not violate orchestrator-only.
 - **Workers never dispatch.** A worker belongs to at most one pod at a time.
 

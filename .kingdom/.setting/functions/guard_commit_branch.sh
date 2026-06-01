@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# kingdom function: guard_worker_commit_branch
+# kingdom function: guard_commit_branch
 
-guard_worker_commit_branch () {
+guard_commit_branch () {
   # Inputs:
   #   $1 = worktree path (defaults to $PWD)
   # Returns:

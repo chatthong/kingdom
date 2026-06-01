@@ -10,9 +10,8 @@
   },
 
   "subAgents": {
-    "_comment": "R51 (v0.37.0): every lane master (worker/co-worker/senior) AND the King fans heavy work out to PARALLEL sub-agents — a strong default, not a hard gate. parallelTarget is the per-lane soft ceiling: aim for it, exceed it only when a task genuinely needs more. Pick the model by work type per index.md's chain — sonnet=standard task work, haiku=bulk reads/greps/doc-orientation, opus=sensitive/high-stakes. The watchman keeps its OWN hard cap (watchman.haikuCapPerTick), which is unaffected.",
-    "parallelTarget": 10,
-    "modelByWorkType": { "standard": "sonnet", "bulk": "haiku", "sensitive": "opus" }
+    "_comment": "Per-project soft ceiling for parallel sub-agent fan-out (R51). Model-by-work-type (sonnet=standard, haiku=bulk, opus=sensitive) is a fixed default defined in R51 — not a per-project knob.",
+    "parallelTarget": 10
   },
 
   "git": {
@@ -105,7 +104,10 @@
       "cveScan": true,
       "conflictScan": true,
       "gitHygiene": true,
-      "crossStoryScan": true
+      "crossStoryScan": true,
+      "seqCollision": true,
+      "configParity": true,
+      "missingTests": true
     }
   }
 }

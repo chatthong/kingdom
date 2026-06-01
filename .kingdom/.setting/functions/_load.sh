@@ -57,8 +57,9 @@ load_all () {
 }
 
 # load_feature <name>… — source a whole feature (its functions + deps) from manifest.json.
-# A feature = an entry in ../manifest.json. `load_feature senior` pulls the 7 senior helpers
-# (+ its deps, e.g. core). Don't load_feature a feature to leave it out entirely.
+# A feature = an entry in ../manifest.json. Features group by backend/capability, not role:
+# `load_feature core` (always; deps cmux) or `load_feature browser` (on-demand wrappers).
+# Function names are action-based, so you can also just `load <names>` directly.
 _KMANIFEST="$_KFN_DIR/../manifest.json"
 load_feature () {
   local feat dep fn
