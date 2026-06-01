@@ -1,11 +1,28 @@
 {
   "name": "kingdom",
-  "version": "0.36.2",
+  "version": "0.38.0",
   "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees and native cmux.app. /kingdom:work runs the full daily cycle in one command. v0.35.0 completes the modular architecture: rules/ (one rule per file) + functions/ (42 *.sh + _load.sh) + roles/ (slim role specs) + reference/ + a manifest.json feature registry where `load_feature <name>` sources just that feature (so senior/watchman plug in or out with no edits to core), plus a structure-lint in /kingdom:self-care. Every file stays short and a run loads only what it calls. v0.33.0 simplified the command surface: /kingdom:init takes no flags (scaffold only), /kingdom:work shape is per-role (worker=/co-worker=/watchman=/senior=, plural accepted) or lane=N (King auto-composes a total budget), and pacing is two plain ceilings pr-limit=N and pod-limit=N (cap renamed, target removed). v0.32.0 added the Senior role (🎓 Opus) and story-pod integration branches: parallel workers on one story merge into a local story branch, reviewed as a unit by a Senior in an autonomous loop, then promoted as a single PR (three-tier gate; King owns cross-story, Senior owns within-story; R46-R50 + R30 delegated-dispatch). v0.31.1 fixes two consumer-reported bugs (claude REPL not auto-launching on worker spawn; King's poll loop calling a stale-named overlay function via the silent-no-op bash-function-missing path), adds R45 (Haiku-army doc orientation for all roles), watchman senior-dev review with doc cross-check, mandatory worker smoke-test reports, and Sonnet default for the sub-agent pool. v0.31.0 hardened R4/R9/R30/R36/R37 with bash-level gate helpers. A King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), and watchmen (🕵️) — each in its own cmux.app workspace. Kingdom branch is a WORKING-TREE OVERLAY for review (never commit on kingdom). PRs carve from worker-N tip byte-for-byte. Two-tier gate. Domain-agnostic. Bootstrap with /kingdom:init; run the day with /kingdom:work; close with /kingdom:save. Won't touch your project files, develop/main branches, shell config, or git config.",
   "author": {
     "name": "kingdom contributors"
   },
   "homepage": "https://github.com/chatthong/kingdom",
   "license": "see LICENSE",
-  "keywords": ["claude-code", "claude-code-plugin", "orchestration", "multi-agent", "multi-agent-orchestration", "ai-agents", "parallel-ai-coding", "cmux", "tmux", "git-worktree", "kingdom", "tasks", "audit", "discovery", "parallel", "agent-fleet"]
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "orchestration",
+    "multi-agent",
+    "multi-agent-orchestration",
+    "ai-agents",
+    "parallel-ai-coding",
+    "cmux",
+    "tmux",
+    "git-worktree",
+    "kingdom",
+    "tasks",
+    "audit",
+    "discovery",
+    "parallel",
+    "agent-fleet"
+  ]
 }

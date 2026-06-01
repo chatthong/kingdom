@@ -33,7 +33,7 @@ R41 (v0.29.3+) made skill-aware execution mandatory. Resolution is three steps: 
 <details>
 <summary><strong>What happened to /kingdom:day?</strong></summary>
 
-Renamed to `/kingdom:work` in v0.29.0 (hard break, no alias). All other commands also renamed: `/kingdom:doctor` → `/kingdom:self-care`, `/kingdom:exit` → `/kingdom:save` (simplified to state snapshot only — no commits or pushes). The building-block commands `/kingdom:start` and `/kingdom:update` were folded into `/kingdom:work` and no longer exist as standalone commands.
+Renamed to `/kingdom:work` in v0.29.0 (hard break, no alias). All other commands also renamed: `/kingdom:doctor` → `/kingdom:self-care`, `/kingdom:exit` → `/kingdom:save` (simplified to state snapshot only — no commits or pushes). The building-block commands `/kingdom:start` and `/kingdom:update` were folded into `/kingdom:work`. (`/kingdom:update` was later reintroduced in v0.38.0 with a completely different meaning — workspace migration after a plugin update, not an audit sweep.)
 
 </details>
 
@@ -80,9 +80,13 @@ Yes. `/kingdom:work` auto-detects what's available. If cmux.app isn't running, i
 </details>
 
 <details>
-<summary><strong>What did /kingdom:update do?</strong></summary>
+<summary><strong>How do I update an existing workspace after the plugin updates? (What is /kingdom:update?)</strong></summary>
 
-`/kingdom:update` no longer exists as a standalone command (removed in v0.29.0). Its audit sweep is now folded into `/kingdom:work` and runs automatically on every invocation. The watchman also does the same low-risk fixes continuously during its `/loop` time.
+Run **`/kingdom:update`** (v0.38.0+) after `/plugin update kingdom`. It migrates a live workspace to the new plugin version without losing anything: it clean-replaces the kit (`.kingdom/.setting/`, backup → fresh), additively merges new schema keys into each `kingdom.json` (your tuned values always win), and **never touches** your `tasks/`, `logs/`, `state.json`, `king-inbox`, or memory. It previews the full delta and asks for an explicit `update` before any write; every write is backed up first. `/kingdom:self-care` (Check 12) flags when the kit is behind the installed plugin.
+
+Use `/kingdom:init` for scaffolding a *new* workspace/project; use `/kingdom:update` for *upgrading* an existing one.
+
+> Note: the name `/kingdom:update` was used pre-v0.29.0 for a different thing (an audit sweep, since folded into `/kingdom:work`). v0.38.0 reuses the name for the workspace-migration command described here.
 
 </details>
 

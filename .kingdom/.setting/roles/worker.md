@@ -10,6 +10,8 @@ See [`index.md`](../index.md) for entry-point context, [`king.md`](king.md) for 
 
 A lane master spawns sub-agents in one of three ways. **Default since v0.28.0 (R38): ALL models default to visible tab** — `Agent()` in-process background spawns are opt-in only, not the default. (Pre-v0.28.0 model-tiered "cheap fan-outs headless" behaviour is retired.)
 
+**R51 — fan heavy work out, don't do it serially.** Multi-file reads, pattern greps, doc orientation, independent edits, and review passes SHOULD run as parallel sub-agents (strong default, soft target `kingdom.json.subAgents.parallelTarget` ≈ 10 — aim for it, exceed when a task needs it, skip for a trivial one). Model by work type: **sonnet** = standard task work, **haiku** = bulk reads/greps/orientation, **opus** = sensitive/high-stakes. Always bounded by `_bounded_wait` (R42).
+
 ### Spawn-cost reality
 
 | Mode | Spawn cost | When it's worth it |
@@ -204,7 +206,7 @@ Some artifacts aren't lane-attached:
 - `/kingdom:work` curated digest: `<LOGS>/kingdom-update-<UTC>.md` — no lane (it's King-dispatched, not lane work)
 - `/kingdom:work` specialist sub-digests: `<LOGS>/audit-{A,B,C,D}-<UTC>.md` — no lane
 - King planning task files: `<workspace>/.kingdom/<project>/tasks/<UTC>__king-plan__<short-slug>.md` — `king-plan` IS the "lane" slot (constant)
-- Watchman reports: `<project>/docs/test-reports/WATCH_<UTC>__<event-class>.md` — no lane (always watchman-N implicit)
+- Watchman reports: `<workspace>/.kingdom/<project>/logs/watch/WATCH_<UTC>__<event-class>.md` — no lane (always watchman-N implicit). (v0.37.0/K10: moved out of the project tree.)
 
 For these non-lane artifacts, the filename's segment-2 slot carries the artifact TYPE instead of a lane name (`king-plan`, audit-A through audit-D, WATCH_*). The grep contract still holds: any file with a lane in segment 2 IS lane-attached; anything else isn't.
 

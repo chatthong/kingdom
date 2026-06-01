@@ -28,8 +28,13 @@ kingdom_resync_after_merge () {
   # Step 4: free the merged lane (its commit just landed)
   git -C "$WORKTREE" branch -f "$merged_lane" "$BASE"
 
-  # Step 5: rebase remaining active lanes onto new base
-  local lanes_freed="$merged_lane"
+  # Step 5: rebase remaining active lanes onto new base.
+  # Rebase INSIDE each lane's own worktree. `git -C "$WORKTREE" switch <lane>`
+  # fails (rc=128 "already used by worktree at …") when that branch is checked
+  # out in a .worktrees/<lane> linked worktree — the normal kingdom layout — and
+  # the unguarded switch would then leave the main worktree rebasing the WRONG
+  # branch (silently corrupting kingdom). Operate on the lane's worktree directly.
+  local lanes_freed="$merged_lane" lane lane_wt
   for lane in $(git -C "$WORKTREE" branch --list 'worker-*' | tr -d ' *'); do
     [ "$lane" = "$merged_lane" ] && continue
     [ -z "$(git -C "$WORKTREE" log "$BASE..$lane" 2>/dev/null)" ] && {
@@ -37,11 +42,19 @@ kingdom_resync_after_merge () {
       lanes_freed="$lanes_freed,$lane"
       continue
     }
-    git -C "$WORKTREE" switch "$lane"
-    git -C "$WORKTREE" rebase "origin/$BASE" || {
-      echo "⚠️ rebase conflict on $lane — resolve manually, then re-run resync"
-      return 1
-    }
+    lane_wt="$WORKTREE/.worktrees/$lane"
+    if [ -d "$lane_wt" ]; then
+      git -C "$lane_wt" rebase "origin/$BASE" || {
+        echo "⚠️ rebase conflict on $lane (in $lane_wt) — resolve manually, then re-run resync"
+        return 1
+      }
+    else
+      # No linked worktree for this lane → safe to switch + rebase in main worktree.
+      git -C "$WORKTREE" switch "$lane" && git -C "$WORKTREE" rebase "origin/$BASE" || {
+        echo "⚠️ rebase conflict on $lane — resolve manually, then re-run resync"
+        return 1
+      }
+    fi
   done
 
   # Step 6: verify kingdom shows ONLY open-lane commits

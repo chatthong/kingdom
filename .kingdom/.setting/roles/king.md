@@ -146,7 +146,13 @@ Runs on the **kingdom branch working tree** AFTER overlaying the lane's changes 
 cd "$PROJ"                              # primary checkout
 git checkout kingdom
 git fetch origin
-git reset --hard "origin/$BASE"         # clean slate per v0.17.0
+# R29 PRE-FLIGHT (hardened v0.37.0): before this reset, `git status` kingdom.
+# If there are uncommitted changes you did NOT just overlay → STOP. They are
+# either an in-flight review surface (a prior gated lane the user still needs to
+# see — keep it) or work authored on kingdom (R4 violation — recover into a
+# worktree first). NEVER reset --hard over unreviewed/unpushed work.
+# See R29 + king-overlay-review.md step 1.
+git reset --hard "origin/$BASE"         # clean slate — safe ONLY at the start of a fresh review cycle
 git diff "origin/$BASE..worker-N" | git apply --3way -  # overlay (no commit)
 
 # Heavy — full gate on the overlaid working tree

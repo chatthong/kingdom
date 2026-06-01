@@ -333,7 +333,7 @@ On `N` → warning: stale files left in place. King may misbehave if it referenc
 
 ## Check 10 — story-pod config present (v0.32.0+, informational)
 
-If a project's `kingdom.json` predates v0.32.0 it will lack the `integration` block, `shape.seniors`, and the `seniors[]` array. Story pods stay off until those exist. This check is informational: report it, offer to re-run `/kingdom:init <project>` (idempotent) to merge the new keys, or note the project keeps the classic per-worker flow.
+If a project's `kingdom.json` predates v0.32.0 it will lack the `integration` block, `shape.seniors`, and the `seniors[]` array. Story pods stay off until those exist. This check is informational: report it and recommend `/kingdom:update` (the migration command — additively merges the new schema keys into every `kingdom.json`, preserving existing values + all runtime), or note the project keeps the classic per-worker flow.
 
 ```bash
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
@@ -342,9 +342,9 @@ for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
   has_integ=$(jq -r 'has("integration")' "$KJSON" 2>/dev/null)
   has_seniors=$(jq -r '.shape | has("seniors")' "$KJSON" 2>/dev/null)
   if [ "$has_integ" = "true" ] && [ "$has_seniors" = "true" ]; then
-    echo "  ✓ $proj: story-pod config present (seniors=$(jq -r '.shape.seniors // 0' "$KJSON"), unit=$(jq -r '.integration.unit // "story"' "$KJSON"))"
+    echo "  ✓ $proj: story-pod config present (seniors=$(jq -r '.shape.seniors // 0' "$KJSON"), unit=$(jq -r '.integration.unit // "pod"' "$KJSON"))"
   else
-    echo "  ⓘ $proj: pre-v0.32.0 config (no integration/seniors keys). Story pods OFF; classic per-worker flow active. Re-run /kingdom:init $proj to add them."
+    echo "  ⓘ $proj: pre-v0.32.0 config (no integration/seniors keys). Story pods OFF; classic per-worker flow active. Run /kingdom:update to add them (additive; keeps your values + runtime)."
   fi
 done
 ```
@@ -393,6 +393,27 @@ PY
 ```
 
 Informational (a consumer workspace may have customized files). Run it after a `/kingdom:init` re-sync or before shipping a plugin change so the modular tree can't silently break.
+
+## Check 12 — kit version vs installed plugin (v0.38.0+, informational)
+
+Detects whether the workspace's kit (`.kingdom/.setting/`) is behind the installed plugin — i.e. the user updated the `kingdom` plugin from Claude but hasn't run `/kingdom:update` yet.
+
+```bash
+STAMP="$PWD/.kingdom/.setting/.kingdom-version"
+CUR=$(cat "$STAMP" 2>/dev/null || echo "")
+NEW=$(jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" 2>/dev/null)
+if [ ! -d "$PWD/.kingdom/.setting" ]; then
+  echo "  ⓘ no .kingdom/.setting/ here — not a kingdom workspace (run /kingdom:init)."
+elif [ -z "$CUR" ]; then
+  echo "  ⚠ kit has no version stamp (pre-0.38.0). Run /kingdom:update to stamp + migrate to v$NEW (preserves tasks/logs/state/memory)."
+elif [ "$CUR" != "$NEW" ]; then
+  echo "  ⚠ kit is v$CUR but the installed plugin is v$NEW → run /kingdom:update to migrate (additive; preserves tasks/logs/state/memory)."
+else
+  echo "  ✓ kit v$CUR matches the installed plugin."
+fi
+```
+
+Informational — never auto-migrates. The actual migration (`/kingdom:update`) previews the full delta and asks for confirmation before any write.
 
 ---
 

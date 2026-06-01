@@ -18,6 +18,7 @@ carve_and_push_feature () {
     --title "$pr_title" \
     --body "$pr_body"
 
-  # After push, discard the kingdom overlay (different concern — kingdom branch)
-  kingdom_discard_overlay
+  # After push (R29), discard the kingdom overlay — ONLY now, never before push.
+  # Pass the project root explicitly (this helper runs with cwd = project root).
+  kingdom_discard_overlay "$PWD"
 }

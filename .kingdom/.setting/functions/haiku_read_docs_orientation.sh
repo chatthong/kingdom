@@ -58,8 +58,13 @@ haiku_read_docs_orientation () {
   # === Phase 1 fan-out — read wayfinding files first ===
   # Up to $cap Haiku in parallel; bounded by _bounded_wait so one slow read
   # doesn't hang the orientation step (R42).
-  local pids="" count=0
-  for f in $phase1_files; do
+  # `while read` over a process substitution (NOT `for f in $phase1_files`):
+  # the bare-var for-loop word-splits paths containing spaces, and feeding a
+  # glob would abort under zsh. read-line preserves spaces and keeps the
+  # pids/count vars in this shell (a pipeline would subshell them away).
+  local pids="" count=0 f
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
     [ "$count" -ge "$cap" ] && break
     local slug=$(echo "$f" | sed 's|/|_|g; s|^[._]*||; s|\.md$||')
     (
@@ -74,12 +79,13 @@ haiku_read_docs_orientation () {
 Output ONLY to $digest_dir/phase1__${slug}.md — no other edits."
     ) &
     pids="$pids $!"; count=$((count+1))
-  done
+  done < <(printf '%s\n' "$phase1_files")
   _bounded_wait 45 $pids   # 45s budget; phase1 files are short
 
   # === Phase 2 fan-out — full doc landscape ===
   pids=""; count=0
-  for f in $phase2_files; do
+  while IFS= read -r f; do
+    [ -z "$f" ] && continue
     [ "$count" -ge "$cap" ] && break
     local slug=$(echo "$f" | sed 's|/|_|g; s|^[._]*||; s|\.md$||')
     (
@@ -94,7 +100,7 @@ Output ONLY to $digest_dir/phase1__${slug}.md — no other edits."
 Output ONLY to $digest_dir/phase2__${slug}.md — no other edits."
     ) &
     pids="$pids $!"; count=$((count+1))
-  done
+  done < <(printf '%s\n' "$phase2_files")
   _bounded_wait 60 $pids   # 60s budget; phase2 docs can be longer
 
   # === Consolidate ===
@@ -113,14 +119,16 @@ Output ONLY to $digest_dir/phase2__${slug}.md — no other edits."
     echo ""
     echo "## Phase 1 digests"
     echo ""
-    for d in "$digest_dir"/phase1__*.md; do
+    # `find` not a glob: an empty digest dir (all Haiku failed) would abort this
+    # `{ } > "$out"` block under zsh NOMATCH, leaving $out empty.
+    while IFS= read -r d; do
       [ -f "$d" ] && { echo "### $(basename "$d" .md | sed 's/^phase1__//')"; cat "$d"; echo ""; }
-    done
+    done < <(find "$digest_dir" -maxdepth 1 -name 'phase1__*.md' 2>/dev/null | sort)
     echo "## Phase 2 digests"
     echo ""
-    for d in "$digest_dir"/phase2__*.md; do
+    while IFS= read -r d; do
       [ -f "$d" ] && { echo "### $(basename "$d" .md | sed 's/^phase2__//')"; cat "$d"; echo ""; }
-    done
+    done < <(find "$digest_dir" -maxdepth 1 -name 'phase2__*.md' 2>/dev/null | sort)
   } > "$out"
 
   echo "$out"

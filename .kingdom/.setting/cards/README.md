@@ -30,6 +30,7 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`what-to-work-on.md`](what-to-work-on.md) | `[!IMPORTANT]` | `/kingdom:work` Step 0.0 — interactive no-args mode, asks user for natural-language intent (v0.28.0+) |
 | [`session-saved.md`](session-saved.md) | `[!TIP]` | `/kingdom:save` completion (v0.29.0+) |
 | [`watchman-tick.md`](watchman-tick.md) | `[!NOTE]` / `[!CAUTION]` | Watchman /loop tick autonomous summary (v0.29.0+) |
+| [`update-report.md`](update-report.md) | `[!IMPORTANT]` | `/kingdom:update` Step 6 — workspace migration complete (v0.38.0+) |
 
 ## Alert flavour → colour mapping
 

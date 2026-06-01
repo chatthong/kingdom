@@ -20,7 +20,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 **🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
 
-![Version](https://img.shields.io/badge/version-0.36.2-success)
+![Version](https://img.shields.io/badge/version-0.38.0-success)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -53,6 +53,9 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 /kingdom:work my-app          # daily: audit, spawn, dispatch, poll
 /kingdom:save my-app          # end of session: snapshot state, close lane workspaces
+
+/kingdom:update               # after a plugin update: migrate the kit + configs,
+                              # keep all tasks/logs/state/memory (preview + confirm)
 ```
 
 `/kingdom:work` is the daily ritual. It audits the project, spawns lanes, prints a kickoff brief with your local date+time and a Suggested next task, then auto-dispatches and gates work until something needs your approval. You stay in one chat with the King. At end of day, `/kingdom:save` snapshots lane + task state so the next `/kingdom:work` picks up where you left off.

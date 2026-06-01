@@ -13,7 +13,15 @@
 # A role/feature spec (roles/*.md) lists the function names it uses; pass those
 # names to `load`. `load_all` sources everything (rarely needed).
 
-_KFN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# zsh-safe self-location. Claude Code's Bash tool runs zsh on macOS, where
+# ${BASH_SOURCE[0]} is empty — _KFN_DIR would resolve to cwd and every `load`
+# would fail with "command not found". The eval hides zsh-only syntax from
+# bash's parser (bash treats it as an opaque string); only zsh ever runs it.
+if [ -n "${ZSH_VERSION:-}" ]; then
+  eval '_KFN_DIR="${${(%):-%x}:A:h}"'   # zsh: %x = file being sourced; :A:h = absolute dirname
+else
+  _KFN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+fi
 
 load () {
   local f path
@@ -21,8 +29,10 @@ load () {
     if [ -f "$_KFN_DIR/$f.sh" ]; then
       path="$_KFN_DIR/$f.sh"
     else
-      # fall back to one level of provider/feature subfolders (cmux/, tmux/, browser/, …)
-      path=$(ls "$_KFN_DIR"/*/"$f.sh" 2>/dev/null | head -1)
+      # fall back to one level of provider/feature subfolders (cmux/, tmux/, browser/, …).
+      # `find` instead of a shell glob: zsh aborts the whole function on a no-match
+      # glob (NOMATCH), and the 2>/dev/null on `ls` can't suppress that.
+      path=$(find "$_KFN_DIR" -mindepth 2 -maxdepth 2 -name "$f.sh" 2>/dev/null | head -1)
     fi
     if [ -n "$path" ] && [ -f "$path" ]; then
       # shellcheck disable=SC1090
@@ -36,13 +46,14 @@ load () {
 
 load_all () {
   local f
-  # flat files + one level of subfolders
-  for f in "$_KFN_DIR"/*.sh "$_KFN_DIR"/*/*.sh; do
+  # flat files + one level of subfolders, via `find` (zsh-safe: a glob with no
+  # match aborts the function under zsh's NOMATCH; find never does).
+  while IFS= read -r f; do
     [ -f "$f" ] || continue
     [ "$(basename "$f")" = "_load.sh" ] && continue
     # shellcheck disable=SC1090
     source "$f"
-  done
+  done < <(find "$_KFN_DIR" -mindepth 1 -maxdepth 2 -name '*.sh')
 }
 
 # load_feature <name>… — source a whole feature (its functions + deps) from manifest.json.

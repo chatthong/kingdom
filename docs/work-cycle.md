@@ -76,24 +76,26 @@ Full detail: [`commands/save.md`](../commands/save.md).
 
 ## Updating the plugin
 
-Two layers, different routines:
+Two steps (v0.38.0+):
 
 ```bash
-/plugin update kingdom    # 1. pull new plugin code (slash commands + templates)
-/kingdom:self-care        # 2. (optional) check for new env requirements
-/kingdom:init             # 3. (optional) re-sync workspace role docs from new templates
+/plugin update kingdom    # 1. pull new plugin code (slash commands + templates) from the marketplace
+/kingdom:update           # 2. migrate the workspace: re-sync .setting/, add new kingdom.json keys,
+                          #    keep ALL tasks/logs/state/memory. Previews the delta, asks to confirm.
 ```
 
-| Asset | Survives plugin update? |
-|---|---|
-| Slash commands | replaced by new version (immediate) |
-| Role doc templates (in plugin) | replaced by new version |
-| Workspace `.kingdom/.setting/*.md` | ✅ untouched; re-run `/kingdom:init` to sync |
-| Your `kingdom.json` configs | ✅ untouched |
-| `tasks/` + `logs/` audit trail | ✅ untouched (your work is safe) |
-| `.claude/settings.json` permissions | ✅ untouched |
+`/kingdom:update` is the migration command (v0.38.0). It previews everything first, backs up before every write, and never touches your runtime state:
 
-If a release changes the `kingdom.json` schema (e.g., v0.5.0 dropped `focus`+`ownsPaths`), the [CHANGELOG entry](../CHANGELOG.md) for that version tells you what to edit. Schema migrations are manual edits right now; a future `/kingdom:migrate` command may automate this.
+| Asset | What `/kingdom:update` does |
+|---|---|
+| Slash commands | replaced by `/plugin update` (immediate, before you run `/kingdom:update`) |
+| Workspace `.kingdom/.setting/` (the kit) | **clean-replaced** from the new plugin (backup → fresh; stale files removed; local patches kept in the `.bak`) |
+| Your `kingdom.json` configs | **additively merged** — new schema keys added, every existing value kept (backed up first) |
+| `tasks/` + `logs/` + `state.json` + `king-inbox` | ✅ **never touched** (your work + audit trail are safe) |
+| `.claude/settings.json` permissions | additively merged (new required entries added; existing kept) |
+| Memory (`~/.claude/projects/<…>/memory/`) | ✅ outside the workspace — structurally never touched |
+
+So a plugin schema change (e.g. v0.32.0's `integration.*` / `shape.seniors`, or v0.37.0's `subAgents.*`) is applied automatically and additively — no manual `kingdom.json` editing. `/kingdom:init` is for scaffolding a NEW workspace/project; `/kingdom:update` is for upgrading a live one. Run `/kingdom:self-care` (Check 12) any time to see whether the kit is behind the installed plugin.
 
 ## Reference (relocated from `commands/work.md`)
 

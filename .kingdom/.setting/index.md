@@ -9,7 +9,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | File | Owns |
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
-| [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R50`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
+| [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R51`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
 | [`king.md`](roles/king.md) | King role: planning fan-out, dispatch (cmux_send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`worker.md`](roles/worker.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-worker.md`](roles/co-worker.md) | Co-worker (user-paired) interactive protocol |
@@ -19,7 +19,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`cmux.md`](reference/cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
 | [`functions/`](functions/) | **Shared bash helpers (v0.34.0: one function per file)** — 42 helpers, one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. (`_primitives.md` is now a pointer to this folder.) |
 | [`manifest.json`](manifest.json) | **Feature registry (v0.35.0)** — each feature (`core`, `senior`, `watchman`, …) lists the rules + functions it owns + its deps + the `kingdom.json` config flag that activates it. `source functions/_load.sh; load_feature senior` sources that feature's functions + deps; **don't `load_feature` a feature to leave it out**. This is the composability layer: features plug in/out with no edits to core. |
-| [`cards/`](cards/) | **Card display library** (v0.22.0+) — 24 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
+| [`cards/`](cards/) | **Card display library** (v0.22.0+) — 25 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
 | [`skill-routing.md`](reference/skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
 
 ---

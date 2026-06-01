@@ -40,13 +40,24 @@ spawn_master_workspace () {
   # Step 1b (v0.31.1): explicitly launch claude in the workspace's surface.
   # Without this, the workspace sits at a bash prompt and dispatch briefs
   # sent later via `cmux send` land in the shell — silent failure mode.
-  local surface=$(cmux_rpc workspace.list \
-    | jq -r ".[] | select(.ref == \"$ref\") | .surfaces[0].ref" 2>/dev/null)
-  if [ -n "$surface" ] && [ "$surface" != "null" ]; then
+  # v0.37.0 (K2/K6): surface resolution moved to cmux_first_surface, which is
+  # robust to the wrapped {workspaces:[…]} schema. Plus a LOUD post-launch
+  # verify — read the screen and confirm Claude actually booted instead of
+  # assuming a fixed sleep was enough.
+  local surface=$(cmux_first_surface "$ref")
+  if [ -n "$surface" ]; then
     cmux_rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}"
-    sleep 1.5   # claude boot — same budget proven by spawn_watchman_loop
+    local tries=0 booted=""
+    while [ "$tries" -lt 6 ]; do          # up to ~9s
+      sleep 1.5
+      if cmux_read_screen "$ref" 2>/dev/null | grep -qiE 'Claude Code|esc to interrupt|❯ '; then
+        booted=1; break
+      fi
+      tries=$((tries + 1))
+    done
+    [ -z "$booted" ] && echo "⚠️ $label: claude REPL not confirmed after ~9s; dispatch may land in shell. Check the lane." >&2
   else
-    echo "⚠️ $label: no surface found post-spawn; claude REPL not launched. Dispatch will land in shell." >&2
+    echo "⚠️ $label: no surface found post-spawn (cmux_first_surface empty); claude REPL not launched. Dispatch will land in shell." >&2
   fi
 
   # Step 2: FORCE sidebar name (override "✳ Claude Code" auto-title)

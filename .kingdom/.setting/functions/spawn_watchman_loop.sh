@@ -10,11 +10,11 @@ spawn_watchman_loop () {
   local ws_ref="$1"
 
   # Find the surface inside this workspace (claude REPL is the receiver — already
-  # launched by spawn_master_workspace Step 1b)
-  local surface=$(cmux_rpc workspace.list \
-    | jq -r ".[] | select(.ref == \"$ws_ref\") | .surfaces[0].ref" 2>/dev/null)
+  # launched by spawn_master_workspace Step 1b). v0.37.0 (K2/K6): cmux_first_surface
+  # handles the wrapped {workspaces:[…]} schema the old inline jq broke on.
+  local surface=$(cmux_first_surface "$ws_ref")
 
-  if [ -z "$surface" ] || [ "$surface" = "null" ]; then
+  if [ -z "$surface" ]; then
     echo "❌ spawn_watchman_loop: no surface found in $ws_ref" >&2
     return 1
   fi

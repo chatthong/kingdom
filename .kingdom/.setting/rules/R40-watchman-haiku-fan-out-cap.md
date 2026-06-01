@@ -21,4 +21,6 @@
 
 **Aggregation:** watchman collects each sub-agent's sentinel, then writes `WATCH_TICK_<UTC>.md` as the per-tick summary. King reads the latest `WATCH_TICK_*.md` at session start (R14, step 7).
 
+**Where these live (K10, v0.37.0):** ALL `WATCH_*` artifacts above are written to `$LOGS/watch/` (= `.kingdom/<project>/logs/watch/`), never `<project>/docs/test-reports/`. Monitoring heartbeats stay OUT of the project git tree; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` gate reports ride PRs in `docs/test-reports/`. (The `WATCH_CR_`/`WATCH_CONFLICT_` names above are illustrative; the live writers use `WATCH_REVIEW_`/`WATCH_CONFLICTS_` — see [`watchman-duties.md`](../roles/watchman-duties.md).)
+
 **Cap enforcement mechanics:** before spawning each sub-agent, watchman checks its internal `spawned_this_tick` counter. If `spawned_this_tick >= haikuCapPerTick`, remaining work items are queued for the next tick — not dropped.

@@ -4,6 +4,51 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.38.0] — 2026-06-01
+
+### Added
+
+- **New command `/kingdom:update`** — migrate an existing workspace to the freshly-updated plugin **without losing session state or memory**. Previously the only way to refresh the kit was `/kingdom:init`, which conflates "scaffold a new workspace" with "re-sync an existing one" and (pre-v0.37.0) could clobber a hand-tuned `kingdom.json`. `/kingdom:update` treats the workspace as three categories: **shape** (`.kingdom/.setting/` — clean-replaced from the plugin, backup → fresh, stale files removed, local patches preserved in the `.bak`), **config** (each `<project>/kingdom.json` — additively merged so new schema keys are added while every existing value wins), and **runtime** (`tasks/`, `logs/`, `state.json`, `king-inbox`, `watchman_state.json` — never touched). Memory (`~/.claude/projects/<…>/memory/`) lives outside the workspace and is structurally never touched. The command previews the full delta (shape files changed/added/removed, per-project keys to add, preserved runtime) and requires an explicit `update` confirmation before any write; every write is backed up first. New `cards/update-report.md`.
+- **Kit version stamp `.kingdom/.setting/.kingdom-version`.** Both `/kingdom:init` and `/kingdom:update` now write the installed plugin version into the kit, so drift between a workspace and the installed plugin is detectable.
+- **`/kingdom:self-care` Check 12 — version drift.** Compares the kit's stamp against the installed plugin and recommends `/kingdom:update` when behind (or when the stamp is absent on a pre-0.38.0 kit). Informational; never auto-migrates.
+
+### Changed
+
+- The command surface is now **5 commands** (`work`, `save`, `init`, `self-care`, `update`). The 4-command surface (v0.29.0) deliberately folded updates into `init`; real consumer use (a workspace with 57 task files + 104 logs + tuned config) showed migration is a distinct enough concern — and risky enough to get wrong — to warrant its own verb with its own preview-and-preserve safety model.
+
+---
+
+## [0.37.0] — 2026-06-01
+
+Consumer bug-report pass: a full day driving a 9-lane fleet on a consumer project (cmux.app + macOS/zsh) surfaced a cluster of silent-stall bugs (K1–K13) plus a hard lesson about the `kingdom` overlay being wiped before the human could review. This release fixes the verified-in-source bugs, hardens the overlay-review contract, and adds R51 (parallel sub-agents as a default for every lane + the King).
+
+### Fixed
+
+- **K1 — `_load.sh` was not zsh-safe (silent total failure).** Claude Code's Bash tool runs **zsh** on macOS, where `${BASH_SOURCE[0]}` is empty → `_KFN_DIR` resolved to cwd → every `load <fn>` failed with "command not found", and the subfolder fallback used a shell glob that **aborts** the function under zsh's `NOMATCH`. Rewrote self-location to detect zsh (`eval`-hidden `${${(%):-%x}:A:h}`, opaque to bash's parser) and replaced both globs with `find`. Verified `bash -n` + `zsh -n` clean.
+- **K2 / K6 — spawn helpers assumed a flat `workspace.list` array (lanes came up at a dead bash prompt).** This cmux returns `{window_ref, workspaces:[…]}`, but `spawn_master_workspace`, `spawn_watchman_loop`, and `spawn_senior_loop` all did `jq '.[] | select(.ref…)'` → `surface=null` → the post-spawn `claude\n` and `/loop` sends were silently skipped. New shared helper `cmux_first_surface` (`functions/cmux/`) handles both schemas (`(.workspaces // .)`); all three rewired to it. `spawn_master_workspace` now also **verifies** Claude actually booted via `cmux_read_screen` (loud warning instead of a fixed-sleep assumption).
+- **K3 — `cmux_send` long pastes didn't submit into an idle REPL.** A single Enter after a big paste leaves the composer paste-collapsed → the brief sits unsubmitted → the lane stalls. `cmux_send` now verifies and re-sends Enter if the collapsed-paste hint is still on screen.
+- **K10 — Watchman polluted the project git tree.** `WATCH_*.md` monitoring artifacts were written to `<project>/docs/test-reports/` (they ride PRs). Relocated **all** `WATCH_*` writes (heartbeats, reviews, CVE/conflict/git/tick) to `.kingdom/<project>/logs/watch/` across `watchman.md` + `watchman-duties.md`; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` reports stay in the project tree.
+- **`kingdom_discard_overlay` was cwd-dependent** (bare `git checkout`). Now takes a project root and uses `git -C`, and `clean -fd`s the untracked overlay files the old version left behind.
+
+### Changed
+
+- **K8 — `/kingdom:init` no longer blind-overwrites a hand-tuned `kingdom.json`.** Existing config now offers `merge` (default — template adds only NEW schema keys, your values win via `jq '.[0] * .[1]'`), `overwrite` (with a timestamped `.bak`), or `keep`. No more lost all-`opus` lane config.
+- **K9 — `/kingdom:init` `.setting` migration is now a clean-replace, not an overlay.** It renames the existing tree to `.setting.bak-<ts>` then installs fresh, so a stale flat layout (`kings.md`, `workers.md`, `cmux.md`, …) can't linger beside the new `roles/`+`reference/` dirs as dead traps.
+- **K12 — dispatch briefs now say issue closure is FLAG-ONLY.** Briefs instruct lanes to never run `gh issue close`; use `Closes #N` in the PR body or flag king-inbox. Closure = lead sign-off.
+- **K13 — `integration.unit` default is now `"pod"`** (one branch per Senior pod → one PR) with both `pod` and `story` semantics documented in the template.
+- **R15 / R29 hardened — the overlay is sacred until push.** R15 now requires overlaying the **full** gated set so the user sees every in-flight change (all N PRs) as dirty files in one review surface. R29 now explicitly **BANS** `git reset --hard` / `git restore .` / `git clean -fd` on the overlay while gated work awaits review or push, and adds a classify-don't-wipe rule for pre-existing dirty kingdom (in-flight surface → keep; authored-on-kingdom → R4 violation, recover to a worktree). Motivated by the 2026-05-26 incident where the overlay was repeatedly wiped before the human could review 3 push-eligible PRs.
+
+### Added
+
+- **R51 (Tier 2) — every lane master + King fans heavy work out to parallel sub-agents.** Multi-file reads, greps, doc-orientation, review fan-outs should run as parallel sub-agents (soft target `kingdom.json.subAgents.parallelTarget`, default 10 — a strong default, not a hard gate), with model by work type (sonnet=standard, haiku=bulk, opus=sensitive). King fans out via `cmux_send`/visible tabs only (R38); still bounded by `_bounded_wait` (R42); the watchman keeps its own hard cap (R40). New `subAgents` block in the `kingdom.json` template.
+
+### Notes
+
+- **K5 (the `PreToolUse … hookSpecificOutput missing hookEventName` error) is NOT a plugin file** — it lives in a hook in `~/.claude`/workspace `settings.json`. `/kingdom:init` does not install it; locate and repair that hook separately. K4 (loop stalls on a failed wakeup) is downstream of K5.
+- **K11 (`sync_roadmap.py` native-Milestone support)** is a consumer-project script, not a kingdom plugin file — out of scope for the plugin repo.
+
+---
+
 ## [0.36.2] — 2026-05-25
 
 ### Added

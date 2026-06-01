@@ -73,7 +73,9 @@ NEW_SHA=$(git -C "$WORKTREES/$LANE" rev-parse HEAD 2>/dev/null)
 [ "$LAST_SHA" = "$NEW_SHA" ] && continue   # no new commits — skip
 
 UTC=$(date -u +%Y-%m-%dT%H%MZ)
-REVIEW_FILE="$PROJ/docs/test-reports/WATCH_REVIEW_${UTC}__${LANE}.md"
+# K10 (v0.37.0): WATCH_REVIEW artifacts go to $LOGS/watch/, not the project tree
+mkdir -p "$LOGS/watch"
+REVIEW_FILE="$LOGS/watch/WATCH_REVIEW_${UTC}__${LANE}.md"
 
 Agent(
   model="haiku",
@@ -139,7 +141,10 @@ Write ONLY the review file — no other edits."
 ```bash
 KINGDOM_DIRTY=$(git -C "$PROJ" status --porcelain 2>/dev/null | head -1)
 if [ -n "$KINGDOM_DIRTY" ] && [ "$(git -C "$PROJ" branch --show-current)" = "kingdom" ]; then
-  KING_REVIEW_FILE="$PROJ/docs/test-reports/WATCH_REVIEW_${UTC}__king-overlay.md"
+  # K10 (v0.37.0): king-overlay WATCH_REVIEW goes to $LOGS/watch/, not the project tree.
+  # mkdir here too — this block can run on a tick where no lane review fired first.
+  mkdir -p "$LOGS/watch"
+  KING_REVIEW_FILE="$LOGS/watch/WATCH_REVIEW_${UTC}__king-overlay.md"
   Agent(
     model="haiku",
     prompt="Review King's current kingdom-branch overlay against the docs above.
@@ -174,13 +179,14 @@ Detect the project's package manager(s) by inspecting the project root. Spawn ON
 
 Multiple managers may coexist (e.g., a monorepo with both `pnpm-lock.yaml` and `requirements.txt`). Each gets its own Haiku, but each counts against `haiku_cap_per_tick`.
 
-**Output file:** `$LOGS/WATCH_CVE_<UTC>.md`
+**Output file:** `$LOGS/watch/WATCH_CVE_<UTC>.md`
 
 **Haiku prompt (per manager):**
 
 ```bash
 UTC=$(date -u +%Y-%m-%dT%H%MZ)
-CVE_FILE="$LOGS/WATCH_CVE_${UTC}.md"
+mkdir -p "$LOGS/watch"
+CVE_FILE="$LOGS/watch/WATCH_CVE_${UTC}.md"
 
 Agent(
   model="haiku",
@@ -207,7 +213,8 @@ Build a file-touch matrix across all active lanes since the last tick. Flag case
 
 ```bash
 UTC=$(date -u +%Y-%m-%dT%H%MZ)
-CONFLICT_FILE="$LOGS/WATCH_CONFLICTS_${UTC}.md"
+mkdir -p "$LOGS/watch"
+CONFLICT_FILE="$LOGS/watch/WATCH_CONFLICTS_${UTC}.md"
 
 # Build per-lane changed-file lists (using last-tick SHA from watchman_state.json)
 declare -A LANE_FILES
@@ -261,7 +268,8 @@ Spawn one Haiku to scan for git-state drift across the kingdom worktree layout.
 
 ```bash
 UTC=$(date -u +%Y-%m-%dT%H%MZ)
-GIT_FILE="$LOGS/WATCH_GIT_${UTC}.md"
+mkdir -p "$LOGS/watch"
+GIT_FILE="$LOGS/watch/WATCH_GIT_${UTC}.md"
 
 Agent(
   model="haiku",
@@ -295,7 +303,7 @@ Write ONLY the git hygiene file — no other edits."
 
 At the END of each `/loop` tick (after all four fan-out duties complete and their Haiku sub-agents have written their output files), Watchman writes a single tick summary:
 
-**File:** `$LOGS/WATCH_TICK_<UTC>.md`
+**File:** `$LOGS/watch/WATCH_TICK_<UTC>.md`
 
 ```markdown
 # Watchman tick summary — <UTC>

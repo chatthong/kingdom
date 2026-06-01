@@ -1,6 +1,6 @@
 # functions — index
 
-> One bash helper per file. Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder. 81 functions total.
+> One bash helper per file. Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder. 82 functions total.
 
 > Layout: flat files = backend-agnostic mechanics; **`cmux/`** = the cmux.app backend — one wrapper per `cmux` subcommand **plus the `browser_*` wrappers** (cmux.app's built-in browser is unavailable under Ghostty+tmux, so a future **`tmux/`** backend folder won't include them). Features: **core** (always) deps **cmux** (always); **browser** loads on demand; **senior**/**watchman** gated by `kingdom.json`.
 
@@ -50,7 +50,7 @@
 | `summarise_gate_failure` | — | [summarise_gate_failure.sh](summarise_gate_failure.sh) |
 | `wait_for_ter_decision` | — | [wait_for_ter_decision.sh](wait_for_ter_decision.sh) |
 
-## cmux (22)
+## cmux (23)
 | function | purpose | file |
 |---|---|---|
 | `cmux_attention_clear` | Resolve an attention override: clear the unread badge and restore the active-state description. | [cmux/cmux_attention_clear.sh](cmux/cmux_attention_clear.sh) |
@@ -59,6 +59,7 @@
 | `cmux_close_surface` | Close a single surface (tab/pane). See reference/cmux.md § Teardown. | [cmux/cmux_close_surface.sh](cmux/cmux_close_surface.sh) |
 | `cmux_close_window` | Close an entire native cmux.app window (rare). See reference/cmux.md § Teardown. | [cmux/cmux_close_window.sh](cmux/cmux_close_window.sh) |
 | `cmux_close_workspace` | Close a whole workspace (lane teardown, /kingdom:save). NOT tab-action close. See reference/… | [cmux/cmux_close_workspace.sh](cmux/cmux_close_workspace.sh) |
+| `cmux_first_surface` | Resolve the first surface ref in a workspace, robust to the wrapped `{workspaces:[…]}` schema… | [cmux/cmux_first_surface.sh](cmux/cmux_first_surface.sh) |
 | `cmux_identify` | Return the caller's cmux context as JSON (caller/focused workspace_ref + surface_ref, socket… | [cmux/cmux_identify.sh](cmux/cmux_identify.sh) |
 | `cmux_list_pane_surfaces` | List the surface refs of the current/target panes (e.g. to grab a freshly-spawned tab's surf… | [cmux/cmux_list_pane_surfaces.sh](cmux/cmux_list_pane_surfaces.sh) |
 | `cmux_list_panes` | List a workspace's panes as JSON. See reference/cmux.md § Inspect topology. | [cmux/cmux_list_panes.sh](cmux/cmux_list_panes.sh) |

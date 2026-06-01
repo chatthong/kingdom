@@ -66,7 +66,7 @@ The Senior is the sole within-story reviewer (R48). Its review covers what a per
 - **Architecture:** are the seams right, is anything leaking across module boundaries, did two workers solve the same problem twice?
 - **Doc cross-check:** does the change honor the documented decisions (R45 orientation digest)?
 
-Fan-out model defaults (R45): Haiku for cheap reads, Sonnet for per-area review, Opus (the Senior itself) for synthesis and sensitive judgment.
+Fan-out model defaults (R45/R51): Haiku for cheap reads, Sonnet for per-area review, Opus (the Senior itself) for synthesis and sensitive judgment. Per R51, fan out in parallel (soft target `subAgents.parallelTarget` ≈ 10, bounded by `_bounded_wait`/R42) rather than reviewing areas serially.
 
 **Routing a fix:** the fix-task names the owning worker, the file/area, and the specific issue. It is a normal dispatch (visible, in-pod). The worker fixes on its `worker-N` branch, signals done, the Senior re-merges and re-reviews. This is the loop.
 

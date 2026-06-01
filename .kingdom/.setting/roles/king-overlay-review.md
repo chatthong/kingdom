@@ -24,6 +24,8 @@ After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
    git fetch origin
    git reset --hard "origin/$BASE"
    ```
+   > [!WARNING]
+   > This `reset --hard` is safe ONLY at the START of a fresh review cycle, when nothing on kingdom awaits review or push. Before running it, check `git status` on kingdom: if there are uncommitted changes you did not just overlay, STOP (R29) — those are either an in-flight review surface (keep) or work authored directly on kingdom (R4 violation — recover into a worktree first). Never reset over unreviewed/unpushed work.
 2. **Overlay each gated lane's changes onto kingdom's working tree** (no commits — just files modified):
    ```bash
    # For each gated lane:
@@ -43,12 +45,14 @@ After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
 5. **Ask the user to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
 6. **Wait for the user's approval**.
 7. **On approval — carve `feature/<topic>` from each lane's tip** (NOT from kingdom; the feature branch is the lane's commits, untouched). Push, open PR.
-8. **After push — discard the kingdom overlay**:
+8. **After push — and ONLY after — discard the kingdom overlay** (R29):
    ```bash
-   git restore .                        # discard working-tree changes
-   # OR `git reset --hard origin/develop` if needed
+   kingdom_discard_overlay "$PWD"       # checkout kingdom + restore . + clean -fd
+   # Kingdom is back to clean = origin/$BASE. Next gate-pass starts a fresh overlay.
    ```
-   Kingdom is back to clean = `origin/develop`. Next gate-pass starts a fresh overlay.
+
+   > [!CAUTION]
+   > **Never run step 8 before the push has gone out.** `git restore .` / `git reset --hard` / `git clean -fd` on kingdom while gated work still awaits the user's review or push approval destroys the exact review surface they asked for ("I must see all the dirty files / all N PRs before you push" — R15). Discard fires AFTER `gh pr create` succeeds for the batch, never as a "let me tidy kingdom first" reflex. If you find dirty files on kingdom you did NOT just overlay, do not wipe them — classify per R29 (in-flight review surface → keep; authored-on-kingdom → R4 violation, recover into a worktree first).
 
 ### Why never commit on kingdom?
 

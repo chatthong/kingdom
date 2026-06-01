@@ -95,6 +95,7 @@
         "cmux_close_surface",
         "cmux_close_window",
         "cmux_close_workspace",
+        "cmux_first_surface",
         "cmux_identify",
         "cmux_list_pane_surfaces",
         "cmux_list_panes",

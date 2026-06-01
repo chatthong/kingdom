@@ -425,13 +425,19 @@ If `kingdom.json.integration.enabled` is true and `SENIORS > 0`, the King runs t
 
 ```bash
 INTEG_ON=$(jq -r '.integration.enabled // false' "$KJSON")
-UNIT=$(jq -r '.integration.unit // "story"' "$KJSON")
+UNIT=$(jq -r '.integration.unit // "pod"' "$KJSON")   # K13: default "pod" (one branch per Senior → one PR)
 
 if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
   # 1. PARTITION (R50): pick units from the task-ledger, scope them so file-areas
   #    do not overlap, sequence dependencies. The King decides pod count + size
   #    within sanityCap (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
-  #    Output: a list of "story-id : worker-1 worker-2 ..." pod assignments.
+  #
+  #    $UNIT (K13) controls branch/PR granularity when composing POD_ASSIGNMENTS:
+  #      "pod"   (default) → group ALL of a Senior's stories under ONE story-id →
+  #                          ONE branch per Senior pod → ONE PR. Most teams want this.
+  #      "story"          → one POD entry (and thus one branch/PR) per CSV-story/issue,
+  #                          so a Senior owning N stories produces N branches.
+  #    Output: a list of "story-id=worker-a,worker-b,..." pod assignments built per $UNIT.
 
   S=0
   for POD in $POD_ASSIGNMENTS; do            # each POD = "<story-id>=<worker-a,worker-b,...>"

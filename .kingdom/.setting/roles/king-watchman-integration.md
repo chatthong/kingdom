@@ -29,7 +29,7 @@ Before `cmux_send "$WORKER_WS_N" "<brief>"`:
 source "$LOGS/workspace-refs.env"   # exposes KING_WS, WORKER_WS_N, etc.
 
 # 1. Is develop green?
-LATEST_DEV=$(ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1)
+LATEST_DEV=$(ls -1t "$LOGS/watch/WATCH_"*develop_*.md 2>/dev/null | head -1)
 if echo "$LATEST_DEV" | grep -q 'develop_RED'; then
   echo "⛔ develop is RED per $(basename "$LATEST_DEV") — pause dispatch until watchman reports green"
   return 1
@@ -145,10 +145,10 @@ King writes this synthesis every morning, after every long break, and whenever t
 
 ```bash
 # Latest watchman develop heartbeat (passing OR failing)
-ls -1t "$PROJ/docs/test-reports/WATCH_"*develop_*.md 2>/dev/null | head -1
+ls -1t "$LOGS/watch/WATCH_"*develop_*.md 2>/dev/null | head -1
 
 # All PR transitions logged today
-ls -1t "$PROJ/docs/test-reports/WATCH_"*pr-*.md 2>/dev/null \
+ls -1t "$LOGS/watch/WATCH_"*pr-*.md 2>/dev/null \
   | xargs -I{} grep -l "$(date -u +%Y-%m-%d)" {} 2>/dev/null
 
 # Current PR state snapshot

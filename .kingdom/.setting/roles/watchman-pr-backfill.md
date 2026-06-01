@@ -32,8 +32,9 @@ done
 
 # One call — handles parallel-across-branches, MERGED/CLOSED skip, amend +
 # --force-with-lease, and master_agent.log line. Per-lane stdout lines reach
-# the WATCH_PR_BACKFILL.md report.
-parallel_edit_fanout "(PR #pending)" "(PR #${pr})" "$spec" > "$LOGS/WATCH_PR_BACKFILL.md" 2>&1
+# the WATCH_PR_BACKFILL.md report. (K10 v0.37.0: WATCH_* live in $LOGS/watch/.)
+mkdir -p "$LOGS/watch"
+parallel_edit_fanout "(PR #pending)" "(PR #${pr})" "$spec" > "$LOGS/watch/WATCH_PR_BACKFILL.md" 2>&1
 ```
 
 **On per-lane `(PR #${pr})` expansion:** the helper does literal string replace, not shell expansion, so the second argument must already encode the lane's own PR number. The wrapper above is illustrative; in practice watchman calls `parallel_edit_fanout` **once per lane** when PR numbers differ across lanes, or once collectively when the search/replace is identical (e.g. a structural footer change). The library favours the latter — different PR numbers per lane is the watchman-specific edge.
@@ -63,6 +64,6 @@ This is still parallel **across** lanes, with a hard ceiling so a stuck `gh pr v
 
 **Side duty — stale `.lane` claim sweep:** for every `<LOGS>/done/<UTC>__<sub>-<lane>__<id>.flag` sentinel, check `<LOGS>/claims/<lane>__<task-id>.lane` — if both exist, rm the claim. Lane is then free for next dispatch.
 
-**Side duty — kingdom-task-file checkbox audit:** on each tick, walk `.kingdom/<project>/tasks/*.md` and flag any file whose `Status` is `verifying` but whose matching sentinel exists in `<LOGS>/done/` → write to `WATCH_TASK_AUDIT.md` for King (NOT auto-flip; status is worker's responsibility per R23/R24).
+**Side duty — kingdom-task-file checkbox audit:** on each tick, walk `.kingdom/<project>/tasks/*.md` and flag any file whose `Status` is `verifying` but whose matching sentinel exists in `<LOGS>/done/` → write to `<LOGS>/watch/WATCH_TASK_AUDIT.md` for King (NOT auto-flip; status is worker's responsibility per R23/R24).
 
 This duty IS Tier 2 maintenance — failure to backfill is cosmetic, not load-bearing. King carries on without it; the TODO files just stay ugly until next tick.

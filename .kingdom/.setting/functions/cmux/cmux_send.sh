@@ -10,4 +10,12 @@ cmux_send () {
   case "$ref" in surface:*) flag=--surface ;; esac
   cmux send "$flag" "$ref" -- "$text"
   cmux_send_key "$ref" Enter
+  # K3: a long paste into an IDLE REPL can stay "paste-collapsed" after a single
+  # Enter — the brief sits unsubmitted in the composer and the lane silently
+  # stalls. Verify it cleared; if the collapsed-paste hint is still on screen,
+  # press Enter once more. Best-effort: read-screen may not exist for surface refs.
+  sleep 0.3
+  if cmux_read_screen "$ref" 2>/dev/null | grep -qiE 'paste again to expand|\[pasted [0-9]+ '; then
+    cmux_send_key "$ref" Enter
+  fi
 }

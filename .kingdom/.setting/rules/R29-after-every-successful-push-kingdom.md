@@ -1,6 +1,23 @@
-### R29. After every successful push, kingdom MUST be reset to `origin/develop` tip — Tier 2 (v0.19.1+)
+### R29. After every successful push, kingdom MUST be reset to `origin/develop` tip — Tier 2 (v0.19.1+, hardened v0.37.0)
 
 **Push completes → kingdom overlay is discarded.** Not deferred to "after PR merge." The user's mental model is "push to remote → kingdom is clean like a fresh `git pull`" — the spec must match that.
+
+> [!CAUTION]
+> **Discard the overlay ONLY after the gated work is pushed — NEVER before.** This is the load-bearing half of the rule. The `kingdom` working tree is the human's review surface (R15): the user reviews the uncommitted overlay, then says `push`. Wiping it earlier destroys exactly what they need to see.
+>
+> 🚫 **BANNED while gated work awaits review or push approval** (anything that drops the overlay):
+> - `git reset --hard origin/$BASE`
+> - `git restore .` / `git checkout -- .`
+> - `git clean -fd`
+> - any "let me clean up / reset kingdom first" reflex before the user has reviewed + approved + the push has gone out
+>
+> ✅ The ONLY time to discard is **AFTER** `gh pr create` succeeds for the gated batch (the sequence below).
+
+**Pre-existing dirty kingdom at session start ≠ garbage to wipe.** If the King finds uncommitted changes on `kingdom` it did not just overlay, STOP and classify before touching anything:
+- Changes that match a gated lane's diff → that's an in-flight review surface. Keep it; do NOT wipe.
+- Changes authored directly on kingdom with no matching lane → an **R4 violation already happened** (work landed on kingdom instead of a `.worktrees/<lane>/`). Recover them into a lane worktree (`git stash` → apply on the right lane), THEN reset. Never silently `reset --hard` work the user may not have seen or pushed.
+
+**Incident that motivated the hardening (2026-05-26):** a King session repeatedly ran `git reset --hard origin/develop && git clean -fd` on the kingdom overlay *while the user was still trying to review 3 push-eligible PRs as dirty files*. Worse, a fix had been authored ON kingdom (an R4 violation) instead of in a worktree, so the reset destroyed unpushed work. The user, rightly furious: "I MUST SEE ALL THE DIRTY FILES BEFORE YOU PUSH." The overlay is sacred until push.
 
 **Where this is already documented (but was being skipped):**
 

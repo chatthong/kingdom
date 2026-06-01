@@ -59,6 +59,17 @@ On `yes` OR if `SETTING_MISSING`, run:
 ```bash
 SRC="${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting"
 DST="$PWD/.kingdom/.setting"
+
+# K9 (v0.37.0): clean-replace, NOT overlay. An older flat layout (kings.md,
+# workers.md, cmux.md, …) left beside the new roles/ + reference/ dirs becomes a
+# dead trap — index.md points at the new paths, so the stale flat files just
+# mislead. Back up any existing tree by renaming it, then install fresh; this
+# guarantees no removed-upstream file survives the migration.
+if [ -d "$DST" ]; then
+  BAK="$DST.bak-$(date -u +%Y%m%d-%H%M%S)"
+  mv "$DST" "$BAK"
+  echo "Backed up existing .setting/ -> $(basename "$BAK") (clean-replace, no stale files carried over)"
+fi
 mkdir -p "$DST/roles" "$DST/reference" "$DST/rules" "$DST/functions" "$DST/cards"
 
 # top-level files (index + the two back-compat pointers + the feature manifest)
@@ -73,6 +84,9 @@ cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing
 cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R50 + index.md
 cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ backend (cmux_* + browser_* wrappers). -R so the cmux/ subfolder comes along (plain cp skips directories).
 cp "$SRC/cards/"*.md      "$DST/cards/"
+
+# Stamp the kit version (v0.38.0+) so /kingdom:update can detect drift later.
+jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" > "$DST/.kingdom-version"
 
 echo "Scaffolded .setting/: $(find "$DST" -name '*.md' -o -name '*.sh' -o -name '*.json' | wc -l | tr -d ' ') files"
 ls -1 "$DST"
@@ -148,23 +162,32 @@ If `JSON_EXISTS`, show the existing content:
 cat "$PWD/.kingdom/${project}/kingdom.json"
 ```
 
-Then ask:
+Then ask (K8 — never blind-overwrite a hand-tuned config):
 
-> `.kingdom/<project>/kingdom.json` already exists (shown above). Overwrite with the new values? (yes/no)
+> `.kingdom/<project>/kingdom.json` already exists (shown above). Choose:
+> - `merge` (recommended) — add any NEW schema keys this template version introduces; keep ALL your existing values (shape, per-lane models, gate commands, integration settings, …)
+> - `overwrite` — replace with template defaults (loses your tuning; a timestamped `.bak` is written first)
+> - `keep` — leave it untouched, skip to Step 5
 
-Wait for confirmation before continuing. If `JSON_MISSING`, continue without asking.
+Record the answer as `json_action` (`merge` / `overwrite` / `keep`) for Step 4.3. On `keep`, skip Step 4.2 + 4.3 and go to Step 5. If `JSON_MISSING`, treat as a fresh write (`json_action=fresh`, template verbatim) without asking.
 
-### Step 4.2 — Show the project config (template defaults)
+### Step 4.2 — Preview what will be written
 
-`init` writes the template **as-is** (no flag substitution, v0.33.0). Show the user what will be written:
+Show the user the exact result for their chosen `json_action`. For `fresh`/`overwrite` it's the template defaults; for `merge` it's the template-plus-existing result (existing values win):
 
 ```bash
-jq '.' "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template"
+TEMPLATE="${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template"
+TARGET="$PWD/.kingdom/${project}/kingdom.json"
+case "${json_action:-fresh}" in
+  keep)   echo "Keeping existing $TARGET unchanged — nothing to preview." ;;
+  merge)  jq -s '.[0] * .[1]' "$TEMPLATE" "$TARGET" ;;   # template base, existing wins
+  *)      jq '.' "$TEMPLATE" ;;                            # fresh / overwrite = template
+esac
 ```
 
 Then ask:
 
-> Will write the default `kingdom.json` above to `.kingdom/<project>/kingdom.json`. Tune the shape later at `/kingdom:work` time or by editing this file. Proceed? (yes/no)
+> Will write the `kingdom.json` above to `.kingdom/<project>/kingdom.json`. Proceed? (yes/no)
 
 Wait for confirmation.
 
@@ -174,9 +197,30 @@ Wait for confirmation.
 mkdir -p "$PWD/.kingdom/${project}/tasks"
 mkdir -p "$PWD/.kingdom/${project}/logs"
 
-# Copy the template verbatim (defaults). Edit kingdom.json afterward to change shape/base.
-jq '.' "${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template" \
-  > "$PWD/.kingdom/${project}/kingdom.json"
+TEMPLATE="${CLAUDE_PLUGIN_ROOT}/.kingdom/templates/kingdom.json.template"
+TARGET="$PWD/.kingdom/${project}/kingdom.json"
+
+# K8 (v0.37.0): never blind-overwrite a hand-tuned config.
+#   merge     → template is the base, existing values WIN on every overlapping key
+#               (jq `*` deep-merge: right operand wins) → new schema keys added, tuning kept
+#   overwrite → back up first, then template verbatim
+#   fresh     → template verbatim (no existing file)
+case "${json_action:-fresh}" in
+  keep)
+    echo "Keeping existing $TARGET unchanged (json_action=keep)."
+    ;;
+  merge)
+    cp "$TARGET" "$TARGET.bak-$(date -u +%Y%m%d-%H%M%S)"
+    tmp=$(mktemp); jq -s '.[0] * .[1]' "$TEMPLATE" "$TARGET" > "$tmp" && mv "$tmp" "$TARGET"
+    ;;
+  overwrite)
+    cp "$TARGET" "$TARGET.bak-$(date -u +%Y%m%d-%H%M%S)"
+    jq '.' "$TEMPLATE" > "$TARGET"
+    ;;
+  *)  # fresh (no existing file)
+    jq '.' "$TEMPLATE" > "$TARGET"
+    ;;
+esac
 ```
 
 Print the written file for review:

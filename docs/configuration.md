@@ -74,7 +74,7 @@ Plural forms (`workers=`, `seniors=`, …) are accepted; the docs show singular.
 
 That's the entire customisation surface. **Workers are generic capacity**, no preset focus or path locks. The King assigns each task at dispatch time (see [`king.md`](../.kingdom/.setting/roles/king.md) → "Dispatch brief schema"), so `worker-1` and `worker-2` are interchangeable. Same worker can do backend today, frontend tomorrow, financial-model audit the day after.
 
-> **Re-running `/kingdom:init <project>` on an existing project** shows the existing config and asks before overwriting. Re-running replaces the whole file, back up your `gate.*` customisations first if you've filled them in.
+> **Updating an existing project's config:** prefer **`/kingdom:update`** — it additively merges any new schema keys into your `kingdom.json` while keeping every value you set (and preserves all runtime + memory). Re-running **`/kingdom:init <project>`** instead offers a `merge` / `overwrite` / `keep` prompt (default `merge`, which also preserves your values; `overwrite` writes a timestamped `.bak` first). Either way your `gate.*` customisations are safe — no need to back them up manually.
 
 ## Configure your project
 

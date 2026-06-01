@@ -37,12 +37,12 @@ done
 
 When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail.
 
-Then — per § "Kingdom as review staging — MANDATORY before any push" — gate-pass flows directly into kingdom merge:
+Then — per [`king-overlay-review.md`](king-overlay-review.md) (the WORKING-TREE OVERLAY model, v0.17.0+) — gate-pass flows into the kingdom **overlay** (NOT a merge commit; the `kingdom` branch never commits, R4):
 
-- **Gate PASS** → King **(1)** merges the lane into `kingdom` (resolving common conflicts; surfacing real source-file collisions to the user). **(2)** Prints the review surface (`git log --oneline origin/develop..kingdom` + `git diff origin/develop..kingdom --stat`). **(3)** Fires `cmux_notify "$KING_WS" "👑 King · review on kingdom?" "<lane> · <sub-task-id>"` and asks the user in chat: "Gate passed for `<lane>` task `<ID>` + merged into kingdom. Review the diff above; ready for push?"
-- **Gate FAIL** → King fires `cmux_notify "<lane-ws>" "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO kingdom merge happens on fail.
+- **Gate PASS** → King **(1)** overlays the lane onto kingdom's working tree via `kingdom_overlay_lane "$PWD" "<lane>" "$BASE"` (the R4-guarded helper: `git diff origin/$BASE..<lane> | git apply --3way`; resolving common conflicts in the working tree, surfacing real source-file collisions to the user — **no `git merge`, no commit on kingdom**). **(2)** Prints the review surface as UNCOMMITTED changes: `git status --short` + `git diff "origin/$BASE" --stat`. **(3)** Fires `cmux_notify "$KING_WS" "👑 King · review on kingdom?" "<lane> · <sub-task-id>"` and asks in chat: "Gate passed for `<lane>` task `<ID>` + overlaid onto kingdom as uncommitted changes. Review the diff above (GitHub Desktop's Changes tab); ready for push?"
+- **Gate FAIL** → King fires `cmux_notify "<lane-ws>" "👑 King · gate FAIL"` and tells the user what failed. May dispatch a fix-task back to the lane (King's call). NO overlay happens on fail.
 
-Push only happens after the user explicitly approves the kingdom review. King NEVER skips the merge-to-kingdom step.
+Push only happens after the user explicitly approves the kingdom review. King NEVER skips the overlay-onto-kingdom step, and NEVER commits/merges on the `kingdom` branch (R4). When ≥2 lanes are gated, overlay ALL of them so the user reviews the full set at once (R15); the overlay stays dirty until push (R29).
 
 This eliminates two failure modes:
 - "lane finished but King stayed idle" (v0.14.10 fix)

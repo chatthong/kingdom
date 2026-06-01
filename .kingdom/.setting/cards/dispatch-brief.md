@@ -39,6 +39,12 @@ Standards (rules.md):
   R24 task file continuously updated, not write-once
   R25 update BOTH kingdom task file AND project task-ledger
   R28 parallel by default for scan + non-conflicting edit
+  R51 fan heavy work out to parallel sub-agents (soft target ~10;
+      sonnet=standard, haiku=bulk reads/greps, opus=sensitive)
+
+Issue closure (K12): FLAG-ONLY. Never run `gh issue close`. To close an
+  issue, put `Closes #N` in the PR body (the lead's merge auto-closes it) OR
+  flag it to king-inbox for the lead. Closure = lead sign-off, not lane action.
 
 Commit message style: ${COMMIT_STYLE}
 Branch: ${LANE} (DO NOT push; King carves feature/<topic> at push time per R9)

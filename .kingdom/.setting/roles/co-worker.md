@@ -162,7 +162,7 @@ Same as workers (see [`worker.md`](worker.md) → Spawn rights inside a lane):
 
 - Read project files.
 - Edit + commit locally to `co-worker-N`.
-- Lane master itself runs **Opus** (high-quality coding inside the lane). Sub-agents it spawns follow the P1/P2/P3 chain — canonical definition in [`index.md`](../index.md) → Sub-agent model priority. The lane master's model is separate from the sub-agent chain. No eco cap; parallel allowed.
+- Lane master itself runs **Opus** (high-quality coding inside the lane). Sub-agents it spawns follow the P1/P2/P3 chain — canonical definition in [`index.md`](../index.md) → Sub-agent model priority. The lane master's model is separate from the sub-agent chain. No eco cap; parallel allowed — per R51, fan heavy work out to parallel sub-agents (soft target ≈ 10, sonnet/haiku/opus by work type, bounded by R42).
 - Run the 4-step closer when the task chunk is complete.
 - Use `cmux_notify` to ping King/the user when something needs attention.
 - Write the task file (mandatory, Step 0 of any task).

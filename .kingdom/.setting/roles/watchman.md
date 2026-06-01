@@ -27,7 +27,7 @@ Three rules govern Watchman's relationship with the rest of the kingdom — keep
 - In PRIMARY mode (manaflow/cmux), watchman gets its own **workspace** with an optional **vertical split layout** (`kingdom.json.cmux.watchmanLayout`): top pane runs `claude` (the /loop session), bottom pane runs `gh pr list --watch --interval 30` for live PR state. Default `direction=vertical`, `split=0.6`. Set `watchmanLayout: null` in `kingdom.json` to disable the split and use a single-pane workspace instead.
 - Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet.
 - Reads `kingdom.json.gate.smoke` + `gate.tests` for the smoke command list to run on each develop advance.
-- Writes `WATCH_*.md` reports to `<project>/docs/test-reports/` (separate prefix from King's `KING_*.md` gate reports).
+- Writes `WATCH_*.md` reports to `.kingdom/<project>/logs/watch/` — monitoring heartbeats stay OUT of the project git tree; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` reports go to `<project>/docs/test-reports/`.
 - Posts `cmux_notify` when something needs the King's or the user's attention.
 
 ---
@@ -104,11 +104,15 @@ if [ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] || [ daily_smoke_overdue ]; the
   if [ "$SMOKE_PASS" = "true" ]; then
     # Write heartbeat / pass report
     UTC=$(date -u +%Y-%m-%dT%H%MZ)
-    echo "# develop smoke pass at $UTC" > "$PROJ/docs/test-reports/WATCH_${UTC}__develop_green.md"
+    # K10 (v0.37.0): heartbeats go to $LOGS/watch/, not the project tree
+    mkdir -p "$LOGS/watch"
+    echo "# develop smoke pass at $UTC" > "$LOGS/watch/WATCH_${UTC}__develop_green.md"
   else
     # Develop is RED — write report + alert King/Ter
     UTC=$(date -u +%Y-%m-%dT%H%MZ)
-    cat > "$PROJ/docs/test-reports/WATCH_${UTC}__develop_RED__<short-reason>.md" <<EOF
+    # K10 (v0.37.0): RED reports go to $LOGS/watch/, not the project tree
+    mkdir -p "$LOGS/watch"
+    cat > "$LOGS/watch/WATCH_${UTC}__develop_RED__<short-reason>.md" <<EOF
     ## TL;DR
     - **Status:** fail
     - develop tip ${NEW_DEVELOP_SHA:0:8} broke smoke
@@ -203,18 +207,21 @@ cmux_send "$HANDLE" "$LANE_WATCHMAN_PROMPT"
 
 ## WATCH_*.md report naming convention
 
-Watchman writes to `<project>/docs/test-reports/` alongside human-written `SMOKE_*.md` / `DEBUG_*.md` / `POSTMORTEM_*.md` and King's `KING_*.md` gate reports. Watchman uses the `WATCH_*` prefix:
+Watchman writes `WATCH_*` reports to `.kingdom/<project>/logs/watch/` — monitoring heartbeats stay out of the project git tree so they don't pollute PRs or appear as dirty files on the integration branch. PR-evidence reports (`SMOKE_*`, `SENIOR_*`, `KING_*`) still go to `<project>/docs/test-reports/`.
 
 ```text
-<project>/docs/test-reports/
-├── KING_<UTC>__<lane-name>__<sub-task-id>.md     ← King's per-lane pre-commit gate (one per push-decision)
+.kingdom/<project>/logs/watch/                     ← all Watchman heartbeats/monitoring reports
 ├── WATCH_<UTC>__develop_green.md                  ← heartbeat / develop pass
 ├── WATCH_<UTC>__develop_RED__<short-reason>.md    ← develop break detected
 ├── WATCH_<UTC>__pr-<N>_CI_failed.md               ← PR CI just turned red
 ├── WATCH_<UTC>__pr-<N>_CI_green.md                ← PR CI just turned green (log only, no notify)
 ├── WATCH_<UTC>__pr-<N>_lead_approved.md           ← lead just approved a PR
 ├── WATCH_<UTC>__pr-<N>_ready_to_merge.md          ← PR green + approved + idle ≥30 min
-└── (existing) SMOKE_*.md / DEBUG_*.md / POSTMORTEM_*.md  ← human-written
+└── WATCH_<UTC>__verify-<slug>.md                  ← on-demand verification report
+
+<project>/docs/test-reports/                       ← PR-evidence only (rides PRs, visible to reviewers)
+├── KING_<UTC>__<lane-name>__<sub-task-id>.md      ← King's per-lane pre-commit gate (one per push-decision)
+└── (existing) SMOKE_*.md / SENIOR_*.md / DEBUG_*.md / POSTMORTEM_*.md  ← human-written / Senior reviews
 ```
 
 `<UTC>` = `YYYY-MM-DDTHHMMZ` (no colons, trailing `Z`).
@@ -319,7 +326,7 @@ The watchman's worktree + branch + state file persist across pauses; only the `/
 }
 ```
 
-Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the same `origin/develop` tip, but with different PR filter scopes. They write to the same `<project>/docs/test-reports/` dir but with distinct `WATCH_<UTC>__watchman-<N>__...md` filenames to avoid collision.
+Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the same `origin/develop` tip, but with different PR filter scopes. They write to the same `.kingdom/<project>/logs/watch/` dir but with distinct `WATCH_<UTC>__watchman-<N>__...md` filenames to avoid collision.
 
 ---
 
@@ -407,7 +414,7 @@ to confirm BE-AUTH-3 doesn't regress the login flow.">
 ## Scope
 - Read-only — DO NOT edit test code, fixtures, or project files
 - DO NOT push, commit, or open PRs
-- Write report to <project>/docs/test-reports/WATCH_<UTC>__verify-<slug>.md
+- Write report to $LOGS/watch/WATCH_<UTC>__verify-<slug>.md
 ```
 
 ### Watchman's pickup logic (every `/loop` tick)
@@ -422,10 +429,12 @@ mkdir -p "$REQUESTS_DIR"
 for REQ in "$REQUESTS_DIR"/*.md; do
   [ -f "$REQ" ] || continue
   REQ_SLUG=$(basename "$REQ" .md | sed 's/^[0-9-]*T[0-9]*Z__verify-//')
-  REPORT="$PROJ/docs/test-reports/WATCH_$(date -u +%Y-%m-%dT%H%MZ)__verify-${REQ_SLUG}.md"
+  # K10 (v0.37.0): verify reports go to $LOGS/watch/, not the project tree
+  mkdir -p "$LOGS/watch"
+  REPORT="$LOGS/watch/WATCH_$(date -u +%Y-%m-%dT%H%MZ)__verify-${REQ_SLUG}.md"
 
   # Already processed? (a matching report exists)
-  if ls "$PROJ/docs/test-reports/WATCH_"*"__verify-${REQ_SLUG}.md" >/dev/null 2>&1; then
+  if ls "$LOGS/watch/WATCH_"*"__verify-${REQ_SLUG}.md" >/dev/null 2>&1; then
     continue
   fi
 
