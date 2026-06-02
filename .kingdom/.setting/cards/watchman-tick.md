@@ -25,13 +25,13 @@
 | Var | Source | Example |
 |---|---|---|
 | `${TICK_FLAVOUR}` | `CAUTION` if any finding is severity=urgent; otherwise `NOTE` (see Variant logic below) | `NOTE` |
-| `${PROJECT}` | active project | `bfg-swt` |
+| `${PROJECT}` | active project | `my-app` |
 | `${TICK_UTC}` | tick timestamp (ISO 8601, compact) | `2026-05-19T06:30Z` |
 | `${DUTIES_LIST}` | comma-separated list of enabled duties this tick | `code-review · cve-scan · conflict-scan · git-hygiene` |
 | `${N_HAIKUS}` | count of Haiku sub-agents spawned this tick | `4` |
 | `${CAP}` | configured Haiku cap for this watchman | `6` |
 | `${FINDINGS_LIST}` | multi-line bullets, one per duty with non-zero findings (see format below) | (multi-line) |
-| `${REPORTS_PATH}` | path to watchman reports dir | `.kingdom/bfg-swt/reports` |
+| `${REPORTS_PATH}` | path to watchman reports dir | `.kingdom/my-app/reports` |
 
 ## `${DUTIES_LIST}` format
 
@@ -82,7 +82,7 @@ The Watchman determines urgency per-finding when it writes `WATCH_TICK_${TICK_UT
 ```text
 > [!NOTE]
 > ```
-> ╭─ 🕵️ Watchman tick · bfg-swt · 2026-05-19T06:30Z ──────╮
+> ╭─ 🕵️ Watchman tick · my-app · 2026-05-19T06:30Z ──────╮
 > │  Duties run: code-review · cve-scan · git-hygiene       │
 > │  Haiku sub-agents spawned: 3 (cap=6)                    │
 > │                                                         │
@@ -90,7 +90,7 @@ The Watchman determines urgency per-finding when it writes `WATCH_TICK_${TICK_UT
 > │  • 2 code review flags (WATCH_REVIEW_*)                 │
 > │  • 1 git hygiene issues (WATCH_GIT_*)                   │
 > │                                                         │
-> │  Details: .kingdom/bfg-swt/reports/                     │
+> │  Details: .kingdom/my-app/reports/                     │
 > │           WATCH_TICK_2026-05-19T06:30Z.md               │
 > ╰────────────────────────────────────────────────────────╯
 > ```
@@ -101,7 +101,7 @@ The Watchman determines urgency per-finding when it writes `WATCH_TICK_${TICK_UT
 ```text
 > [!CAUTION]
 > ```
-> ╭─ 🕵️ Watchman tick · bfg-swt · 2026-05-19T10:15Z ──────╮
+> ╭─ 🕵️ Watchman tick · my-app · 2026-05-19T10:15Z ──────╮
 > │  Duties run: code-review · cve-scan · conflict-scan     │
 > │             · git-hygiene                               │
 > │  Haiku sub-agents spawned: 4 (cap=6)                    │
@@ -111,7 +111,7 @@ The Watchman determines urgency per-finding when it writes `WATCH_TICK_${TICK_UT
 > │  • 2 CVE findings (WATCH_CVE_*) ← urgent               │
 > │  • 1 cross-lane conflicts (WATCH_CONFLICTS_*)           │
 > │                                                         │
-> │  Details: .kingdom/bfg-swt/reports/                     │
+> │  Details: .kingdom/my-app/reports/                     │
 > │           WATCH_TICK_2026-05-19T10:15Z.md               │
 > ╰────────────────────────────────────────────────────────╯
 > ```

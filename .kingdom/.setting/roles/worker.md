@@ -2,7 +2,7 @@
 
 Workers are the autonomous task-execution lanes (`worker-1`, `worker-2`, …). Each runs a long-lived Claude Code teammate in its own `git worktree` on its own `worker-N` branch. Workers pick claimable sub-tasks from the project's task source, execute via their own sub-agent fleet, and signal the King with the 4-step closer.
 
-See [`index.md`](../index.md) for entry-point context, [`king.md`](king.md) for who dispatches and gates worker work, [`co-worker.md`](co-worker.md) and [`watchman.md`](watchman.md) for the other lane roles, [`git.md`](../reference/git.md) for branch model.
+See [`index.md`](../index.md) for entry-point context, [`king.md`](king.md) for who dispatches and gates worker work in the solo path, [`senior.md`](senior.md) for who dispatches and reviews worker work in a story pod, [`co-worker.md`](co-worker.md) and [`watchman.md`](watchman.md) for the other lane roles, [`git.md`](../reference/git.md) for branch model.
 
 ---
 
@@ -11,6 +11,8 @@ See [`index.md`](../index.md) for entry-point context, [`king.md`](king.md) for 
 A lane master spawns sub-agents in one of three ways. **Default since v0.28.0 (R38): ALL models default to visible tab** — `Agent()` in-process background spawns are opt-in only, not the default. (Pre-v0.28.0 model-tiered "cheap fan-outs headless" behaviour is retired.)
 
 **R51 — fan heavy work out, don't do it serially.** Multi-file reads, pattern greps, doc orientation, independent edits, and review passes SHOULD run as parallel sub-agents (strong default, soft target `kingdom.json.subAgents.parallelTarget` ≈ 10 — aim for it, exceed when a task needs it, skip for a trivial one). Model by work type: **sonnet** = standard task work, **haiku** = bulk reads/greps/orientation, **opus** = sensitive/high-stakes. Always bounded by `_bounded_wait` (R42).
+
+**R53 — prefer the Workflow tool for the fan-out, when the session exposes it.** The worker's heavy fan-out is the task's own **Discover → Execute → Verify** army (Layers 1/3/4 below). When the Workflow tool is in this session's toolset, run that army as **one Workflow run per task** (→ live `/workflows` view: phases + per-agent token/tool/time + an optional Verify judge stage) instead of raw `Agent()` calls. One kingdom task = one Workflow run. When the tool is **not** present, fall back to the existing bounded mechanism unchanged: parallel `Agent()` (R42) or visible cmux tabs (R38). Either way the task file (R23), the 4-step closer (R22), and the load-bearing sentinel flag are unchanged — the Workflow run is only the *execution surface* for the army, never a substitute for the artifact protocol. Canonical pattern + script skeleton + per-role shapes: [`R53`](../rules/R53-fan-out-via-workflow-tool.md) and [`reference/workflow-fanout.md`](../reference/workflow-fanout.md).
 
 ### Spawn-cost reality
 
@@ -83,7 +85,7 @@ Configured in `kingdom.json.cmux.subAgentPool`:
 
 Master initialises the pool at spawn time (background, non-blocking):
 
-> Helper definitions: see [`_primitives.md § init_subagent_pool / spawn_pool_slot / spawn_subagent_from_pool`](../functions/init_subagent_pool.sh). Three helpers, one home.
+> Helper definitions: see [`init_subagent_pool.sh`](../functions/init_subagent_pool.sh) / [`spawn_pool_slot.sh`](../functions/spawn_pool_slot.sh) / [`spawn_subagent_from_pool.sh`](../functions/spawn_subagent_from_pool.sh).
 >
 > - `init_subagent_pool` — call once at master spawn; fans out `perMasterPoolSize` hidden tabs running `claude -p 'AWAITING_DISPATCH'`.
 > - `spawn_pool_slot` — internal; spawns one hidden tab + appends its surface ref to the pool list file.
@@ -129,10 +131,10 @@ The user SEES the parallelism happen. Tabs appear, do work, disappear cleanly.
 ## Worker lane role
 
 - **Generic autonomous task workers.** No preset focus, no path locks. Every worker starts as identical capacity — `worker-1` and `worker-2` are interchangeable. The King assigns each task at dispatch time; the same worker can be doing backend today and frontend tomorrow.
-- Lane master itself runs **Opus** by default (override per-lane in `kingdom.json.workers[i].model` if you want Sonnet for cost reasons). Executes via its own sub-agent fleet (P1 Sonnet / P2 Haiku / P3 Opus, unbounded parallel — see Spawn rights below).
+- Lane master itself runs **Opus** by default (override per-lane in `kingdom.json.workers[i].model` if you want Sonnet for cost reasons). Executes via its own sub-agent fleet (P1 Sonnet / P2 Haiku / P3 Opus; fan heavy work out in parallel per R51 — soft target `kingdom.json.subAgents.parallelTarget` ≈ 10, every fan-out bounded by `_bounded_wait` per R42 — see Spawn rights below).
 - **Domain-agnostic.** A worker can edit code, run financial-model checks, run lab notebooks, draft manuscripts — whatever the task brief describes. The kingdom's only assumption is that work is versioned in git.
-- Signals the King via the standard 4-step closer (raw + curated + log + sentinel flag). Sub-agents spawned as **Tabs** add Step 5 (auto-close own tab) — see § "5-step closer for tab-spawned sub-agents" below.
-- Cross-lane conflict prevention happens at the King's level — Layer 1 planning detects overlapping tasks before dispatch, and the FINAL `git merge-tree` check at the push gate catches anything that slipped through. Workers don't need configured `ownsPaths` to stay out of each other's way.
+- Signals its dispatcher via the standard 4-step closer (raw + curated + log + sentinel flag). The dispatcher is the **King** for a solo lane and its **Senior** for a pod worker — both poll the same `done/*.flag` sentinel. Sub-agents spawned as **Tabs** add Step 5 (auto-close own tab) — see § "5-step closer for tab-spawned sub-agents" below.
+- Cross-lane conflict prevention is not the worker's job — Layer 1 planning detects overlapping tasks before dispatch, and the FINAL `git merge-tree` check at the push gate catches anything that slipped through. In a pod, within-story merge conflicts are the **Senior's** to resolve (R49) and between-story drift is watchman-flagged + King-resolved (R50). Workers don't need configured `ownsPaths` to stay out of each other's way.
 
 ---
 
@@ -151,12 +153,13 @@ echo "worker-1 | $(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$LOGS/claims/$SUBTASK_ID.lan
 
 Workers don't write claims. King does. Workers just receive their assignment via the dispatch prompt — see [`king.md`](king.md) → "Dispatch brief schema" for what King sends to each worker.
 
-### Pod membership (v0.32.0+, R46/R48)
+### Pod membership (v0.32.0+, R46/R47/R48)
 
 A worker may be assigned to a **Senior's story pod**. When it is:
 
-- Its sub-tasks (and any fix-tasks) come from its **Senior**, not the King (the King delegated the story per R30's delegated-dispatch amendment). The work is identical: do the sub-task on `worker-N`, pass Tier-1, signal done.
-- It does **not** merge its own branch. The Senior merges `worker-N` into the story branch (R49) and runs the review. If the Senior routes a fix-task back, fix on the same `worker-N` branch and signal done again; the Senior re-merges and re-reviews.
+- Its sub-tasks (and any fix-tasks) come from its **Senior** (a 🎓 Opus lane), not the King (the King delegated the story per R30's delegated-dispatch amendment, and the Senior dispatches in-pod + visible via `guard_dispatch_scope`). The work is identical to a solo task: open a task file (R23), do the sub-task on `worker-N`, run **Tier-1** typecheck in your own worktree, fire the closer (R22), signal done.
+- **Gate tier changes (R47).** In pod work the gate is THREE-tier: your Tier-1 → the Senior's **story-branch Tier-2** (`run_tier2_on_story`) → the Senior's review loop → the human push. You still only own Tier-1; the kingdom-overlay Tier-2 path (the SOLO two-tier flow, run by the King) does not apply to pod work.
+- You do **not** merge your own branch. The Senior merges `worker-N` into the local `story/<id>` branch via `merge_into_story` (R46) and is the **sole within-story reviewer** (R48). If the Senior routes a fix-task back, fix on the same `worker-N` branch and signal done again; the Senior re-merges and re-reviews (loop capped at `integration.reviewLoopCap`, R48).
 - A worker belongs to at most one pod at a time. See [`senior.md`](senior.md).
 
 ---
@@ -196,7 +199,7 @@ ls -1t "$WS"/.kingdom/<project>/tasks/*__worker-3__*.md | head -1
 - ❌ Lane name in different positions across artifacts (must always be segment 2 for shell glob consistency)
 - ❌ Renaming a task file after creation (it's a frozen snapshot — write once)
 - ❌ Putting two lanes' work in one task file (one lane, one file, period)
-- ❌ **Implementing without exhaustive pattern grep first.** "I assume the project doesn't have X" is not allowed without grep evidence proving it. Use sub-agents — capacity is unlimited. The lazy-implementor failure mode caught by v0.17.2: worker added `metadata: Metadata = { canonical: "https://webshop.bonfire.gg/" }` at module top-level (hardcoded literal) when the project's `lib/brand-defaults.ts` had a comment block explicitly documenting "Read by `app/layout.tsx` via `process.env.X ?? BRAND_Y` pattern. Env reads live INSIDE the async RootLayout function so Next.js doesn't inline at build." Worker read the brief but didn't read the convention docs alongside.
+- ❌ **Implementing without exhaustive pattern grep first.** "I assume the project doesn't have X" is not allowed without grep evidence proving it. Use sub-agents — capacity is unlimited. The lazy-implementor failure mode caught by v0.17.2: a worker added `metadata: Metadata = { canonical: "https://shop.example.com/" }` at module top-level (hardcoded literal) when the project's `lib/brand-defaults.ts` had a comment block explicitly documenting "Read by `app/layout.tsx` via `process.env.X ?? BRAND_Y` pattern. Env reads live INSIDE the async RootLayout function so Next.js doesn't inline at build." The worker read the brief but didn't read the convention docs alongside.
 - ❌ **Saying "scripts/foo.sh doesn't seed X" without grepping all of `scripts/`.** Real failure: King said "compose.stateless.yml and 000_superscript.sh don't seed APP_BASE_URL" → user pushed back → King discovered `scripts/026_provision_frontend_env.sh` DOES seed it. **Don't claim absence without exhaustive grep.**
 
 ### `/kingdom:work` and other non-lane artifacts
@@ -236,7 +239,7 @@ Every task assigned to a lane gets its own **task file** — checkbox doc tracki
 
 > **The "lazy implementor antidote" rule (v0.17.2+):** Before deciding "no existing pattern exists" or "I'll invent a new approach", the worker MUST exhaustively grep the project for existing references, conventions, env handling, scripts, and doc comments. Capacity is unlimited — fan out 5-10 Haiku scanners in parallel if needed. Default stance: **the project HAS a pattern; my job is to find it. Burden of proof is on me to demonstrate one doesn't exist.**
 
-- [ ] **Doc orientation FIRST (R45, v0.31.1+):** before any code grep, call `haiku_read_docs_orientation "<lane>" "$PROJ" "$LOGS"` (see [`_primitives.md`](../_primitives.md) § Orientation). The helper fans out up to 10 Haiku in parallel, reads root + `docs/` markdown (wayfinding first: every `readme.md` / `index.md` / `todo*.md`; then the 20 newest others), and writes a consolidated digest to `<LOGS>/.<lane>_<UTC>_doc_context.md`. Read that digest, not the originals. Docs encode the project's documented conventions, which **override** code patterns when they conflict — finding the code pattern first risks reinforcing drift.
+- [ ] **Doc orientation FIRST (R45, v0.31.1+):** before any code grep, call `haiku_read_docs_orientation "<lane>" "$PROJ" "$LOGS"` (see [`haiku_read_docs_orientation.sh`](../functions/haiku_read_docs_orientation.sh)). The helper fans out up to 10 Haiku in parallel, reads root + `docs/` markdown (wayfinding first: every `readme.md` / `index.md` / `todo*.md`; then the 20 newest others), and writes a consolidated digest to `<LOGS>/.<lane>_<UTC>_doc_context.md`. Read that digest, not the originals. Docs encode the project's documented conventions, which **override** code patterns when they conflict — finding the code pattern first risks reinforcing drift.
 - [ ] **Pattern grep — fan-out N× Agent(haiku) in parallel:**
   - [ ] `grep -rln "<key-term>" --include='*.{ts,tsx,js,py,sh,yml,yaml,json,md,env,env.example}' .` (any file types relevant)
   - [ ] Read every `.env*` and `.env.example` in the relevant subtree — these encode env conventions
@@ -287,7 +290,7 @@ Re-brief required. The closing checklist (AC flip / heading suffix / Final summa
 wholly lane-owned per R43. Please re-dispatch with the annotation removed.
 ```
 
-See `rules.md § R43` for the full rule + the 2026-05-19 worker-1 incident that motivated it.
+See [`rules/R43-job-done-closing-actions-are.md`](../rules/R43-job-done-closing-actions-are.md) for the full rule + the 2026-05-19 worker-1 incident that motivated it.
 
 The status checkboxes are flipped sequentially as work progresses. Each Layer's bullets are checked off as their sub-agents complete. Progress notes are appended freely (one paragraph per layer-completion or significant event).
 
@@ -295,7 +298,7 @@ The status checkboxes are flipped sequentially as work progresses. Each Layer's 
 
 After every checkbox flip / layer transition, the worker updates its own cmux workspace description so the sidebar shows current state at a glance:
 
-> Helper definition: see [`_primitives.md § cmux_set_state`](../functions/cmux/cmux_set_state.sh). Worker's usage patterns below.
+> Helper definition: see [`cmux_set_state.sh`](../functions/cmux/cmux_set_state.sh). Worker's usage patterns below.
 
 ```bash
 # At Step 0 (task file just created)
@@ -320,7 +323,7 @@ Description updates are **optional but recommended** — failures are silent and
 - **Created** in Step 0 of every task. Lane never starts sub-agent dispatch without writing the task file first.
 - **Updated** continuously — check boxes off, append progress notes, refine plan as discovery yields surprises.
 - **Finalised** when status → done or blocked: lane writes the "Final summary" section, then runs the 4-step closer.
-- **R25 — update BOTH files before closing:** when finalising, lane updates the project task-ledger (`TODO_*.md` / `TODO_Master.csv` / `STEP.md` — whichever the project uses) alongside the kingdom task file. Flip acceptance-criteria checkboxes in the ledger, append `— ✅ closed YYYY-MM-DD (PR #pending)` to the heading. Both updates land in the same `worker-N` commit as the code change. See `rules.md § R25` for the full diff pattern.
+- **R25 — update BOTH files before closing:** when finalising, lane updates the project task-ledger (`TODO_*.md` / `TODO_Master.csv` / `STEP.md` — whichever the project uses) alongside the kingdom task file. Flip acceptance-criteria checkboxes in the ledger, append `— ✅ closed YYYY-MM-DD (PR #pending)` to the heading. Both updates land in the same `worker-N` commit as the code change. See [`rules/R25-update-both-kingdom-task-file.md`](../rules/R25-update-both-kingdom-task-file.md) for the full diff pattern.
 - **Never deleted, never reused.** New task = new task file.
 
 **Read access:** anyone (King, sub-agents, Watchman for context, the user). **Write access:** lane master only. Sub-agents report progress via their own 4-step closer; lane master ingests their curated output and reflects it in the task file's progress notes / checkboxes.
@@ -372,20 +375,20 @@ A lane runs **one task at a time** (no two task briefs from the King in flight a
 
 Sequence:
 
-0. King sends task brief → lane pane. **Lane master creates the task file** (`<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`) with status, brief, and multi-layer plan filled in. No sub-agent is dispatched until the task file exists.
-1. King sends task brief → lane pane (via `cmux_send` / `tmux send-keys` / `claude -p`).
-2. Lane master reads the brief, analyzes the work, plans its sub-agent strategy (recorded in the task file). **R41 — skills:** King's dispatch brief includes a `${SUGGESTED_SKILLS}` block (0-3 domain skills from `skill-routing.md`). Lane invokes those skills immediately. If a gap is discovered mid-task (e.g., unexpected Prisma migration, Stripe error), lane may invoke ADDITIONAL skills mid-task and logs each invocation to `## Progress notes` in the task file.
+0. **R52 — self-ground FIRST.** At spawn, the **King** injects `/kingdom:self-worker` as the lane's FIRST message (`commands/work.md` Step 0.4 spawns + grounds every lane, including pod workers), so the lane re-reads its canonical rules + this role spec from disk BEFORE any task arrives. The task brief that follows therefore carries only the *task* — it does NOT restate the rules. (A Senior re-sends `/kingdom:self-worker` only to a recovered lane it did not just spawn-and-ground; see [`senior.md`](senior.md) → The pod. If you were spawned without grounding, run `/kingdom:self-worker` yourself before claiming.)
+1. King (solo) or Senior (pod) sends the task brief → lane pane (via `cmux_send` (primary) / `tmux_send` (tmux FALLBACK) / `claude -p` (headless) — all through the wrappers, never raw `cmux`/`tmux`; the backend is auto-detected by `kingdom_backend_init`). **Lane master creates the task file** (`<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<sub-task-id>.md`) with status, brief, and multi-layer plan filled in (R23). No sub-agent is dispatched until the task file exists.
+2. Lane master reads the brief, analyzes the work, plans its sub-agent strategy (recorded in the task file). **R41 — skills:** the dispatch brief includes a `${SUGGESTED_SKILLS}` block (0-3 domain skills from `skill-routing.md`). Lane invokes those skills immediately. If a gap is discovered mid-task (e.g., unexpected Prisma migration, Stripe error), lane may invoke ADDITIONAL skills mid-task and logs each invocation to `## Progress notes` in the task file.
 3. Lane master spawns its sub-agents — parallel where independent, sequential where dependent.
 4. Lane master synthesizes sub-agent outputs, makes edits to the lane's worktree, updates task file progress notes and checkboxes.
 5. Lane master finalises the task file (writes Final summary, flips status → done/blocked), then runs the 4-step closer.
-6. King polls the sentinel flag, runs pre-commit gate → push approval (see [`king.md`](king.md) → Push approval gate).
-7. Lane master receives `/compact` from King, then the next task brief — back to step 0.
+6. The dispatcher polls the sentinel flag. **Solo:** King runs the Tier-2 gate on the kingdom overlay → push approval (see [`king.md`](king.md) → Push approval gate). **Pod:** the Senior merges your branch into `story/<id>` (`merge_into_story`, R46), runs story-branch Tier-2, and reviews (R48); a fix routes back to step 0 on the same `worker-N` branch.
+7. Lane master receives `/compact` from its dispatcher (King solo, Senior in a pod), then the next task brief — back to step 0.
 
 Task lifecycle within a lane:
 
 ```mermaid
 flowchart TB
-    A(["👷 King sends task brief\n(cmux_send / tmux send-keys / claude -p)"])
+    A(["👑 King / 🎓 Senior sends task brief\n(cmux_send / tmux_send / claude -p)"])
     A0["Step 0: Create task file\n(status + brief + multi-layer plan)"]
     B["Lane master reads brief\nplans sub-agent strategy"]
     C["Spawn sub-agents\n(parallel if independent, sequential if dependent)"]
@@ -408,7 +411,9 @@ flowchart TB
     class F decision
 ```
 
-Lanes never receive a "queue" of multiple tasks; the King serialises task-to-lane assignment. This keeps the lane's reasoning context focused and the gate boundaries clean.
+Lanes never receive a "queue" of multiple tasks; the dispatcher (the King in solo work, the Senior in a pod) serialises task-to-lane assignment. This keeps the lane's reasoning context focused and the gate boundaries clean.
+
+> **Mermaid above is the SOLO path** (King is dispatcher + gater). In a story pod the same shape holds with the **Senior** as dispatcher and gater: the Senior sends the sub-task brief, polls the sentinel, then merges your branch into `story/<id>` (`merge_into_story`, R46) and runs story-branch Tier-2 + review (R47/R48) instead of the kingdom-overlay Tier-2. See [`senior.md`](senior.md) and § Pod membership above.
 
 ---
 
@@ -554,7 +559,7 @@ echo "✅ smoke-test report written: $REPORT"
 
 Before the 4-step closer fires, the lane stages and commits its work on its **own lane branch** (`worker-N`). The commit lands all three things in one atom: the project source change, the project task-ledger update (per R25), and the kingdom task-file update.
 
-**MANDATORY:** call `guard_commit_branch "$PWD"` BEFORE every `git commit`. The helper is in `_primitives.md § Hard gates` and refuses to proceed if:
+**MANDATORY:** call `guard_commit_branch "$PWD"` BEFORE every `git commit`. The helper ([`guard_commit_branch.sh`](../functions/guard_commit_branch.sh)) refuses to proceed if:
 
 - Current branch is `kingdom` → R4 violation (kingdom never holds commits)
 - Current branch is `feature/<topic>` → R9 violation (feature is carved from `worker-N` at push time, byte-for-byte)
@@ -581,7 +586,7 @@ The worker prompt has **four mandatory closing actions** done at the end of each
 4. **Touch sentinel flag** → `<LOGS>/done/<UTC>__<sub>-<lane-name>__<sub-task-id>.flag` — AND fire two `cmux_notify` calls (mandatory in PRIMARY mode):
    - `cmux_notify "" "👷 <lane> done" "<ID>" "<one-line TL;DR from curated digest>" "$CMUX_SURFACE_ID"` — gives this pane a blue ring + tab lights up in cmux.app
    - `cmux_notify "$KING_WS" "👷 <lane> done" "<ID>" "<one-line TL;DR>"` — King's sidebar entry gets a badge + bell-icon panel logs the event
-   `$KING_WS` is sourced from `<LOGS>/workspace-refs.env`. See `cmux.md` → § Notification system for visual targeting reference.
+   `$KING_WS` is sourced from `<LOGS>/workspace-refs.env`. See `cmux.md` → § Notification system for visual targeting reference. (The sentinel flag in step 4 is the load-bearing signal: a pod worker's **Senior** polls that flag to know the sub-task is done — see [`senior.md`](senior.md) § Story lifecycle — so the ping is a convenience badge, never the handoff itself.)
 
 4-step write chain:
 
@@ -606,7 +611,7 @@ Master writes nothing under `<LOGS>/`. The worker is the only writer for its tas
 
 ### 5-step closer for tab-spawned sub-agents (PRIMARY mode only)
 
-When a master spawns a sub-agent as a **visible tab** (the default since v0.14.9 — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
+When a master spawns a sub-agent as a **visible tab** (the kingdom default per R38 — see § "Spawning sub-agents — Tab vs Agent decision"), the sub-agent's closer gets one extra step:
 
 5. **Close own tab** — `cmux_tab_action close --surface "$CMUX_SURFACE_ID"` (the env var is auto-set in every cmux terminal)
 
@@ -695,7 +700,7 @@ flag     <LOGS>/done/<ID>__<sub>-<lane-name>.flag    ← sentinel
 
 ## Path / ID helpers (master generates IDs; worker uses paths in its prompt)
 
-> Helper definitions: see [`_primitives.md` § make_artifact_id / raw_path / curated_path](../_primitives.md). Usage examples below.
+> Helper definitions: see [`make_artifact_id.sh`](../functions/make_artifact_id.sh) / [`raw_path.sh`](../functions/raw_path.sh) / [`curated_path.sh`](../functions/curated_path.sh). Usage examples below.
 
 There is no `log_master` helper — master writes nothing. The worker prompt embeds its own `echo … >> master_agent.log` line as step 3 of the closer.
 
@@ -703,11 +708,11 @@ There is no `log_master` helper — master writes nothing. The worker prompt emb
 
 ## Worker dispatch — Single-worker self-curate (most common)
 
-Master dispatches via `cmux_send` / `tmux send-keys` (kingdom mode — PRIMARY) or the `Agent` tool (standalone mode only — no cmux). In kingdom mode, `Agent()` in-process spawns are banned by R38; use tab or lane dispatch. The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
+Master dispatches its sub-agents per R38: **visible tab** (`cmux_tab_action new-terminal-right`, the kingdom default) or **lane dispatch** (`cmux_send` to a running lane). The raw `Agent()` form shown in the templates below is the **standalone-mode** shape (no cmux/tmux host); in kingdom mode (PRIMARY cmux.app or FALLBACK tmux) the same prompt body is delivered through a tab/lane spawn instead, because in-process `Agent()` is banned as the kingdom default (R38). Either way the closer protocol is identical. The lane master runs **Opus**; sub-agents it spawns follow the P1/P2/P3 chain (default = Sonnet for sub-agents).
 
 ```bash
 # Master-side setup (Bash) — generate IDs and paths.
-WS=/Users/ter/Desktop/Bonfire
+WS=<workspace-root>
 PROJ=$WS/<project>
 LOGS=$WS/.kingdom/$(basename "$PROJ")/logs
 ID="$(make_artifact_id doc-pull opus docs-summary)"
@@ -783,13 +788,13 @@ curated   <WS>/.kingdom/<project>/logs/<ID>.md
 flag      <WS>/.kingdom/<project>/logs/done/<ID>__opus-worker-1.flag
 ```
 
-After the flag appears, the King decides: `cmux merge` (if commits to keep + the user approves push) → carve `feature/<topic>` → push. See [`git.md`](../reference/git.md) → Commit flow.
+After the flag appears, the King (solo path) overlays the lane onto kingdom's working tree for review (R4 — never a merge commit on `kingdom`), and on the user's `push` approval carves `feature/<topic>` from the `worker-N` tip byte-for-byte (R9) → push → `gh pr create`. (Pod path: the Senior collects + reviews; the King carves `story/<id> → develop` instead.) See [`king.md`](king.md) → Kingdom as review staging and [`git.md`](../reference/git.md) → Commit flow.
 
 ---
 
 ## Multi-worker tasks
 
-For parallel fan-outs, master issues multiple `Agent` calls (one per worker, each with its own slug) in **a single message** so they run concurrently. Each worker runs the same 4-step closer with its own slug. The curated path is shared (`<LOGS>/<ID>.md`) — the **last** worker to finish overwrites the previous one's `<ID>.md`, which is why multi-worker tasks require an archivist merge.
+For parallel fan-outs, master spawns multiple sub-agents (one per worker, each with its own slug) so they run concurrently — as parallel tabs/lane dispatches in kingdom mode (R38), or multiple `Agent` calls in **a single message** in standalone mode. Any parallel fan-out is bounded by `_bounded_wait`, never a bare `wait` (R42), with a soft target of `kingdom.json.subAgents.parallelTarget` ≈ 10 (R51). Each worker runs the same 4-step closer with its own slug. The curated path is shared (`<LOGS>/<ID>.md`) — the **last** worker to finish overwrites the previous one's `<ID>.md`, which is why multi-worker tasks require an archivist merge.
 
 ### Multi-worker archivist — required when ≥2 workers share an `<ID>`
 
@@ -851,14 +856,15 @@ If a worker runs and produces any reasoning / analysis / file content, **all fou
 
 | ❌ Forbidden for workers | ✅ Belongs to King |
 |---|---|
-| `git push` | King runs all pushes — see [`king.md`](king.md) → Push approval gate |
-| `feature/*` branch creation | King carves `feature/<topic>` from lane branch tip |
+| `git push` | King is the SOLE pusher (R1) — see [`king.md`](king.md) → Push approval gate. (A pod Senior never pushes either; it marks the story push-eligible and the King carves + pushes.) |
+| `feature/*` / `story/*` branch carving | King carves `feature/<topic>` from the lane tip (solo) or pushes the Senior's `story/<id> -> develop` (pod) |
 | `gh pr create` | King opens PRs after the user's "push" OK + FINAL conflict check |
-| FINAL conflict check against `origin/develop` | King runs `git merge-tree` after the user approves |
-| Authoritative pre-commit gate | King runs the gate; workers may run fast feedback tests internally but those are hygiene, not gating |
+| FINAL conflict check against `origin/develop` | King runs `git merge-tree` after the user approves (cross-story drift in a pod, R50) |
+| Authoritative integration gate | **Solo:** King runs kingdom-overlay Tier-2 (R13). **Pod:** the Senior runs story-branch Tier-2 + the within-story review (R47/R48). Either way the worker owns only its own Tier-1 typecheck; its fast-feedback tests are hygiene, not the gate. |
+| Merge own branch into the integration branch | **Solo:** King overlays `worker-N` onto kingdom. **Pod:** the Senior merges `worker-N` into `story/<id>` (`merge_into_story`, R46) — the worker never merges its own branch. |
 | Reuse task files across tasks | New task = new task file. Task files are never reused or overwritten for a subsequent task. |
 
-Workers DO: read, edit, commit locally to `<role>-<n>`, spawn their own sub-agents (P1/P2/P3, no eco cap), run the 4-step closer, signal completion via the sentinel flag (+ optional `cmux_notify` for sidebar badge). Everything else is the King.
+Workers DO: read, edit, commit locally to `<role>-<n>` via `guard_commit_branch` (R4 + R9), spawn their own sub-agents (P1/P2/P3, no eco cap), run the mandatory 4-step closer (R22 — including the two Step-4 `cmux_notify` pings in PRIMARY mode), and signal completion via the sentinel flag. Everything else is the King's (solo) or the Senior's (pod). The live `cmux_set_state` workspace description is the only optional signal.
 
 ---
 
@@ -889,7 +895,7 @@ flowchart TB
     class C compact
 ```
 
-For lane master itself (long-lived across tasks): `/compact` between tasks is mandatory. Without it, lane context accumulates and pollutes the next task's reasoning. The King's per-task closing sequence ends with sending `/compact` to the lane pane via `cmux_send` (or `tmux send-keys`).
+For lane master itself (long-lived across tasks): `/compact` between tasks is mandatory. Without it, lane context accumulates and pollutes the next task's reasoning. The dispatcher's per-task closing sequence ends with sending `/compact` to the lane pane via `cmux_send` (or `tmux_send`) — the **King** for a solo lane, the **Senior** for a pod worker.
 
 For sub-agents spawned by lane master: each sub-agent is one-shot; it returns (via sentinel flag) when done. In kingdom mode (R38), "spawn sub-agent" means tab-spawn or lane dispatch — not in-process `Agent()`. In standalone mode, `Agent()` calls are used directly. The lane master collects results, synthesises, then moves to the next dispatch within the same task (or completes the task and runs the 4-step closer).
 

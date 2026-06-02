@@ -15,7 +15,7 @@
 > │         (this week: ${DONE_THIS_WEEK} done · ${IN_FLIGHT} in-flight)
 > │                                                         │
 > │  Context: rules.md · CLAUDE.md · README.md · docs/      │
-> │           MEMORY.md · TER.md · watchman state           │
+> │           MEMORY.md · NOTES.md · watchman state         │
 > │  Watchman: develop ${DEV_STATUS} @ ${LAST_TICK}         │
 > │  PR queue: ${N_OPEN} open · ${N_MERGED_TODAY} merged today
 > │  Lanes blocked: ${N_BLOCKED}                            │
@@ -27,7 +27,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | `$ARGUMENTS` resolved project | `bfg-swt` |
+| `${PROJECT}` | `$ARGUMENTS` resolved project | `my-app` |
 | `${PR_LIMIT}` | `pr-limit=` arg, or `none` | `5` |
 | `${POD_LIMIT}` | `pod-limit=` arg, or `none` | `none` |
 | `${DONE_THIS_WEEK}` | count of sentinels in `<LOGS>/done/` for the ISO week | `3` |

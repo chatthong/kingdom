@@ -65,7 +65,7 @@ King's auto-gate poll will pick it up and run Tier-1, then overlay onto kingdom 
 | `${DEPENDENCIES}` | blocking PRs/tasks, or `none` | `FE-P0-FOUND.8 (PR #258)` |
 | `${REFERENCE}` | spec/PR/issue link | `docs/gap-reviews/SWT_2026-05-06.md` |
 | `${DEADLINE}` | if any | `none` |
-| `${PROJECT}` | active project | `bfg-swt` |
+| `${PROJECT}` | active project | `my-app` |
 | `${UTC}` | UTC timestamp `YYYY-MM-DDTHHMMZ` | `2026-05-18T1142Z` |
 | `${COMMIT_STYLE}` | from `kingdom.json.git.commitStyle` | `Conventional Commits: feat/fix/docs/...` |
 | `${SUGGESTED_SKILLS}` | output of `pick_skills_for_task` (or user override). 0-3 lines, each prefixed `  → Skill <name> · <why>`. If empty, the `Suggested skills` line + its content are both dropped from the brief. | (multi-line, see below) |

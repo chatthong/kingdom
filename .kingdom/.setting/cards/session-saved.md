@@ -28,7 +28,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | active project | `bfg-swt` |
+| `${PROJECT}` | active project | `my-app` |
 | `${LOCAL_DATETIME}` | `date '+%A, %B %-d, %Y · %H:%M %Z'` | `Monday, May 19, 2026 · 09:15 +07` |
 | `${LANE_STATUS_LIST}` | one bullet per lane (see format below) | (multi-line) |
 | `${N_OPEN_PRS}` | count of open PRs from this kingdom | `2` |
@@ -69,10 +69,10 @@ Drop lanes that were never configured for the project (i.e., do not render a bul
 ```text
 > [!TIP]
 > ```
-> ╭─ 💾 Session saved · bfg-swt ───────────────────────────╮
+> ╭─ 💾 Session saved · my-app ───────────────────────────╮
 > │  Monday, May 19, 2026 · 09:15 +07                       │
 > │                                                         │
-> │  Snapshot: .kingdom/bfg-swt/state.json                  │
+> │  Snapshot: .kingdom/my-app/state.json                  │
 > │                                                         │
 > │  Lane status:                                           │
 > │  • worker-1 · branch=worker-1 · task=FE-P0-FOUND.5     │
@@ -86,7 +86,7 @@ Drop lanes that were never configured for the project (i.e., do not render a bul
 > │  Ready for fresh work next time: ❌ no (lanes have      │
 > │    in-flight work)                                      │
 > │                                                         │
-> │  Run /kingdom:work bfg-swt when ready to resume.        │
+> │  Run /kingdom:work my-app when ready to resume.        │
 > ╰────────────────────────────────────────────────────────╯
 > ```
 ```
@@ -96,10 +96,10 @@ Drop lanes that were never configured for the project (i.e., do not render a bul
 ```text
 > [!TIP]
 > ```
-> ╭─ 💾 Session saved · bfg-swt ───────────────────────────╮
+> ╭─ 💾 Session saved · my-app ───────────────────────────╮
 > │  Monday, May 19, 2026 · 17:44 +07                       │
 > │                                                         │
-> │  Snapshot: .kingdom/bfg-swt/state.json                  │
+> │  Snapshot: .kingdom/my-app/state.json                  │
 > │                                                         │
 > │  Lane status:                                           │
 > │  • worker-1 · idle (no in-flight task)                  │

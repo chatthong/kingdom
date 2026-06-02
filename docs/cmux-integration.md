@@ -2,7 +2,9 @@
 
 > Part of the [kingdom](../README.md) docs.
 
-The kingdom is built for **manaflow/cmux.app** as the PRIMARY mode (raw tmux + headless `claude -p` are graceful fallbacks). When you run `/kingdom:work my-app`, cmux.app's sidebar fills with one **workspace per role**, each in its own colour, each with its own Claude session, each notify-able independently.
+The kingdom is built for **manaflow/cmux.app** as the PRIMARY mode. When you run `/kingdom:work my-app`, cmux.app's sidebar fills with one **workspace per role**, each in its own colour, each with its own Claude session, each notify-able independently.
+
+> **Backends are auto-detected at runtime** (no config switch). **cmux.app** is the PRIMARY backend (macOS — colour-coded workspaces, desktop notifications, the live sidebar this page describes). **tmux** is the FALLBACK (Linux, or non-cmux macOS such as Ghostty): the lanes become tmux windows and the status-bar window list serves as the sidebar — see the repo-root [`TMUX-Guide.md`](../TMUX-Guide.md) for the full cmux→tmux mapping. **standalone** mode (neither backend present) runs in-process `Agent()` sub-agents only. This page describes the cmux.app PRIMARY experience.
 
 ```mermaid
 graph TB
@@ -11,7 +13,7 @@ graph TB
         K["📌 👑 King · my-app   🔔1<br/>Your conversation · pinned"]
         W1["👷 worker-1<br/>Kingdom lane · 2026-05-18T03Z<br/>BE-AUTH-3 · layer 3/4"]
         W2["👷 worker-2   🔵<br/>Kingdom lane · 2026-05-18T03Z<br/>OPS-DB-7 done · pushed PR#236"]
-        CW["🧑‍💼 co-worker-1<br/>Kingdom lane · 2026-05-18T03Z<br/>UI-CHK-12 · Ter active"]
+        CW["🧑‍💼 co-worker-1<br/>Kingdom lane · 2026-05-18T03Z<br/>UI-CHK-12 · paired with you"]
         WM["🕵️ watchman-1   🔔1<br/>Kingdom monitor · running<br/>split: claude top, gh bot"]
 
         K --- W1
@@ -61,7 +63,7 @@ graph TB
     K -.->|spawns| CW[🏢 Workspace · 🧑‍💼 co-worker-1<br/>Blue · paired with you]
     K -.->|spawns| WM[🏢 Workspace · 🕵️ watchman-1<br/>Rose · vertical split inside]
 
-    M1 -.->|"Agent() or<br/>cmux tab-action"| T1[📑 Tab · 🐱 sub · Sonnet · code<br/>auto-close on sentinel]
+    M1 -.->|"cmux tab-action<br/>(visible tab)"| T1[📑 Tab · 🐱 sub · Sonnet · code<br/>auto-close on sentinel]
     M1 -.->|spawns| T2[📑 Tab · 🐱 sub · Haiku · digest]
     WM --> S1[🪟 Split top · claude /loop]
     WM --> S2[🪟 Split bottom · gh pr list --watch]
@@ -85,7 +87,7 @@ graph TB
 
 **What the arrows mean:**
 - `══>` solid bold: you launch the King inside cmux.app (start of your conversation)
-- `-.->` dashed: **spawn** relationships. King spawns lane workspaces via `/kingdom:work`; lane masters spawn sub-agent tabs via `Agent()` (background) or `cmux tab-action --action new-terminal-right` (visible).
+- `-.->` dashed: **spawn** relationships. King spawns lane workspaces via `/kingdom:work`; in PRIMARY mode lane masters fan heavy work out to **visible sub-agent tabs** via `cmux tab-action --action new-terminal-right` (or to other lanes via `cmux send`). In-process `Agent()` in a master or King session is **banned** (R38 — the cmux "1 local agent" indicator is the violation signal); it is only the spawn path in **standalone** mode, where no backend exists.
 - `-->` solid plain: internal split layout (watchman's dual-view top/bottom).
 
 All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (under the same window), but the King is the **dispatcher** that creates the lane workspaces. The diagram shows the spawn relationship rather than the flat sibling layout.
@@ -93,8 +95,10 @@ All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (un
 | Tier | Used for | cmux command | Auto-closes? |
 |---|---|---|---|
 | 🏢 **Workspace** | One per master (King + every worker + co-worker + watchman) | `cmux new-workspace --name --cwd --command "claude"` + `cmux workspace-action --action set-color` | No, survives across sessions |
-| 📑 **Tab** | Visible sub-agent spawn (default: headless `Agent(...)`; tab only when visibility wanted) | `cmux tab-action --action new-terminal-right` | ✅ Auto-closes on sentinel via 5-step closer Step 5 |
+| 📑 **Tab** | Canonical sub-agent spawn in PRIMARY mode — always visible (in-process `Agent()` is banned by R38; it is the standalone-only path) | `cmux tab-action --action new-terminal-right` | ✅ Auto-closes on sentinel via 5-step closer Step 5 |
 | 🪟 **Split** | Watchman dual-view (claude + `gh pr watch`); optional paired-coworker editor | `cmux new-workspace --layout '{…}'` OR `cmux new-split` post-creation | No, same lifetime as parent workspace |
+
+> The raw `cmux …` forms shown above are illustrative. Since v0.36.0 every role, command, rule, and card routes cmux access through one micro-wrapper per subcommand (`cmux_new_workspace`, `cmux_tab_action`, `cmux_send`, `cmux_tree`, `cmux_workspace_action`, …). The wrapper catalog — and the raw command each wrapper runs — lives in [`cmux.md`](../.kingdom/.setting/reference/cmux.md).
 
 ## Other cmux features the kingdom uses
 

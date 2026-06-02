@@ -13,14 +13,14 @@ See [`index.md`](../index.md) for the entry-point overview, [`worker.md`](worker
 - Holds conversation with the user; never edits files directly.
 - **Uses the Watchman as its eyes and ears** — reads `WATCH_*.md` reports, `WATCH_DOCS_AUDIT.md`, and `watchman_state.json` at every decision point. The Watchman exists to feed the King context; the King must consume it. See [§ Working WITH the Watchman](#working-with-the-watchman-mandatory-when-one-exists) below.
 - Picks unclaimed sub-tasks from the project's task source per lane.
-- Dispatches to each lane via `cmux send` (primary) / `tmux send-keys -l` (fallback) / `claude -p` (headless).
+- Dispatches to each lane via `cmux_send` (primary) / `tmux_send` (tmux FALLBACK) / `claude -p` (headless) — all access goes through the wrappers, never raw `cmux` (v0.36.0). The backend is auto-detected by `kingdom_backend_init` (see [`index.md`](../index.md) § Session start).
 - Reads `<workspace-root>/.kingdom/<project>/logs/master_agent.log` for lane completion. Tier 1 always; Tier 2 (`<ID>.md`) on demand; Tier 3 (`raw/*`) **banned**.
-- Watches sidebar badges from `cmux notify` (lanes + watchman signal readiness).
-- Runs full pre-commit gate per lane (tests + dry-merge + cross-lane overlap).
-- Refreshes `kingdom` integration branch periodically.
+- Watches sidebar badges from `cmux_notify` (lanes + watchman signal readiness).
+- **SOLO path:** runs the two-tier gate (lane Tier-1 typecheck -> kingdom-overlay Tier-2 tests/smoke/lint) + dry-merge + cross-lane overlap (R13). **POD path:** the Senior owns story-branch Tier-2 + the within-story review (R47/R48); the King does NOT re-run them — it reads the Senior's `SENIOR_*` verdict and runs only the cross-story conflict check (R50).
+- Keeps `kingdom` reset to `origin/$BASE` as a clean overlay base — never commits on it (R4); refreshes it at the start of each gate-pass overlay cycle, not periodically.
 - Writes test reports to `<project>/docs/test-reports/`.
 - Runs **FINAL conflict check** after the user's "push" OK (re-verifies the lane still merges cleanly into the latest `origin/develop`).
-- **SOLE PUSHER** — carves `feature/<topic>` from the lane branch + `git push` + `gh pr create`. Lane masters never push.
+- **SOLE PUSHER** (R1) — solo path: carves `feature/<topic>` byte-for-byte from the lane tip (R9); pod path: pushes the Senior's `story/<id>` branch as a `story/<id> -> develop` PR. Then `git push` + `gh pr create`. Lane masters, Seniors, co-workers, and the watchman never push.
 
 ---
 
@@ -115,13 +115,17 @@ When `kingdom.json.integration.enabled` and `seniors > 0`, the King delegates pe
 - **Partition + sequence:** scope stories so file-areas do not overlap; serialize stories that must touch the same area; sequence dependent stories. Allocate pods within `sanityCap` (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
 - **Delegate:** assign each story + its worker pod to a Senior, pass cross-cutting conventions, start its loop. The King does **not** dispatch the pod's sub-tasks (the Senior does, in-pod + visible, `guard_dispatch_scope`).
 - **Never re-review story internals (R48):** the Senior is the sole within-story reviewer. The King re-reviewing is redundant work.
-- **Cross-story only:** consume the watchman's `crossStoryScan` drift signal each tick; at a Senior's push-eligible hand-back, resolve any drift, then offer the human the story-PR push-prompt (R1).
+- **Cross-story only:** consume the watchman's `crossStoryScan` drift signal each tick (Duty 5 — `cross_story_scan`, `warn`/`urgent`); at a Senior's push-eligible hand-back, resolve any drift, then offer the human the story-PR push-prompt (R1).
 
-The gate becomes **three tiers** for pod work (R47): worker Tier-1 -> story-branch Tier-2 (run by the Senior) -> Senior review loop -> human push. Solo one-worker tasks still use the two-tier flow below.
+**The Senior's hand-back (what the King receives).** When a Senior finishes a story it does NOT push (R1). It drops a push-eligible sentinel `<LOGS>/done/<UTC>__senior-N__<story-id>.flag`, writes its verdict to `<project>/docs/test-reports/SENIOR_<UTC>__story-<id>.md`, and notifies the King. The King then: (1) reads the `SENIOR_*` report (does NOT re-run the Senior's review — R48); (2) runs its cross-story conflict check (R50); (3) carves the PR from the **story branch** (`story/<id> -> develop`, NOT a per-lane `feature/<topic>`) and offers the human the push-prompt. A blocked Senior escalates (`⛔` state + detail) instead of a push-eligible flag; the King resolves or re-scopes.
+
+The gate becomes **three tiers** for pod work (R47): worker Tier-1 (lane typecheck) -> story-branch Tier-2 (run by the Senior via `run_tier2_on_story`) -> Senior review loop (R48, capped at `integration.reviewLoopCap`) -> human push. Solo one-worker tasks still use the two-tier flow below.
 
 ---
 
 ## Two-tier gate — light per-lane, heavy on kingdom
+
+> **Scope: SOLO path only.** This two-tier flow (lane Tier-1 → kingdom-overlay Tier-2 → human push, R13) is how the King gates a one-worker `worker-N`/`co-worker-N` task. **Pod work uses the three-tier gate (R47)** — the Senior owns story-branch Tier-2 + the within-story review (R48); the King does NOT overlay or re-run them, it reads the `SENIOR_*` verdict + runs only the cross-story check (R50). See [§ Story-pod delegation + cross-story](#story-pod-delegation--cross-story-v0320-r30r46-r50).
 
 Pre-commit gates run in **two tiers** (v0.16.0+). This matches the v0.15.1 rule that kingdom is the integration AND test environment.
 
@@ -266,7 +270,9 @@ After the user picks, the WINNER merges to kingdom + pushes; the LOSER's branch 
 
 ## Dispatching a task to a lane
 
-How the King sends a task brief to a lane across all three host modes — `cmux_send` (primary), `tmux send-keys -l` (fallback), `claude -p` (headless) — plus the R31+R36 `guard_lane_workspace_exists` gate and file-based completion polling.
+How the King sends a task brief to a lane across all three host modes — `cmux_send` (primary), `tmux_send` (tmux FALLBACK — the wrapper, never raw `tmux send-keys`), `claude -p` (headless) — plus the R31+R36 `guard_lane_workspace_exists` gate and file-based completion polling.
+
+> **Co-worker exception (R32).** This dispatch flow is for **workers** (and pod sub-tasks the King delegates to a Senior). The King NEVER picks task content for a **co-worker** — a co-worker is dormant until the user drives it, and the King relays a brief into a co-worker pane ONLY when the user explicitly asks ("King, send my plan to co-worker-1"), and even then the brief is **user-authored** (still `guard_lane_workspace_exists` first). See [`co-worker.md`](co-worker.md) → Activation flow.
 
 ### Primary (`cmux_send` via cmux.app)
 
@@ -283,7 +289,9 @@ When you finish, run the 4-step closer (see worker.md):
   2) curated -> $LOGS/<ID>.md  (## TL;DR first)
   3) one-line status -> $LOGS/master_agent.log
   4) touch    $LOGS/done/<ID>__opus-worker-1.flag
-     ALSO run: cmux_notify \"$KING_WS\" '👑 ' '' 'lane worker-1 done: <ID>'
+     ALSO run (worker-done ping uses the 👷 emoji per the role convention,
+     positional cmux_notify ws title subtitle body):
+       cmux_notify \"$KING_WS\" '👷 worker-1 done' '<ID>' '<one-line TL;DR>'
 Spawn sub-agents as visible tabs by default (R38 — all models default to tab).
 Use: cmux_tab_action new-terminal-right --workspace \"$WORKER_WS_1\"
 Tab-spawned sub-agents follow the 5-step closer (Step 5 = close own tab via
@@ -302,12 +310,12 @@ cmux_send "$WORKER_WS_1" "$PROMPT"
 
 No `-l` flag, no Enter ceremony, no escaping fights. The workspace ref is stable across the session — King addresses lanes by `$WORKER_WS_N` not by pane title.
 
-### Fallback (`tmux send-keys -l` via raw tmux)
+### Fallback (`tmux_send` via raw tmux)
+
+Under `KINGDOM_BACKEND=tmux` the SAME `cmux_send "$WORKER_WS_1" "$PROMPT"` call above is transparently routed to the tmux mirror by `kingdom_use_tmux_backend` — the King never branches on backend. The wrapper is `tmux_send` (it does `send-keys -l` + Enter internally); call it directly only when writing tmux-specific tooling, never raw `tmux send-keys`:
 
 ```bash
-PANE=2                                                       # pane 1.2 = worker-1
-tmux send-keys -t "$SESSION:$WIN.$PANE" -l "$PROMPT"         # -l = literal
-tmux send-keys -t "$SESSION:$WIN.$PANE" Enter
+tmux_send "worker-1" "$PROMPT"          # mirror of cmux_send; resolves the lane window + submits
 ```
 
 ### Headless (`claude -p`)
@@ -341,6 +349,8 @@ A lane completion produces a sentinel at `<LOGS>/done/<ID>__<sub>-<lane>.flag`. 
 
 **Definition:** an **un-gated sentinel** is a flag at `<LOGS>/done/<ID>__*-<lane>.flag` with NO matching `KING_*__<lane>__<sub-task-id-from-flag>.md` test report.
 
+> **SOLO flags only — a Senior's flag is NOT an un-gated sentinel.** This auto-gate (overlay + two-tier gate) applies to **solo-path** lane flags (`worker-N` / `co-worker-N`). A **pod** Senior drops a different sentinel — `<LOGS>/done/<UTC>__senior-N__<story-id>.flag` — which is a **push-eligible hand-back**, NOT an un-gated sentinel: the Senior already ran story-branch Tier-2 + the review loop (R47/R48), so the King MUST NOT re-overlay or re-gate it (R48). Senior flags route to the pod hand-back flow (see [§ Story-pod delegation + cross-story](#story-pod-delegation--cross-story-v0320-r30r46-r50)): read the `SENIOR_*` verdict, run the cross-story conflict check (R50), carve `story/<id> -> develop`. The detector below skips any flag whose segment-2 slot is `senior-N`.
+
 ```bash
 # Find un-gated sentinels at session start (and pre-every-user-interaction)
 for FLAG in "$LOGS"/done/*.flag; do
@@ -348,7 +358,13 @@ for FLAG in "$LOGS"/done/*.flag; do
   BASE=$(basename "$FLAG" .flag)
   # Filename format: <ID>__<sub>-<lane>
   ID="${BASE%%__*}"
-  LANE_PART="${BASE#*__}"          # e.g., sonnet-worker-2
+  LANE_PART="${BASE#*__}"          # e.g., sonnet-worker-2  OR  senior-1 (pod hand-back)
+  # Pod hand-back flags (segment 2 = senior-N) are NOT un-gated sentinels — the
+  # Senior already ran story Tier-2 + review (R48). Route them to the pod
+  # hand-back flow instead, never the solo overlay gate below.
+  case "$LANE_PART" in
+    senior-*) echo "POD_HANDBACK: $LANE_PART / $ID  (→ § Story-pod hand-back, no overlay)"; continue ;;
+  esac
   LANE=$(echo "$LANE_PART" | sed 's/^[a-z]*-//')   # strip "sonnet-" → worker-2
 
   # Already gated?
@@ -361,6 +377,8 @@ done
 ### The auto-trigger rule
 
 When King detects ≥1 un-gated sentinel, **King runs the pre-commit gate without asking** for each one. Gate is non-destructive (typecheck + tests + dry-merge in the lane's worktree). Gate writes a test report regardless of pass/fail.
+
+**Keep the flag until the lane is PUSHED, then delete it (bounds `done/` over a month).** A gated flag is NOT re-gated — the un-gated detector above keys on the `KING_*` test report existing, so once the report is written the flag is skipped on every future scan. But the flag is still load-bearing between gate and push: the **multi-lane overlay rebuild** (the resume / batch-push path in [§ Kingdom as review staging](#kingdom-as-review-staging-working-tree-overlay-never-commit-on-kingdom)) derives *which lanes to re-overlay* from `done/*.flag`. Deleting at gate-time would empty that set, so a session resume (or a `git reset --hard` on kingdom before push) rebuilds an **empty** review surface — the user loses the exact dirty files they were about to review. So the flag survives review; it is deleted only **after** the lane's `feature/<topic>` is pushed (see § push gate Step 8). This still bounds `done/` for a month-long King: the only flags that linger are gated-but-unpushed lanes (one review cycle wide), and the freshly-pushed ones are pruned immediately. The poll loop's per-tick scan of that small bounded set is cheap; the runaway-accumulation it used to fear is now prevented by the post-push prune, not by gate-time deletion.
 
 Then — per [§ Kingdom as review staging](#kingdom-as-review-staging-working-tree-overlay-never-commit-on-kingdom) (the WORKING-TREE OVERLAY model, v0.17.0+) — gate-pass flows into the kingdom **overlay** (NOT a merge commit; the `kingdom` branch never commits, R4):
 
@@ -446,10 +464,22 @@ After every gate-pass (per the v0.14.10 auto-gate rule), King's NEXT step is:
 5. **Ask the user to review** in GitHub Desktop / VS Code / their preferred diff tool. Phrase: "All changes for <N> lane(s) overlaid onto kingdom as uncommitted modifications. Open GitHub Desktop's Changes tab (or `git diff`) to review file-by-file. Approve push?"
 6. **Wait for the user's approval**.
 7. **On approval — carve `feature/<topic>` from each lane's tip** (NOT from kingdom; the feature branch is the lane's commits, untouched). Push, open PR.
-8. **After push — and ONLY after — discard the kingdom overlay** (R29):
+8. **After push — and ONLY after — discard the kingdom overlay** (R29) **and prune the pushed lanes' done-flags**:
    ```bash
    kingdom_discard_overlay "$PWD"       # checkout kingdom + restore . + clean -fd
    # Kingdom is back to clean = origin/$BASE. Next gate-pass starts a fresh overlay.
+
+   # Prune the done-flag(s) for every lane just pushed — their work has shipped, so
+   # they must drop out of the overlay-rebuild set (and the poll/resume scans). This
+   # is the deletion point deferred from gate-time (§ auto-trigger rule): the flag
+   # lived just long enough to keep the review surface rebuildable through review.
+   # Solo lane flags carry a `<model>-<lane>` segment-2; a pod story's push-eligible
+   # flag (when this push was a `story/<id> -> develop` PR) is `__senior-N__<story-id>`,
+   # so prune by the segment-2 token directly to cover both shapes.
+   for LANE in $PUSHED_LANES; do          # $PUSHED_LANES = lanes/stories in this push batch
+     rm -f "$LOGS/done/"*"-${LANE}.flag"      # solo: <model>-worker-2
+     rm -f "$LOGS/done/"*"__${LANE}__"*.flag  # pod: senior-1 / story-id token
+   done
    ```
 
    > [!CAUTION]
@@ -543,7 +573,17 @@ git reset --hard "origin/$BASE"
 # isn't checked out, or if kingdom HEAD ≠ origin/$BASE (which would mean
 # a rogue commit landed on kingdom — common 2026-05-20 failure mode where
 # the King FF-merged a feature branch onto kingdom).
-for LANE in $(ls -t "$LOGS/done/"*.flag | xargs -I{} basename {} | sed 's/^.*__\([^.]*\).flag/\1/' | sort -u); do
+# Extract the CLEAN lane name (worker-2, co-worker-1) from each flag, matching the
+# single-sentinel detector above: drop everything up to `__`, drop `.flag`, then
+# strip the leading `<model>-` sub-prefix. Without the final strip this yields
+# `sonnet-worker-2` → kingdom_overlay_lane diffs a branch that doesn't exist → the
+# whole rebuild silently overlays nothing.
+#
+# `grep -v` first drops pod hand-back flags (segment 2 = `senior-N`): those are NOT
+# overlay candidates (the Senior already gated the story; the King carves
+# `story/<id> -> develop`, never an overlay — R47/R48). Leaving them in would make
+# the strip yield a bare `1`/`2` and overlay a branch that doesn't exist.
+for LANE in $(ls -t "$LOGS/done/"*.flag 2>/dev/null | xargs -I{} basename {} | sed 's/^.*__//; s/\.flag$//' | grep -v '^senior-' | sed 's/^[a-z]*-//' | sort -u); do
   echo "▶ Overlaying $LANE..."
   if ! kingdom_overlay_lane "$PWD" "$LANE" "$BASE"; then
     echo "⚠️ Conflict overlaying $LANE — resolve in working tree"
@@ -594,6 +634,7 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 | King action | Files to read first | Why |
 |---|---|---|
 | **First message after `/kingdom:work`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** + **`haiku_read_docs_orientation "king" "$PROJ" "$LOGS"`** (R45, v0.31.1+ — fans out up to 10 Haiku in parallel across the WHOLE project: Phase 1 scans every directory for `readme.md` / `index.md` / `todo*.md` wayfinding files (cap 30); Phase 2 reads the 20 newest `*.md` everywhere else, minus test-reports. Consolidated digest lands at `<LOGS>/.king_<UTC>_doc_context.md`) | Full context: workspace rules, project conventions, the user's preferences, watchman state, AND a fresh project-docs digest. Skipping any of these breaks trust within minutes. |
+| **Any decision point** (kickoff, dispatch, push prompt, "what's the state?") | `<LOGS>/king-inbox/` (`WATCH_*` + `NOTIFY_*`) — read, fold into the decision, then **delete** each consumed item (see [§ King-inbox — consume-and-delete](#king-inbox--consume-and-delete-mandatory)) | The watchman's notify-fallback queues alerts here when cmux can't deliver; consuming-and-deleting keeps the inbox a live work queue instead of an unbounded pile |
 | **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
 | **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell the user to wait until watchman reports green |
 | **Ask the user "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
@@ -662,10 +703,11 @@ MEM_DIR="$HOME/.claude/projects/${WS_KEY}/memory"
 #    each entry to decide which are load-bearing today.
 
 # 5. Personal notes (if present + user has named them)
-#    Examples: TER.md, TER_WEEK.md, NOTES.md at workspace root or project root.
+#    Examples: <NAME>.md, NOTES.md at workspace root or project root (the user
+#    names their own; the kingdom never hardcodes a personal filename).
 #    King reads ONLY for situational awareness — NEVER paste verbatim, NEVER
 #    commit; summary into the kickoff synthesis if relevant.
-for NOTES in "$WS/TER.md" "$WS/${PROJECT}/TER.md" "$WS/NOTES.md"; do
+for NOTES in "$WS/NOTES.md" "$WS/${PROJECT}/NOTES.md"; do
   [ -f "$NOTES" ] && Read "$NOTES"
 done
 ```
@@ -674,10 +716,10 @@ The King synthesises this into a brief "context loaded" line in the kickoff outp
 
 ```
 👑 Context loaded:
-   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
-   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
+   • Workspace CLAUDE.md   (my-workspace — multi-project workspace, N projects)
+   • Project CLAUDE.md     (my-app — <stack>, develop→main flow)
    • MEMORY.md             (42 entries — 18 feedback, 7 user, 14 project, 3 reference)
-   • Personal notes        (TER.md — read but never quoted)
+   • Personal notes        (NOTES.md — read but never quoted)
 ```
 
 This step is **non-negotiable**. Without it, the King may dispatch tasks against rules the user has explicitly written down ("never use Prisma migrations", "confirm before every edit", "no source-project attribution in commits") and burn the user's trust + cycles re-correcting.
@@ -692,10 +734,10 @@ Then the watchman state read happens (per § "Mandatory reads" above). The combi
 👑 Good morning.
 
 Context loaded:
-   • Workspace CLAUDE.md   (Bonfire — multi-project workspace, 8 projects)
-   • Project CLAUDE.md     (bfg-swt — Django+Next.js+Keycloak, develop→main flow)
+   • Workspace CLAUDE.md   (my-workspace — multi-project workspace, N projects)
+   • Project CLAUDE.md     (my-app — <stack>, develop→main flow)
    • MEMORY.md             (42 entries; will load specific ones JIT)
-   • Personal notes        (TER.md — read but never quoted)
+   • Personal notes        (NOTES.md — read but never quoted)
 
 Watchman state:
    • develop:        green @ 2026-05-18T01:30Z (latest tick)
@@ -736,11 +778,34 @@ jq '.pr_states' "$LOGS/watchman_state.json"
 # Blocked lanes (output of v0.14.6 blocked-lane scan)
 jq '.blocked_lanes' "$LOGS/watchman_state.json"
 
-# Gap findings
-[ -f "$LOGS/WATCH_DOCS_AUDIT.md" ] && cat "$LOGS/WATCH_DOCS_AUDIT.md"
+# Gap findings (rolling single-file report; lives in the watch/ subdir)
+[ -f "$LOGS/watch/WATCH_DOCS_AUDIT.md" ] && cat "$LOGS/watch/WATCH_DOCS_AUDIT.md"
 
 # Watchman alive check (last tick timestamp)
 jq -r '.last_smoke_ts' "$LOGS/watchman_state.json"
+```
+
+### King-inbox — consume-and-delete (mandatory)
+
+The watchman's notify-fallback (v0.40.0) appends every alert it fires to `<LOGS>/king-inbox/` as a file — `WATCH_<UTC>__<key>.md` for audit findings, `NOTIFY_<UTC>__<key>.md` for lane-done / state pings — so a finding is never *only* a sidebar badge the King might miss. The inbox is a **work queue, not an archive**: when King reads + acts on an item, it deletes that file (same discipline as the `WATCH_DOCS_AUDIT.md` consume below). Nothing else clears these, so leaving them grows the inbox unbounded over a long-running King.
+
+King drains the inbox at every decision point (kickoff, pre-dispatch, "what's the state?"):
+
+```bash
+INBOX="$LOGS/king-inbox"
+# `find | while read` (NOT `for ITEM in "$INBOX"/WATCH_* …`): a plain glob aborts the whole
+# for-statement under zsh's NOMATCH when the inbox is empty — the common case.
+while IFS= read -r ITEM; do
+  [ -f "$ITEM" ] || continue
+  # Read + fold the finding into the current decision (dispatch, gate, push prompt).
+  # Then consume it — the action it triggered is now the record, not the inbox file.
+  rm -f "$ITEM"
+done < <(find "$INBOX" -maxdepth 1 \( -name 'WATCH_*' -o -name 'NOTIFY_*' \) 2>/dev/null)
+
+# Safety sweep — drop anything stale that never got consumed (e.g. inbox read
+# while King was mid-gate and the item didn't apply). Bounds the directory even
+# if a consume is ever skipped.
+find "$INBOX" -name 'NOTIFY_*' -mtime +3 -delete 2>/dev/null
 ```
 
 ### What changes when there's NO watchman (shape: `watchman: 0`)
@@ -752,7 +817,7 @@ If the kingdom was started with `watchman: 0` in `kingdom.json.shape`, the King 
 The King MUST NOT:
 
 - ❌ Dispatch new tasks while develop is RED without telling the user first
-- ❌ Skip reading `WATCH_DOCS_AUDIT.md` at session start (it has Gap A/B findings that should shape today's plan)
+- ❌ Skip reading `watch/WATCH_DOCS_AUDIT.md` at session start (it has Gap A/B findings that should shape today's plan)
 - ❌ Treat blocked-lane alerts as "the lane will figure it out" — blocked lanes need human resolution or kingdom dispatch
 - ❌ Send a "push?" prompt without checking the PR's latest watchman alert first
 
@@ -763,6 +828,15 @@ If watchman is sending alerts that the King keeps ignoring, the kingdom is worse
 ## King-level parallel planning (the King's own sub-agents)
 
 The King itself is a Claude Code process with the Agent tool — so the King can (and should) spawn its own parallel sub-agents for the **planning layer**, before dispatching any task to a lane.
+
+### Mechanism — Workflow tool first, lanes/tabs as fallback ([`R53`](../rules/R53-fan-out-via-workflow-tool.md))
+
+When the session exposes the Claude Code **Workflow tool**, it is the King's **sanctioned in-session, visible** fan-out: each kingdom planning task becomes **one Workflow run** in the live `/workflows` view, so the army is trackable — this satisfies R38's visibility intent without raw `Agent()` in the King's own session. Typical King fan-outs that go through Workflow: the session audit, doc-orientation (R45, the `haiku_read_docs_orientation` Haiku fan-out above), and the cross-story drift scans (R50). One run per task; the task file (Step 0 below) and the 4-step closer are unchanged — the sentinel flag is still the load-bearing signal.
+
+- **Workflow tool present** → encode the planning fan-out as Workflow phases (one run per planning task). Prefer this over routing to tabs.
+- **Not present** → fall back to the existing visible mechanism: route heavy work to lanes (`cmux_send`, R37) or visible tabs (`cmux_tab_action`, R38). **Never** bare `Agent()` in the King's own session.
+
+Canonical pattern + script skeleton + per-role shapes: [`reference/workflow-fanout.md`](../reference/workflow-fanout.md). (Bounds carry over either way — R42 + the R51 soft target govern the concurrency.)
 
 ### King's planning task file (Step 0)
 
@@ -860,16 +934,16 @@ worker-1, task <sub-task-id>:
   Spawn mode:   (optional) tab | background | split
                 Override for sub-agents spawned by this task. If omitted,
                 worker uses kingdom.json.cmux.subAgentSpawnByModel[<model>]
-                defaults (haiku → background, sonnet → background, opus → tab).
-                Add this line when the user says "watch worker-1 do BE-AUTH-3"
-                (set to "tab") or "fast scan, don't bother showing me"
-                (set to "background"). See worker.md → "Per-task override".
+                defaults — ALL models default to "tab" (R38; background is
+                opt-in only). Add this line when the user says "fast scan,
+                don't bother showing me" (set to "background"). See
+                worker.md → "Per-task override".
 ```
 
 **No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:
 
 1. **Planning (Layer 1 of King's own task file)** — King's planning sub-agents scan each candidate task's likely file impact. If two candidate tasks overlap, King either serialises them (assign to same worker as task #1 then task #2) or splits the file set explicitly in each brief.
-2. **FINAL conflict check at push gate** — after the user's "push" OK, King runs `git merge-tree --write-tree --no-messages origin/develop <role>-<n>` to dry-merge against the latest `origin/develop`. If conflicts, push is blocked.
+2. **FINAL conflict check at push gate** — after the user's "push" OK, King runs `git merge-tree --write-tree --no-messages "origin/$BASE" <branch>` to dry-merge against the latest `origin/$BASE` (`<branch>` = the lane tip `<role>-<n>` on the solo path, or the Senior's `story/<id>` on the pod path). If conflicts, push is blocked.
 
 Together these replace what `ownsPaths` did in v0.4.0 — without the staleness problem (paths drift; workers stay generic).
 
@@ -888,23 +962,27 @@ Keys are arbitrary; the King runs each list as bash commands inside the lane's w
 
 ---
 
-## Spawning the kingdom — PRIMARY path (manaflow/cmux.app + claude-teams)
+## Spawning the kingdom — PRIMARY path (manaflow/cmux.app workspaces)
 
 Done once at the start of a kingdom session. Idempotent. Reads shape from `kingdom.json`.
 
+> **Canonical spawn lives in `commands/work.md` Step 0.4**, not here. Each lane workspace is brought up via `spawn_master_workspace` (Seniors + workers + co-workers) and a watchman/Senior `/loop` is auto-dispatched via `spawn_loop` (see [`functions/index.md`](../functions/index.md)); per **R52** the King injects `/kingdom:self-<role>` as each freshly-spawned lane's FIRST message BEFORE any task brief, so the lane pulls its rules from disk (this is exactly how [`senior.md`](senior.md), [`worker.md`](worker.md), [`co-worker.md`](co-worker.md), and [`watchman.md`](watchman.md) describe their spawn). All multiplexer access goes through the `cmux_*` wrappers (transparently routed to the tmux mirror under `KINGDOM_BACKEND=tmux`); never raw `cmux`/`tmux` (v0.36.0+). The lower-level bash below documents the underlying git-worktree + host-detection mechanics those helpers wrap.
+
 ```bash
-WS=/Users/ter/Desktop/Bonfire                # workspace root
+WS=<workspace-root>                          # workspace root (the dir holding .kingdom/)
 PROJ=$WS/<project>                           # project directory
 LOGS=$WS/.kingdom/$(basename "$PROJ")/logs   # workspace-level logs dir
-BASE=develop                                 # from kingdom.json.git.base
+BASE=develop                                 # from kingdom.json.git.base ($BASE below)
 
-# Auto-detect outer host mode (the King runs this once at startup)
-if [ -n "$CMUX_CLAUDE_PID" ] && [ -d "/Applications/cmux.app" ]; then
-  MODE=primary        # manaflow/cmux.app + native splits via cmux claude-teams
+# Auto-detect outer host mode (the King runs this once at startup). Canonical
+# detection is `kingdom_detect_backend` / `kingdom_backend_init` (functions/index.md);
+# the inline form is shown here for orientation.
+if [ -n "$CMUX_CLAUDE_PID" ] && command -v cmux >/dev/null 2>&1; then
+  MODE=primary        # manaflow/cmux.app — one cmux workspace per lane
 elif command -v tmux >/dev/null 2>&1; then
-  MODE=fallback       # raw tmux + git worktree
+  MODE=fallback       # tmux — one window per lane
 else
-  MODE=headless       # claude -p, no panes
+  MODE=headless       # claude -p, no lane workspaces
 fi
 
 # ─── Phase 1: project git state ─────────────────────────────────────────
@@ -938,15 +1016,25 @@ for I in $(seq 1 "$WATCHMEN"); do
     git -C "$PROJ" worktree add -b "watchman-$I" "$PROJ/.worktrees/watchman-$I" "origin/$BASE"
 done
 
-# ─── Phase 5 (PRIMARY): spawn the team via cmux claude-teams ────────────
-# Pre-req: ~/.claude/settings.json has "teammateMode": "tmux" and
-#          env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1".
-cmux claude-teams
-
-# ─── Phase 6 (PRIMARY): pin each teammate to its lane's worktree ────────
-WS_ID=$(cmux current-workspace --json | jq -r .id)
-# Discover panes; route each into its lane's worktree; name tabs to match branch.
-# (Exact handle-walk depends on cmux claude-teams's layout; see cmux.app docs.)
+# ─── Phase 5 (PRIMARY): spawn ONE cmux workspace per lane ───────────────
+# The kingdom does NOT use `cmux claude-teams` (it's a thin `claude --print`
+# pass-through that needs input — see reference/cmux.md § Common pitfalls).
+# Each lane is its own workspace booted with `claude`, created by the
+# `spawn_master_workspace` helper (which wraps `cmux_new_workspace`, then names +
+# colours the sidebar entry). This is the canonical flow in commands/work.md Step 0.4.
+for I in $(seq 1 "$WORKERS"); do
+  spawn_master_workspace "👷 worker-$I" "$PROJ/.worktrees/worker-$I" Purple
+done
+for I in $(seq 1 "$COWORKERS"); do
+  spawn_master_workspace "🧑‍💼 co-worker-$I" "$PROJ/.worktrees/co-worker-$I" Blue
+done
+for I in $(seq 1 "$WATCHMEN"); do
+  spawn_master_workspace "🕵️ watchman-$I" "$PROJ/.worktrees/watchman-$I" Rose
+  spawn_loop "watchman-$I"        # auto-dispatch the /loop (R39); see functions/index.md
+done
+# Captured workspace refs are persisted to <LOGS>/workspace-refs.env so the King
+# + watchman can address lanes by stable refs across restarts.
+# Per R52, the King then injects `/kingdom:self-<role>` as each lane's FIRST message.
 ```
 
 ### Fallback path (raw tmux + git worktree)
@@ -988,9 +1076,15 @@ jq -r '.gate.tests[]' "$KJSON" | while read cmd; do eval "$cmd" || exit 1; done
 git fetch origin
 git merge --no-commit --no-ff "origin/$BASE" && git merge --abort
 
-# (d) Cross-lane file-overlap check
+# (d) Cross-lane file-overlap check.
+# Enumerate live lanes DYNAMICALLY (R28-style) — a hardcoded worker-1..co-worker-1
+# list silently skips worker-4+, additional co-workers, and story/* pod branches in
+# a larger fleet shape (same dynamic-enumeration fix the watchman applies). The
+# watchman's Duty 3 (cross-lane conflict scan) is the continuous version of this;
+# this gate check is the push-time confirmation.
 CURRENT_LANE=$(basename "$WT")
-for OTHER_LANE in worker-1 worker-2 worker-3 co-worker-1; do
+for OTHER_LANE in $(git -C "$PROJ" for-each-ref --format='%(refname:short)' \
+                      'refs/heads/worker-*' 'refs/heads/co-worker-*' 'refs/heads/story/*' 2>/dev/null); do
   [ "$OTHER_LANE" = "$CURRENT_LANE" ] && continue
   git diff --name-only "$BASE..$OTHER_LANE" 2>/dev/null \
     | grep -Fxf <(git diff --name-only "$BASE..HEAD") \
@@ -998,7 +1092,7 @@ for OTHER_LANE in worker-1 worker-2 worker-3 co-worker-1; do
 done
 ```
 
-If any check fails: King writes the failure to the test report (below), does NOT request push approval, may dispatch a fix-task to the lane. King also fires `cmux notify` to the originating master's workspace so the lane gets a blue ring + sidebar badge:
+If any check fails: King writes the failure to the test report (below), does NOT request push approval, may dispatch a fix-task to the lane. King also fires `cmux_notify` to the originating master's workspace so the lane gets a blue ring + sidebar badge:
 
 ```bash
 source "$LOGS/workspace-refs.env"   # exposes $WORKER_WS_N etc.
@@ -1026,6 +1120,8 @@ After every pre-commit gate run, King writes a per-lane-per-task report:
 ```
 
 `<UTC>` = `YYYY-MM-DDTHHMMZ` (no colons, trailing `Z`). Multiple gate runs against the same sub-task sort chronologically.
+
+Once this report is on disk it is the durable record for that sentinel — the report, not the flag, is what the un-gated detector keys off thereafter, so the gate never re-runs for it. The `done/<ID>__<sub>-<lane>.flag` is **not** deleted here, though: it stays until the lane is pushed (it still feeds the multi-lane overlay-rebuild set through review), and is pruned at § push gate Step 8 (see [§ The auto-trigger rule](#the-auto-trigger-rule)).
 
 Header schema (master-readable in 15 lines):
 
@@ -1096,24 +1192,28 @@ King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = pr
 1. **Pre-commit gate passes** → King has green test report. The lane's task file (`<LOGS>/../tasks/<UTC>__<lane>__<id>.md`) should already have its status set to `verifying` or `done` at this point; King reads it to understand the layered execution before approving the push.
 2. **King reports to chat:** "Lane <name> ready. Test report at <path>. Proposed PR title: `feat(scope): ...`. Proposed PR branch name: `feature/<topic>`. Push?"
 3. **The user says push** (or holds with reasoning).
-4. **FINAL conflict check** (King-only, after the user's approval):
+4. **FINAL conflict check** (King-only, after the user's approval). `<branch>` = the lane tip `<role>-<n>` (solo path) or the Senior's `story/<id>` (pod path):
    ```bash
    cd "$PROJ"
    git fetch origin
-   if git merge-tree --write-tree --no-messages origin/develop "<role>-<n>" \
+   if git merge-tree --write-tree --no-messages "origin/$BASE" "<branch>" \
         | grep -qE '^<<<<<<<|^=======|^>>>>>>>'; then
-     echo "CONFLICT: origin/develop moved during approval window."
-     # → dispatch rebase to lane, re-run pre-commit gate, re-request approval
+     echo "CONFLICT: origin/$BASE moved during approval window."
+     # Solo → dispatch rebase to the lane; pod → hand the drift back to the
+     # Senior (R49 within-story) / resolve cross-story drift (R50). Then re-run
+     # the gate (solo Tier-2 overlay / pod story Tier-2) + re-request approval.
    fi
    ```
-5. **King carves `feature/<topic>` + pushes (from primary checkout):**
+5. **King carves the PR branch + pushes (from primary checkout)** — canonical helper [`carve_and_push_feature.sh`](../functions/carve_and_push_feature.sh) (auto-fills the body from the task file, see § Auto-generated PR body):
+   - **Solo path** — carve `feature/<topic>` byte-for-byte from the lane tip `<role>-<n>` (R9), push, open the PR against `$BASE`:
    ```bash
    cd "$PROJ"
    git branch "feature/<topic>" "<role>-<n>"     # ref-only; no checkout, lane worktree unaffected
    git push -u origin "feature/<topic>"
-   gh pr create --base develop --head "feature/<topic>" \
+   gh pr create --base "$BASE" --head "feature/<topic>" \
        --title "feat(scope): ..." --body "..." --reviewer <lead>
    ```
+   - **Pod path** — the branch to push is the Senior's already-assembled `story/<id>` (NOT a per-lane `feature/<topic>`; lane branches stay local per R6). The King carves the `story/<id> -> $BASE` PR after reading the `SENIOR_*` verdict + running the cross-story check (R50); it never re-overlays or re-gates the story (R48). See [§ Story-pod delegation + cross-story](#story-pod-delegation--cross-story-v0320-r30r46-r50).
 6. **King logs push** — appends one line to `master_agent.log` with timestamp + PR number.
 7. **After PR merge** (lead clicks Merge or manually closes): King resyncs kingdom and frees the merged lane via the canonical helper (R26):
    ```bash
@@ -1192,7 +1292,7 @@ When in doubt, prefer `tail master_agent.log` first — most decisions can be ma
 
 ## Reviewing watchman audit findings
 
-Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, missing log lines, dead `[[name]]` links). High-risk findings are flagged to `<LOGS>/WATCH_DOCS_AUDIT.md` for King review. See [`watchman.md`](watchman.md) → "Docs audit duty".
+Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, missing log lines, dead `[[name]]` links). High-risk findings are flagged to `<LOGS>/watch/WATCH_DOCS_AUDIT.md` for King review (K10/v0.37.0 — all `WATCH_*` reports live under `logs/watch/`, out of the project git tree). See [`watchman.md`](watchman.md) → "Docs audit duty".
 
 ### When to read it
 
@@ -1201,7 +1301,7 @@ Watchman has scoped write authority for low-risk audit fixes (stale checkboxes, 
 - After a watchman alert mentions docs drift.
 
 ```bash
-WATCH_AUDIT="$LOGS/WATCH_DOCS_AUDIT.md"
+WATCH_AUDIT="$LOGS/watch/WATCH_DOCS_AUDIT.md"   # rolling single-file report (not pruned by the retention sweep)
 [ -f "$WATCH_AUDIT" ] && cat "$WATCH_AUDIT" || echo "No watchman audit findings yet."
 ```
 
@@ -1324,9 +1424,9 @@ flowchart TB
 
 | Action | When | How |
 |---|---|---|
-| **Spawn** | More independent work appears | cmux.app (primary): split new pane + `git worktree add -b <slug> "$PROJ/.worktrees/<slug>" "origin/$BASE"`. AGENT mode (no cmux/tmux): `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<slug> && ...")` per R31. Headless: `claude -p` against new worktree. |
-| **Shutdown / close** | Finished + nothing left to do | Tmux/cmux.app: `tmux send-keys -t <pane> "/exit" Enter; sleep 1; tmux kill-pane`. Then `git worktree remove "$PROJ/.worktrees/<slug>" --force; git branch -D <slug> 2>/dev/null || true`. Standalone Agent: already returned. |
-| **Compact / reuse** | Keep pane + worktree, free Claude's context before next task | Inside the lane pane: `cmux_send "<pane-handle>" "/compact"`. Wait for context% to drop, then send next task. **Mandatory between tasks in the same lane** — without it, lane context accumulates and pollutes later work. |
+| **Spawn** | More independent work appears | cmux/tmux (PRIMARY/FALLBACK): `spawn_master_workspace` (it wraps the `git worktree add -b <slug> "$PROJ/.worktrees/<slug>" "origin/$BASE"` + workspace bring-up); then inject `/kingdom:self-<role>` as the lane's FIRST message (R52) before any brief. Standalone (no cmux/tmux): `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<slug> && ...")` per R31 — Agent() is the standalone-only path (in-process Agent in a King with a live backend is banned, R38). Headless: `claude -p` against a new worktree. |
+| **Shutdown / close** | Finished + nothing left to do | `cmux_close_workspace "<lane-ws>"` (the canonical teardown — routes to `tmux kill-window` under `KINGDOM_BACKEND=tmux`; NOT `tab-action close-others`, a banned pattern). Then `git worktree remove "$PROJ/.worktrees/<slug>" --force; git branch -D <slug> 2>/dev/null \|\| true`. Standalone Agent: already returned. |
+| **Compact / reuse** | Keep pane + worktree, free Claude's context before next task | Inside the lane: `cmux_send "<lane-ws>" "/compact"`. Wait for context% to drop, then send next task. **Mandatory between tasks in the same lane** — without it, lane context accumulates and pollutes later work. |
 
 **Forbidden:**
 - ❌ Sleep / idle "in case we need it later" — close + respawn instead. Exception: the kingdom's persistent lane panes are *expected* to stay up across tasks (recycled via `/compact`).

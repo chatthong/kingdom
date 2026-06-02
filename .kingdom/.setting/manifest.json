@@ -1,10 +1,11 @@
 {
-  "_comment": "Feature registry (v0.40.0). Function NAMES are action-based, not role-based — any role loads any helper it needs. Loading is grouped only by BACKEND/CAPABILITY, not role: core (always; all backend-agnostic mechanics) deps cmux; cmux (always; the cmux.app wrappers); browser (on-demand capability). The former senior/watchman feature gating was removed — their helpers (create_story_branch, merge_into_story, review_tick, run_tier2_on_story, cross_story_scan, guard_dispatch_scope, spawn_loop) are now plain core functions.",
+  "_comment": "Feature registry. Function NAMES are action-based, not role-based — any role loads any helper. Grouped by BACKEND/CAPABILITY: core (always) deps cmux; cmux (always; the cmux.app PRIMARY backend); tmux (v0.41.0; the FALLBACK backend — load_feature tmux when cmux is absent, then KINGDOM_BACKEND=tmux routes cmux_* calls to tmux); browser (on-demand). Backend gating, not role gating.",
   "features": {
     "core": {
       "always": true,
       "deps": [
-        "cmux"
+        "cmux",
+        "tmux"
       ],
       "functions": [
         "_bounded_wait",
@@ -27,6 +28,8 @@
         "guard_no_worktree_cd",
         "haiku_read_docs_orientation",
         "init_subagent_pool",
+        "kingdom_backend_init",
+        "kingdom_detect_backend",
         "kingdom_discard_overlay",
         "kingdom_overlay_lane",
         "kingdom_reset",
@@ -85,6 +88,28 @@
         "cmux_tab_action",
         "cmux_tree",
         "cmux_workspace_action"
+      ]
+    },
+    "tmux": {
+      "_comment": "FALLBACK backend (v0.41.0): one micro-wrapper per tmux op (mirrors cmux/). One tmux session whose windows are the lanes; the status-bar window list = the cmux colored-workspace sidebar. `load_feature tmux` then set KINGDOM_BACKEND=tmux (the activator kingdom_use_tmux_backend — listed last — routes all cmux_*/spawn_* calls to tmux). Used when cmux.app is unavailable (Linux, or macOS without cmux).",
+      "functions": [
+        "tmux_capture_pane",
+        "tmux_close_workspace",
+        "tmux_identify",
+        "tmux_list_workspaces",
+        "tmux_new_split",
+        "tmux_new_workspace",
+        "tmux_notify",
+        "tmux_read_screen",
+        "tmux_send",
+        "tmux_send_key",
+        "tmux_set_state",
+        "tmux_setup_session",
+        "tmux_tab_action",
+        "tmux_target",
+        "tmux_tree",
+        "tmux_workspace_action",
+        "kingdom_use_tmux_backend"
       ]
     },
     "browser": {

@@ -18,8 +18,8 @@
 > │  ${LIVE_STATE_LIST}                                     │
 > │                                                         │
 > │  Reply with any of:                                     │
-> │    • a project name (e.g. "bfg-swt")                    │
-> │    • free-form intent (e.g. "fix login bug in bfg-swt") │
+> │    • a project name (e.g. "my-app")                    │
+> │    • free-form intent (e.g. "fix login bug in my-app") │
 > │    • a specific task/PR ID                              │
 > │    • inline caps (e.g. "5 tasks today" or "30-50/wk")   │
 > │                                                         │
@@ -39,7 +39,7 @@
 ## Example `${PROJECTS_LIST}` rendering
 
 ```text
-  • bfg-swt   · last activity 2h ago · 4 PRs open · 1 task in-flight
+  • my-app   · last activity 2h ago · 4 PRs open · 1 task in-flight
   • cert-site · last activity 3d ago · 0 PRs open · idle
   • td-rep    · last activity 12h ago · 0 PRs open · idle
 ```
@@ -49,8 +49,8 @@ Each project row shows: name + last `master_agent.log` activity + PR count + in-
 ## Example `${LIVE_STATE_LIST}` rendering
 
 ```text
-  → bfg-swt PR #257 has 3 unresolved lead comments (lead-requested follow-up)
-  → bfg-swt worker-1 FE-P0-FOUND.5 blocked on 2 user-decision items (resume?)
+  → my-app PR #257 has 3 unresolved lead comments (lead-requested follow-up)
+  → my-app worker-1 FE-P0-FOUND.5 blocked on 2 user-decision items (resume?)
   → cert-site no live state (idle)
 ```
 
@@ -62,13 +62,13 @@ After the card is rendered, King waits for the user's reply (next chat message).
 
 | User says | King parses |
 |---|---|
-| `bfg-swt` | `project=bfg-swt`, no task_hint |
-| `work on bfg-swt` | `project=bfg-swt`, no task_hint |
-| `fix login bug in bfg-swt` | `project=bfg-swt`, `task_hint="fix login bug"` |
+| `my-app` | `project=my-app`, no task_hint |
+| `work on my-app` | `project=my-app`, no task_hint |
+| `fix login bug in my-app` | `project=my-app`, `task_hint="fix login bug"` |
 | `continue worker-1 PDPA` | `project=<inferred>`, `task_hint="resume worker-1 FE-P0-FOUND.5"` (fuzzy-matched) |
 | `review PR 257` | `project=<inferred from PR>`, `task_hint="address lead comments on PR #257"` |
 | `pair on co-worker-1 for the wireframe` | `project=<inferred>`, `task_hint="pair on co-worker-1, scope: wireframe"` |
-| `5 PRs today, bfg-swt` | `project=bfg-swt`, `pr-limit=5` |
+| `5 PRs today, my-app` | `project=my-app`, `pr-limit=5` |
 | `3 stories on cert-site` | `project=cert-site`, `pod-limit=3` |
 | `till lunch` | `project=<current>`, soft hint (no limit, King decides) |
 | `cancel` / `nvm` / `forget it` | Exit without starting the kingdom. |
@@ -84,7 +84,7 @@ Before proceeding to Step 0.1 (and the rest of `/kingdom:work`), King prints the
 
 ```text
 👑 Parsed:
-   project   = bfg-swt
+   project   = my-app
    task      = continue worker-1 FE-P0-FOUND.5 (matched task file)
    cap       = (none)
    target    = (none)

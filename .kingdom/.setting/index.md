@@ -17,11 +17,12 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`senior.md`](roles/senior.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
 | [`git.md`](reference/git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
 | [`cmux.md`](reference/cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
-| [`functions/`](functions/) | **Shared bash helpers (one function per file)** — 80 helpers (49 core + 23 cmux + 8 browser), one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. Function names are action-based (v0.40.0) — any role loads any helper. (`_primitives.md` is now a pointer to this folder.) |
+| [`functions/`](functions/) | **Shared bash helpers (one function per file)** — 99 helpers (51 core + 23 cmux + 8 browser + 17 tmux), one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. Function names are action-based (v0.40.0) — any role loads any helper. `core` loads BOTH the cmux + tmux backends; `kingdom_backend_init` picks the live one (v0.41.0). (`_primitives.md` is now a pointer to this folder.) |
 | [`manifest.json`](manifest.json) | **Feature registry (v0.40.0)** — features group by BACKEND/CAPABILITY, not role: `core` (always; every backend-agnostic helper) deps `cmux` (always; the cmux.app wrappers); `browser` (on-demand). Function names are action-based, so **any role loads any helper** it needs (`source functions/_load.sh; load <names>`). `load_feature browser` adds the on-demand browser wrappers; core+cmux load by default. |
 | [`cards/`](cards/) | **Card display library** (v0.22.0+) — 26 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
 | [`skill-routing.md`](reference/skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
 | [`role-bootstrap.md`](reference/role-bootstrap.md) | **Role re-grounding procedure** (v0.39.0, R52) — the shared read-order + per-role summary behind `/kingdom:self-king` / `:self-worker` / `:self-co-worker` / `:self-watchman` / `:self-senior`. King injects `/kingdom:self-<role>` as a fresh lane's FIRST message so the lane pulls its rules from disk, not from the King's (drifted) prompt. Any role re-runs it to re-ground. |
+| [`workflow-fanout.md`](reference/workflow-fanout.md) | **Sub-agent fan-out via the Workflow tool** (v0.43.0, R53) — when the session exposes the Claude Code Workflow tool, a role's heavy fan-out runs through it (the live `/workflows` view, one run per task), falling back to bounded `Agent()`/cmux-tabs otherwise. The self-detect → fall-back decision, a Discover→Execute→Verify script skeleton, and per-role shapes. |
 
 ---
 
@@ -140,7 +141,7 @@ Example: `2026-05-17T1430Z__worker-1__BE-P0-CICD.1.md`
 Each project's `CLAUDE.md` auto-loads when a session starts in that directory. Inject this pointer block once per project:
 
 ```bash
-PROJ=/Users/ter/Desktop/Bonfire/<project-name>
+PROJ=/path/to/workspace/<project-name>
 grep -q "kingdom/.setting/index.md" "$PROJ/CLAUDE.md" 2>/dev/null || \
   cat >> "$PROJ/CLAUDE.md" <<'POINTER'
 
@@ -150,7 +151,7 @@ grep -q "kingdom/.setting/index.md" "$PROJ/CLAUDE.md" 2>/dev/null || \
 
 When acting as master-agent in this project, before dispatching any worker:
 
-1. `Read(/Users/ter/Desktop/Bonfire/.kingdom/.setting/index.md)` — workspace rules + role file map
+1. `Read(/path/to/workspace/.kingdom/.setting/index.md)` — workspace rules + role file map
 2. Read the relevant role file per the task at hand (`roles/king.md` / `roles/worker.md` / `roles/co-worker.md` / `roles/watchman.md` / `roles/senior.md`; reference guides in `reference/git.md` / `reference/cmux.md`)
 
 The kingdom is a Claude-only fleet. Don't reconstruct prompts from memory — re-read each session before first dispatch.
@@ -177,18 +178,42 @@ At session start, master decides mode first:
   - tmux is available
   - the user wants the watch-panes UX
 
-  Spawns a tmux session named `kingdom`. Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol. See [`king.md`](roles/king.md) → Spawning the kingdom (fallback).
+  Spawns a tmux session named `kingdom` whose **windows are the lanes** — the status-bar window list is the cmux colored sidebar (one entry per lane, per-role colour). Activate the backend so every `cmux_*` call routes to tmux with no call-site changes:
+  ```bash
+  load_feature tmux && export KINGDOM_BACKEND=tmux   # functions/tmux/
+  ```
+  Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol (`cmux_notify` falls back to a durable `king-inbox/` file under tmux). The tmux wrappers mirror `cmux/` one-for-one — see [`functions/index.md`](functions/index.md) § tmux.
 
 - **Standalone mode:** default for everything else. No worktrees, no teammates. Master spawns parallel sub-agents via the `Agent` tool — multiple Agent calls in one message run concurrently.
 
-**Detection helper (Bash):**
+**Detection + activation (one call, at session start — before any spawn or `cmux_*` call):**
 
 ```bash
-if [ -n "$CMUX_CLAUDE_PID" ]; then echo "primary"
-elif command -v tmux >/dev/null && tmux ls 2>/dev/null | grep -q .; then echo "fallback-available"
-else echo "standalone-only"
-fi
+source .kingdom/.setting/functions/_load.sh
+load_feature core          # loads BOTH backends (cmux + tmux) + the detector
+kingdom_backend_init        # detect cmux.app vs other → export KINGDOM_BACKEND, activate, print which
 ```
+
+`kingdom_backend_init` (→ `kingdom_detect_backend`) picks the backend by the actual host app:
+- **cmux** (PRIMARY) — `$CMUX_CLAUDE_PID` set AND the `cmux` CLI present (we're inside a cmux.app session).
+- **tmux** (FALLBACK) — any OTHER terminal (Ghostty, iTerm2, Terminal.app, Linux) with tmux available. `cmux_*`/`spawn_*` are transparently routed to the tmux backend (`kingdom_use_tmux_backend`), so every role/command works unchanged. Wrappers: [`functions/index.md`](functions/index.md) § tmux.
+- **standalone** — neither: no lane workspaces (in-process `Agent()` sub-agents only).
+
+Requiring BOTH the cmux env var and the `cmux` binary means a stray `$CMUX_*` var alone never mis-routes the King to a missing CLI — it cleanly falls to tmux.
+
+### Multi-session — why it's robust (both apps open, 2 kingdoms, 2 Kings)
+
+**Detection is PER-PROCESS, not a global scan.** `kingdom_detect_backend` reads only THIS King's own environment (`$CMUX_CLAUDE_PID`, inherited from the app that launched it). cmux.app sets that var only in the sessions IT spawns; a Claude launched from Ghostty never has it — even if cmux.app is open in another window. So "which app is also running" is irrelevant; only "which app launched ME" decides.
+
+| Your setup | What each King detects / how it isolates |
+|---|---|
+| cmux.app + Ghostty both open, **King in cmux.app** | That King's env has `$CMUX_CLAUDE_PID` + `cmux` CLI → **cmux**. The other app being open changes nothing. |
+| cmux.app + Ghostty both open, **King in Ghostty** | That King's env has NO `$CMUX_CLAUDE_PID` → **tmux**. cmux.app open elsewhere is ignored. |
+| **Two kingdoms — one in cmux.app, one in Ghostty** | Each King detects its own host independently (separate processes, separate env). The cmux King drives cmux workspaces; the Ghostty King drives its own tmux session `kingdom-<project>`. No crosstalk. |
+| **Two Kings both in cmux.app (2 windows)** | Both detect cmux. Each `cmux_identify` returns ITS OWN window/workspace (per-process socket context); `spawnWindow="current"` keeps each King's lanes in its own window. |
+| **Two Kings both in Ghostty (2 windows)** | Both detect tmux. Each uses a **project-scoped session** `kingdom-<project>` (set by `commands/work.md`), so two *different projects* never share one tmux session. |
+
+**The isolation boundary is the PROJECT.** Runtime state lives in `<workspace>/.kingdom/<project>/logs/` (`workspace-refs.env`, `watchman_state.json`, sentinels) and the tmux session is `kingdom-<project>`. **Invariant: one King per project per workspace.** Two Kings on the *same* project would collide on those per-project files regardless of backend — that's not a supported configuration (run the 2nd King on a different project, or a different workspace clone).
 
 ---
 

@@ -28,7 +28,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | active project | `bfg-swt` |
+| `${PROJECT}` | active project | `my-app` |
 | `${LOCAL_DATETIME}` | `date '+%A, %B %-d, %Y · %H:%M %Z'` | `Monday, May 18, 2026 · 21:42 +07` |
 | `${TASKS_DONE}` | sentinel count for today | `7` |
 | `${BUDGET_TODAY}` | parse_target daily band | `6-10` |

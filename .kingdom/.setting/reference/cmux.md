@@ -207,7 +207,7 @@ Special keys: `cmux_send_key "$ref" C-l` (Ctrl-L, clear), `C-c` (Ctrl-C), etc.
 
 | Command | What it renames | Use case |
 |---|---|---|
-| `cmux workspace-action --action rename --workspace <ws> --title "…"` | **Workspace itself** (sidebar label) | Setting the role-level identity: `👑 King · bfg-swt`, `👷 worker-1` |
+| `cmux workspace-action --action rename --workspace <ws> --title "…"` | **Workspace itself** (sidebar label) | Setting the role-level identity: `👑 King · my-app`, `👷 worker-1` |
 | `cmux tab-action --action rename --surface <ref> --title "…"` | **Inner surface** (tab label inside a workspace) | Setting per-tab labels when a workspace has multiple tabs (e.g., `🐱 sub · Sonnet · code`) |
 | `cmux rename-tab --surface <ref> -- "…"` | Same as `tab-action --action rename` (alias) | Convenience |
 
@@ -393,7 +393,7 @@ cmux identify --json
 # {
 #   "caller": { "workspace_ref": "workspace:7", "surface_ref": "surface:12", ... },
 #   "focused": { ... },
-#   "socket_path": "/Users/ter/Library/Application Support/cmux/cmux.sock"
+#   "socket_path": "/Users/you/Library/Application Support/cmux/cmux.sock"
 # }
 ```
 
@@ -596,7 +596,7 @@ cmux workspace-action --action set-description --workspace "$LANE_WS" --descript
 ```text
 👑 King — state line:
    ▶ Gating worker-2 · BE-AUTH-3       (running pre-commit gate)
-   ⚠ Push? · worker-2 · BE-AUTH-3      (gate passed, awaiting Ter)
+   ⚠ Push? · worker-2 · BE-AUTH-3      (gate passed, awaiting you)
    ✅ Pushed feature/auth-refactor 04Z  (after push complete)
    🐾 Idle · 3 lanes active             (no active King work)
 
@@ -611,7 +611,7 @@ cmux workspace-action --action set-description --workspace "$LANE_WS" --descript
 
 🧑‍💼 Co-worker — state line:
    🐾 Dormant · activate with "pair on co-worker-1"
-   ▶ UI-CHK-12 · Ter paired             (when Ter is actively pairing)
+   ▶ UI-CHK-12 · user paired            (when you are actively pairing)
    ✅ UI-CHK-12 done · sentinel written
    ⚠ Blocked · permission prompt
 

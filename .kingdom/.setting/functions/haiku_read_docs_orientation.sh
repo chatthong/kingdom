@@ -13,8 +13,13 @@ haiku_read_docs_orientation () {
   local role="$1" proj="$2" logs="$3"
   local cap="${HAIKU_CAP:-10}"; [ "$cap" -gt 10 ] && cap=10
   local utc=$(date -u +%Y-%m-%dT%H%MZ)
-  local digest_dir="$logs/.${role}_${utc}_doc_digests"
-  local out="$logs/.${role}_${utc}_doc_context.md"
+  # v0.37.0 longevity fix: STABLE names (no per-invocation `_${utc}_` segment) so
+  # each kickoff/re-ground/resume OVERWRITES the prior artifacts instead of
+  # accumulating thousands of scratch files per month. The $utc still appears as a
+  # heading INSIDE $out (when this run, see below).
+  local digest_dir="$logs/.${role}_doc_digests"
+  local out="$logs/.${role}_doc_context.md"
+  local hashfile="$logs/.${role}_doc_context.hash"
   mkdir -p "$digest_dir"
 
   # === Phase 1: "you are here" files ===
@@ -54,6 +59,35 @@ haiku_read_docs_orientation () {
         else mtime=$(stat -c '%Y' "$f" 2>/dev/null); fi
         [ -n "$mtime" ] && printf '%s\t%s\n' "$mtime" "$f"
       done | sort -rn | head -20 | cut -f2-)
+
+  # === Content-hash cache ===
+  # v0.37.0 optimization: hash the SELECTED file set as (path + mtime) pairs. If
+  # the hash matches the stored one AND the prior context file still exists, the
+  # docs haven't changed since the last orientation — SKIP the ~50-file Haiku
+  # fan-out entirely and reuse the existing context. Only re-digest when the set
+  # (or any file's mtime) changed. mtime is already gathered for phase2 above; we
+  # recompute here over the final selected set (phase1 + phase2) for a single,
+  # order-stable signature.
+  local cur_hash
+  cur_hash=$(
+    printf '%s\n' "$phase1_files" "$phase2_files" | while IFS= read -r f; do
+      [ -z "$f" ] && continue
+      [ -f "$f" ] || continue
+      if mtime=$(stat -f '%m' "$f" 2>/dev/null); then :
+      else mtime=$(stat -c '%Y' "$f" 2>/dev/null); fi
+      printf '%s\t%s\n' "$mtime" "$f"
+    done | sort | { shasum 2>/dev/null || cksum; } | awk '{print $1}'
+  )
+  if [ -n "$cur_hash" ] && [ -f "$out" ] && [ -f "$hashfile" ] \
+     && [ "$cur_hash" = "$(cat "$hashfile" 2>/dev/null)" ]; then
+    # Cache hit — docs unchanged. Reuse the existing context file untouched.
+    echo "$out"
+    return 0
+  fi
+
+  # Cache miss — re-digest. Clear stale digests from a prior (different) file set
+  # so the consolidation below doesn't concatenate orphaned phase*__*.md files.
+  find "$digest_dir" -maxdepth 1 -name 'phase*__*.md' -delete 2>/dev/null
 
   # === Phase 1 fan-out — read wayfinding files first ===
   # Up to $cap Haiku in parallel; bounded by _bounded_wait so one slow read
@@ -130,6 +164,9 @@ Output ONLY to $digest_dir/phase2__${slug}.md — no other edits."
       [ -f "$d" ] && { echo "### $(basename "$d" .md | sed 's/^phase2__//')"; cat "$d"; echo ""; }
     done < <(find "$digest_dir" -maxdepth 1 -name 'phase2__*.md' 2>/dev/null | sort)
   } > "$out"
+
+  # Persist the signature so the next call can short-circuit if docs are unchanged.
+  [ -n "$cur_hash" ] && printf '%s\n' "$cur_hash" > "$hashfile"
 
   echo "$out"
 }

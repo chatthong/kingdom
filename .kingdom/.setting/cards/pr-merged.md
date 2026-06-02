@@ -29,7 +29,7 @@
 | Var | Source | Example |
 |---|---|---|
 | `${PR_NUMBER}` | merged PR number | `258` |
-| `${PR_TITLE}` | PR title from `gh pr view` | `feat(webshop): middleware refresh-on-expiry` |
+| `${PR_TITLE}` | PR title from `gh pr view` | `feat(shop): middleware refresh-on-expiry` |
 | `${MERGE_SHA}` | `gh pr view --json mergeCommit -q .mergeCommit.oid` truncated to 7 chars | `def5678` |
 | `${LANE_FREED}` | lane whose commit just landed | `worker-2` |
 

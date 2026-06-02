@@ -1,126 +1,64 @@
-# TMUX-Guide.md — Tmux 101 for Bonfire
+# TMUX-Guide — the kingdom's FALLBACK backend
 
-> Pure tmux fundamentals. For git-worktree isolation per agent, see
-> [`CMUX-Guide.md`](CMUX-Guide.md). For workspace orchestration (King +
-> 4-lane model), see [`.kingdom/.setting/index.md`](.kingdom/.setting/index.md).
+When **cmux.app is unavailable** (Linux, or macOS without cmux — e.g. running in Ghostty), the kingdom runs in **FALLBACK mode** on plain `tmux`. This guide is the cmux→tmux mapping that makes tmux feel as close to the cmux.app sidebar as a terminal multiplexer can. All commands below were verified live on **tmux 3.6 under Ghostty**.
 
-Tmux keeps work alive across terminal disconnects and lets you watch
-multiple processes in split panes. In Bonfire it's the outer multiplexer
-for the kingdom (King + 4 lane panes).
+> Primary path is cmux.app (see [`.kingdom/.setting/reference/cmux.md`](.kingdom/.setting/reference/cmux.md)). FALLBACK is functionally equivalent for dispatch/read/state/teardown; the one thing tmux can't do is a *vertical* sidebar — tmux's status bar is horizontal, so the "colored workspace list" becomes the **status-bar window list**, one colored entry per lane.
 
----
+## The model
 
-## Core concepts
+| cmux.app | tmux (FALLBACK) |
+|---|---|
+| Workspace (one per lane, colored sidebar entry) | **window** (one per lane), colored in the status-bar window list |
+| The vertical sidebar | the **status bar** (bottom) — `👑 kingdom·<proj>` on the left, the lane windows in the middle, `develop:green PRs:N` on the right |
+| Workspace color (King=Amber, worker=Purple, …) | per-window `@rolecolor` option, rendered in `window-status-format` |
+| Live description / state glyph | per-window `@state` option (▶ ⏸ ✅ ⚠ 🐾) — **set without renaming**, so the target handle stays stable |
+| Tab / split | `tmux split-window` (pane) |
+| Desktop notification | `tmux display-message` (transient) + `@state ⚠` glyph + a durable **king-inbox fallback file** (so an alert survives even with no one attached) |
+| Surface ref | not needed — `send-keys` targets the window directly |
 
-| Term    | What it is                                                       |
-| ------- | ---------------------------------------------------------------- |
-| Session | A named workspace that persists even after you close the terminal |
-| Window  | A full-screen tab inside a session                                |
-| Pane    | A split section inside a window                                   |
+**Window naming:** the window NAME is the bare lane slug (`king`, `worker-1`, `senior-1`) — stable, used as the target handle. The emoji, color, and state glyph are window OPTIONS rendered in the status format, so changing a lane's state never renames its window (and never breaks an in-flight `send-keys` target). This is the key design point.
 
-Bonfire convention: `pane-base-index 1` — panes count from `1.1`, never `1.0`.
-
----
-
-## Sessions
+## Activate it
 
 ```bash
-tmux new-session -s work               # create, attach immediately
-tmux new-session -d -s work            # create detached (in background)
-tmux attach -t work                    # attach to existing
-tmux ls                                # list all sessions
-tmux kill-session -t work              # kill one session
-tmux kill-server                       # kill all sessions
+source .kingdom/.setting/functions/_load.sh
+load_feature tmux             # sources functions/tmux/
+export KINGDOM_BACKEND=tmux    # → redefines cmux_* / spawn_* to route to tmux (kingdom_use_tmux_backend)
 ```
 
-Detach (session keeps running): `Ctrl-b  d`
+After that, **every existing role/command call site works unchanged** — `cmux_send`, `cmux_set_state`, `cmux_notify`, `spawn_master_workspace`, `spawn_loop`, … all dispatch to tmux. `/kingdom:self-care` detects a missing cmux + present tmux and reports FALLBACK; `/kingdom:work` sets `KINGDOM_BACKEND=tmux` and spawns lanes as tmux windows.
 
----
+## The backend wrappers (the `functions/tmux/` wrappers)
 
-## Panes
+| Wrapper | tmux it runs | Mirrors |
+|---|---|---|
+| `tmux_setup_session <proj> <cwd>` | `new-session` + sidebar styling (status bar, per-role `window-status-format`) | the cmux window/sidebar setup |
+| `tmux_new_workspace <slug> <cwd> <emoji> <color>` | `new-window` + `@emoji`/`@rolecolor`/`@state` | `cmux_new_workspace` |
+| `spawn_master_workspace <label> <path> <color>` | `tmux_new_workspace` + boots `claude` in the window | same name, FALLBACK impl |
+| `tmux_send <ws> <text>` | `send-keys -l "<text>"` then `send-keys Enter` | `cmux_send` |
+| `tmux_send_key <ws> <key>` | `send-keys <key>` | `cmux_send_key` |
+| `tmux_set_state <ws> <glyph> [text]` | `set-window-option @state` (no rename) | `cmux_set_state` |
+| `tmux_notify <ws> <title> <sub> <body>` | `display-message` + `@state ⚠` + king-inbox fallback file | `cmux_notify` |
+| `tmux_read_screen <ws>` | `capture-pane -p` (visible) | `cmux_read_screen` |
+| `tmux_capture_pane <ws> [N]` | `capture-pane -p -S -N` | `cmux_capture_pane` |
+| `tmux_list_workspaces` | `list-windows -F` | `cmux_list_workspaces` |
+| `tmux_close_workspace <ws>` | `kill-window` | `cmux_close_workspace` |
+| `tmux_new_split <ws> <-h\|-v>` | `split-window` | `cmux_new_split` |
+| `tmux_identify` | `display-message -p '#{session_name}:#{window_index}.#{pane_index}'` | `cmux_identify` |
 
-```text
-Ctrl-b  %          split horizontally (left | right)
-Ctrl-b  "          split vertically (top / bottom)
-Ctrl-b  arrow      move between panes
-Ctrl-b  z          zoom current pane (toggle fullscreen)
-Ctrl-b  x          close current pane
-Ctrl-b  [          enter scroll/copy mode (arrows to navigate, q to exit)
-```
+A "workspace ref" is a bare slug (`worker-1`) or `<session>:<slug>`; wrappers resolve either. Session name defaults to `kingdom` (`$KINGDOM_TMUX_SESSION`).
 
-Programmatic pane management:
+## See it
 
 ```bash
-SESSION=work; WIN=1
-tmux split-window -t $SESSION:$WIN.1 -h -c "$DIR"     # split horizontal
-tmux split-window -t $SESSION:$WIN.2 -v -c "$DIR"     # split vertical
-tmux select-layout -t $SESSION:$WIN main-vertical     # one big pane + stack
-tmux kill-pane    -t $SESSION:$WIN.3                  # close pane 3
+tmux attach -t kingdom        # the colored sidebar (status-bar window list); Ctrl-b w = window picker
+tmux capture-pane -t kingdom:worker-1 -p   # read a lane non-interactively (what the King does)
 ```
 
----
+## tmux gotchas (the ones that bite)
 
-## Sending text into a pane (`send-keys`)
-
-The way one Claude session (or shell) tells another pane what to do.
-
-```bash
-# ALWAYS use -l for prompt body — without it, tmux interprets words like
-# "Page" / "Down" as key names and emits "not in a mode" errors.
-tmux send-keys -t work:1.2 -l "your prompt body here"
-tmux send-keys -t work:1.2 Enter                     # Enter as a separate key event
-
-# Special keys are sent without -l:
-tmux send-keys -t work:1.2 C-l                       # Ctrl-L (clear/redraw)
-tmux send-keys -t work:1.2 "/compact" Enter          # send a slash command
-```
-
----
-
-## Reading from a pane (`capture-pane`)
-
-```bash
-tmux capture-pane -t work:1.2 -p                     # current visible content
-tmux capture-pane -t work:1.2 -p -S -300             # last 300 lines of scrollback
-```
-
-`-p` prints to stdout. Use this for visual peeking; for completion signals prefer file-based sentinels (see .kingdom/.setting/roles/king.md → "Pattern A — done-sentinel file").
-
----
-
-## Pane titles (visible header per pane)
-
-```bash
-tmux set -t work -g pane-border-status top
-tmux select-pane -t work:1.1 -T "King"
-tmux select-pane -t work:1.2 -T "Lane working-1"
-```
-
----
-
-## Common gotchas
-
-| Symptom                                | Fix                                                              |
-| -------------------------------------- | ---------------------------------------------------------------- |
-| Pane shows only separator line         | TUI didn't redraw — `tmux send-keys -t <pane> C-l`               |
-| `not in a mode` errors on send-keys    | Forgot `-l` flag on the prompt body                              |
-| `can't find pane: 0`                   | Use `1.1`/`1.2`/… — pane-base-index is 1                         |
-| `Window too small`                     | Pane has <10 rows; re-run `select-layout` + shrink main pane     |
-| Pane treats your input as a new prompt | You sent characters into an idle pane; only send when intended    |
-
----
-
-## Essential shortcut card
-
-| Action                          | Keys                                 |
-| ------------------------------- | ------------------------------------ |
-| Detach from session             | `Ctrl-b  d`                          |
-| List sessions                   | `tmux ls`                            |
-| Attach                          | `tmux attach -t <name>`              |
-| New window                      | `Ctrl-b  c`                          |
-| Switch window                   | `Ctrl-b  n` / `p`                    |
-| Split left/right                | `Ctrl-b  %`                          |
-| Split top/bottom                | `Ctrl-b  "`                          |
-| Move between panes              | `Ctrl-b  arrow`                      |
-| Zoom (fullscreen toggle)        | `Ctrl-b  z`                          |
-| Scroll mode                     | `Ctrl-b  [`  (q to exit)             |
+- **Always `send-keys -l` for the brief text**, then a separate `send-keys Enter`. Without `-l`, tmux interprets words like `Page`, `Up`, `Down`, `Space` as key names. (`tmux_send` does this for you.)
+- **Don't encode state in the window name.** Renaming to show ▶→✅ would invalidate name-based targets mid-dispatch. State lives in `@state` (an option), rendered by the status format.
+- **`base-index 0`** is set on the kingdom session so `king` is window 0; lanes follow.
+- **No desktop notifications.** `tmux_notify` flashes `display-message` and glyphs the lane, but the *durable* signal is the king-inbox file — the King reads that, exactly like it reads `WATCH_*`/cmux badges. An alert is never only a transient flash.
+- **Ghostty + tmux**: `TERM=xterm-ghostty`; truecolor + emoji render fine. Nothing special required.

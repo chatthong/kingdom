@@ -28,6 +28,26 @@ kingdom_resync_after_merge () {
   # Step 4: free the merged lane (its commit just landed)
   git -C "$WORKTREE" branch -f "$merged_lane" "$BASE"
 
+  # Step 4b: delete the merged feature branch (local + remote) so out-of-band
+  # merges (lead merges on GitHub, watchman detects MERGED) don't leak orphan
+  # `feature/<topic>` branches over a long-running King. The function isn't told
+  # the topic directly, so derive it conservatively from the PR's head branch.
+  # Only ever touch a `feature/*` name; never fail the resync if the delete can't
+  # happen (PR head unknowable, branch already gone, no network — all fine).
+  local merged_feat=""
+  if [ -n "$merged_pr" ]; then
+    merged_feat=$(gh pr view "$merged_pr" --json headRefName -q .headRefName 2>/dev/null || true)
+  fi
+  case "$merged_feat" in
+    feature/*)
+      git -C "$WORKTREE" branch -D "$merged_feat" 2>/dev/null || true
+      git -C "$WORKTREE" push origin --delete "$merged_feat" 2>/dev/null || true
+      ;;
+    *)
+      : # topic not derivable (or not a feature/* branch) → skip safely
+      ;;
+  esac
+
   # Step 5: rebase remaining active lanes onto new base.
   # Rebase INSIDE each lane's own worktree. `git -C "$WORKTREE" switch <lane>`
   # fails (rc=128 "already used by worktree at …") when that branch is checked
@@ -63,7 +83,7 @@ kingdom_resync_after_merge () {
   git -C "$WORKTREE" log --oneline "origin/$BASE..kingdom" || true
 
   # Step 7: log resync line
-  printf '%s  KINGDOM_RESYNC  merged_pr=#%s  base_advanced=%s..%s  lanes_freed=%s\n' \
-    "$(date -u +%FT%TZ)" "$merged_pr" "${before:0:7}" "${after:0:7}" "$lanes_freed" \
+  printf '%s  KINGDOM_RESYNC  merged_pr=#%s  base_advanced=%s..%s  lanes_freed=%s  feat_deleted=%s\n' \
+    "$(date -u +%FT%TZ)" "$merged_pr" "${before:0:7}" "${after:0:7}" "$lanes_freed" "${merged_feat:-none}" \
     >> "$LOGS/master_agent.log"
 }

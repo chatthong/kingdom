@@ -118,11 +118,17 @@ Watchman behaviour is controlled by the `watchman` block inside `kingdom.json`:
 {
   "watchman": {
     "haikuCapPerTick": 5,
+    "retentionDays": 7,
+    "cadence": { "churnMin": 5, "quietMin": 15, "deepQuietMin": 30, "deepQuietStreak": 3 },
     "duties": {
-      "codeReview":    true,
-      "cveScan":       true,
-      "conflictScan":  true,
-      "gitHygiene":    true
+      "codeReview":     true,
+      "cveScan":        true,
+      "conflictScan":   true,
+      "gitHygiene":     true,
+      "crossStoryScan": true,
+      "seqCollision":   true,
+      "configParity":   true,
+      "missingTests":   true
     }
   }
 }
@@ -132,16 +138,53 @@ Watchman behaviour is controlled by the `watchman` block inside `kingdom.json`:
 
 Maximum number of Haiku sub-agents a single watchman tick may spawn. Default: `5`. Max: `10`. Prevents runaway fan-out on large repos with many open PRs. Raise it for overnight unattended runs; lower it if you want tighter token spend.
 
+### `retentionDays`
+
+Sweep window (in days) for the watchman's `WATCH_*` artifacts (per-tick digests and notes). Anything older than this is pruned at the start of each tick, so the audit trail self-trims instead of growing without bound. Default: `7`. Lower it for tighter disk use; raise it to keep a longer history.
+
+### `cadence.*`
+
+Dynamic tick pacing (minutes between ticks). The watchman speeds up when the repo is churning and backs off when it's quiet:
+
+| Key | Default | When it applies |
+|---|---|---|
+| `churnMin` | `5` | `develop` / open PRs are actively moving — tick frequently |
+| `quietMin` | `15` | calm repo — tick less often |
+| `deepQuietMin` | `30` | longer interval reserved for the heavier change-gated duties so they don't re-run every tick on a still repo |
+| `deepQuietStreak` | `3` | consecutive zero-finding, no-change ticks required before the watchman drops to the `deepQuietMin` cadence; the first sign of life resets the streak |
+
 ### `duties.*` toggles
 
-Each duty is `true` (enabled) by default. Set to `false` to disable for a project:
+Each duty is `true` (enabled) by default. Set to `false` to disable for a project. The CVE, git-hygiene, sequence-collision, config-parity, and missing-tests duties are **change-gated** — they only re-run when their inputs (manifests, branches, config, test files) actually changed since the last tick, so they cost nothing on a still repo:
 
 | Key | What the watchman does when enabled |
 |---|---|
 | `codeReview` | Babysits open PRs: posts a nudge comment if a PR has been waiting > 24 h with no review activity |
-| `cveScan` | Scans `package.json` / `requirements.txt` / `go.mod` for known CVEs via `npm audit` / `pip-audit` / `govulncheck` |
+| `cveScan` | Scans `package.json` / `requirements.txt` / `go.mod` for known CVEs via `npm audit` / `pip-audit` / `govulncheck` (change-gated) |
 | `conflictScan` | Checks whether any in-flight worker branch has diverged enough from `develop` to risk a conflict on merge |
-| `gitHygiene` | Flags stale branches (no commit in > 7 days), orphan worktrees, and missing sentinel flags |
+| `gitHygiene` | Flags stale branches (no commit in > 7 days), orphan worktrees, and missing sentinel flags (change-gated) |
+| `crossStoryScan` | Feeds the King's cross-story coordination (R50): flags drift or overlap between parallel story pods |
+| `seqCollision` | Detects two lanes about to touch the same sequence point / ordered resource (change-gated) |
+| `configParity` | Cross-checks that each project's `kingdom.json` matches the plugin's current schema and flags drift (change-gated) |
+| `missingTests` | Flags changed source files that ship without a corresponding test (change-gated) |
+
+## Sub-agent fan-out
+
+The `subAgents` block tunes parallel sub-agent fan-out:
+
+```json
+{
+  "subAgents": { "parallelTarget": 10 }
+}
+```
+
+### `parallelTarget`
+
+Per-project soft ceiling for how many sub-agents any single fan-out spawns in parallel (R51). Default: `10`. Model-by-work-type (Sonnet for standard reads, Haiku for bulk, Opus for sensitive) is a fixed default baked into R51 — not a per-project knob — so this is the only sub-agent dial you set here. Lower it to cap token burn on big repos; raise it if your machine and rate limits comfortably handle more concurrency.
+
+## Backend: cmux (default) or tmux (fallback)
+
+The kingdom runs lanes through **cmux.app** by default (`cmux.enabled: true`). When cmux isn't available, it falls back to a raw **tmux** backend, auto-detected at runtime — no `kingdom.json` switch is required, and the cmux-specific keys (`cmux.workspaceColors`, `watchmanLayout`, `subAgentPool`, etc.) simply become irrelevant under tmux. See `TMUX-Guide.md` for the fallback layout and how the same roles map onto tmux windows/panes.
 
 ## See also
 

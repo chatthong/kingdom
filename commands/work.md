@@ -144,7 +144,20 @@ Per R41, no-skill is a valid result. Don't invoke a vague match just to invoke s
 
 ## Step 0.4 — Visible workspace progress IMMEDIATELY (R36, MANDATORY)
 
-**Within ~1 second of `/kingdom:work` receipt, before anything else:** rename King's own workspace + set description. User must see the kingdom responding, not stare at an unchanged sidebar.
+**Within ~1 second of `/kingdom:work` receipt, before anything else:** detect the backend (cmux.app vs other), then rename King's own workspace + set description. User must see the kingdom responding, not stare at an unchanged sidebar.
+
+```bash
+# Backend detection FIRST — load both backends + pick cmux (cmux.app) or tmux (any other terminal).
+# Detection is PER-PROCESS: this King reads its OWN env, so cmux.app being open in another window
+# is irrelevant — only the app that launched THIS session counts (see index.md § Multi-session).
+source "$PWD/.kingdom/.setting/functions/_load.sh"
+load_feature core              # loads cmux + tmux backends + the detector
+# Project-scope the tmux session so TWO kingdoms (e.g. 2 Ghostty windows on different projects)
+# never share one tmux session. cmux isolates per-window automatically (cmux_identify = caller's window).
+export KINGDOM_TMUX_SESSION="kingdom-$(printf '%s' "$project" | tr -c 'A-Za-z0-9_-' '-')"
+kingdom_backend_init           # → export KINGDOM_BACKEND=cmux|tmux|standalone, activate, print which
+[ "$KINGDOM_BACKEND" = "tmux" ] && tmux_setup_session "${project}" "$PWD"   # FALLBACK: create this project's tmux session
+```
 
 ```bash
 # Capture King's window + workspace refs
@@ -318,8 +331,11 @@ if [ -f "$STATE_FILE" ]; then
   fi
 fi
 
-# Scan tasks newest-first
-for task_file in $(ls -1t "$TASKS_DIR"/*.md 2>/dev/null); do
+# Scan tasks newest-first. Cap at the 40 most-recent files: in-flight tasks (no
+# sentinel) are always recent, and /kingdom:archive moves closed/old task files
+# out to tasks/archive/, so a month-old hot dir never makes this loop read 1000s
+# of files every session + every dispatch round.
+for task_file in $(ls -1t "$TASKS_DIR"/*.md 2>/dev/null | head -40); do
   base=$(basename "$task_file" .md)
   lane=$(echo "$base" | sed 's/^[0-9-]*T[0-9]*Z__//;s/__.*//')
   task_id=$(echo "$base" | sed 's/.*__//')

@@ -30,7 +30,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | first positional arg | `bfg-swt` |
+| `${PROJECT}` | first positional arg | `my-app` |
 | `${N_ROLE_DOCS}` | count of `.md` files in `.kingdom/.setting/` excluding `cards/` | `8` |
 
 `init` no longer takes shape flags (v0.33.0): the project is scaffolded with `kingdom.json` defaults. Shape is chosen per-session at `/kingdom:work` (`worker=N`, `lane=N`, `senior=N`, …) or by editing `kingdom.json`.

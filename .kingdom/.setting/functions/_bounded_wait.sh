@@ -11,6 +11,11 @@ _bounded_wait () {
   #   0   — all PIDs exited cleanly within budget
   #   124 — global timeout; surviving PIDs killed (matches GNU `timeout` convention)
   #   N   — first non-zero per-PID exit code if any subshell errored
+  #
+  # CRITICAL: zsh does NOT word-split a plain `$var` (so `for pid in $pids` would iterate ONCE
+  # over the whole joined string → the wait is a no-op). `emulate -L sh` gives sh-style word
+  # splitting (+ 0-indexed arrays) for the rest of THIS function only, auto-restored on return.
+  [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null
   local max="$1"; shift
   local pids="${*:-$(jobs -p)}"
   [ -z "$pids" ] && return 0

@@ -14,11 +14,17 @@ This is the single, complete Watchman spec: role + model, the `/loop` tick body,
 
 ## Rule cross-reference
 
-Three rules govern Watchman's relationship with the rest of the kingdom — keep these in mind before adding any new Watchman authority:
+Five rules govern Watchman's relationship with the rest of the kingdom — keep these in mind before adding any new Watchman authority:
 
-- **R39 — King never dispatches to Watchman.** Watchman is self-scheduling (via `/loop`) and autonomous. King does not queue work for it, does not send it prompts mid-session, and does not treat it as a worker lane. The only King→Watchman interaction is the one-time spawn at kingdom startup (see § Dispatch below).
-- **R11 — Watchman is read-mostly on project source.** It may read any project file for situational awareness; it may run smoke/test commands; it may NOT edit project source code. Write authority is confined to `WATCH_*.md` reports, `watchman_state.json`, and low-risk kingdom-doc fixes (see § Docs audit duty).
-- **R27 — Watchman owns PR-number backfill.** Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick. King never does this work. See § PR-number backfill duty.
+- **R39 — Watchman runs fully autonomously.** Watchman is self-scheduling (via `/loop`) and autonomous within its duty list; the King never queues work for it, sends it prompts mid-session, or treats it as a worker lane. The only King→Watchman interaction is the one-time spawn at kingdom startup (see § Dispatch below). Low-risk fixes are applied without King approval; high-risk changes are flagged.
+- **R40 — Haiku cap per tick.** Each `/loop` tick spawns at most `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents (default 5, max 10) across all surveillance duties. See § `haiku_cap_per_tick` enforcement.
+- **R11 — Watchman is read-only on project source.** It may read any project file for situational awareness; it may run smoke/test commands; it may NOT edit project source code. Write authority is confined to `WATCH_*.md` reports, `watchman_state.json`, and low-risk kingdom-doc fixes scoped to `.kingdom/<project>/{tasks,logs}/` (see § Docs audit duty).
+- **R27 — Watchman owns PR-number backfill.** Workers commit TODO/CSV close-suffixes as `(PR #pending)` because the PR number doesn't exist at commit time. Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick — this is the ONE allowed amend of a `feature/<topic>` branch (the R9 byte-for-byte rule's documented exception). King never does this work. See § PR-number backfill duty.
+- **R52 — role knowledge is pull-from-disk.** The King injects `/kingdom:self-watchman` as this lane's FIRST message at spawn, so the watchman re-reads its canonical rules + this spec from `.kingdom/.setting/` before any work; the loop prompt that follows carries only the task. See § Dispatch.
+
+Four more rules bound the work without granting authority: **R42** — every parallel fan-out (the Duty 1–8 Haiku spawn, the PR-backfill fan-out) uses `_bounded_wait`, never bare `wait`. **R28** — parallel by default for scan + non-conflicting edit. **R45** — the Duty 1 senior-dev review reads the project's documented architecture (R45 doc orientation) before judging a lane diff. **R51** — fan heavy work out to parallel sub-agents (soft target `kingdom.json.subAgents.parallelTarget`), bounded by R42; the watchman additionally caps Haiku per tick at R40.
+
+One rule defines the watchman's place in the **story-pod three-way split** (it grants no authority — the watchman only *detects*): **R50** — the King owns cross-story coordination. The watchman's Duty 5 `cross_story_scan` *flags* between-story drift; the **Senior** owns *within-story* integration conflicts (R49); the **King** *resolves* the cross-story drift at push (R50). See [`senior.md`](senior.md) → Senior vs watchman boundary and § Duty 5 below.
 
 ---
 
@@ -27,7 +33,7 @@ Three rules govern Watchman's relationship with the rest of the kingdom — keep
 - **Continuous monitor**, not a worker. Does NOT claim TODOs, edit code, push, or open PRs.
 - Lives in `.worktrees/watchman-N/`, branch `watchman-N` (a local-only branch that's hard-reset to `origin/develop` tip on every `/loop` tick).
 - In PRIMARY mode (manaflow/cmux), watchman gets its own **workspace** with an optional **vertical split layout** (`kingdom.json.cmux.watchmanLayout`): top pane runs `claude` (the /loop session), bottom pane runs `gh pr list --watch --interval 30` for live PR state. Default `direction=vertical`, `split=0.6`. Set `watchmanLayout: null` in `kingdom.json` to disable the split and use a single-pane workspace instead.
-- Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet.
+- Runs Claude Code with the `/loop` skill in **dynamic-pacing mode**: 5 min cadence when there's churn (PRs opening, develop moving, CI transitions); 15 min cadence when quiet; 30 min cadence (`watchman.cadence.deepQuietMin`) after `watchman.cadence.deepQuietStreak` consecutive zero-finding ticks (deep-quiet, v0.41.0).
 - Reads `kingdom.json.gate.smoke` + `gate.tests` for the smoke command list to run on each develop advance.
 - Writes `WATCH_*.md` reports to `.kingdom/<project>/logs/watch/` — monitoring heartbeats stay OUT of the project git tree; only PR-evidence `SMOKE_*`/`SENIOR_*`/`KING_*` reports go to `<project>/docs/test-reports/`.
 - Posts `cmux_notify` when something needs the King's or the user's attention.
@@ -49,7 +55,7 @@ flowchart TB
     T7["Write WATCH_…_develop_RED_….md\ncmux_notify 'develop RED'"]
     T8["4. gh pr list --state open\ncompare to previous snapshot"]
     T9["5. Write WATCH_*.md\nfor each state change"]
-    T10["6. cmux_notify\n(CI fail → King, ready-to-merge → Ter)"]
+    T10["6. cmux_notify\n(CI fail → King, ready-to-merge → you)"]
     T11["7. cmux_set_state\n'develop: green|RED | PRs: N'"]
     T12["8. Write watchman_state.json\n(sha, smoke_ts, pr_states)"]
     PACE{{"Any transition\nthis tick?"}}
@@ -81,12 +87,31 @@ flowchart TB
 Each `/loop` tick does:
 
 ```bash
-WS=/Users/ter/Desktop/Bonfire
+WS=<workspace-root>
 PROJ=$WS/<project>
 LOGS=$WS/.kingdom/$(basename "$PROJ")/logs
+WI=1                                   # this watchman's index (1 for the default single watchman;
+                                       # 2, 3, … in a multi-watchman setup — see § Multiple watchmen).
+                                       # Used in every cmux_notify title (🕵️ watchman-$WI) + worktree path.
+source "$LOGS/workspace-refs.env"      # exposes KING_WS, WATCHMAN_WS_*, WORKER_WS_*, … (R31 dispatch refs)
 
 # (1) cd to the watchman worktree
-cd "$PROJ/.worktrees/watchman-1"
+cd "$PROJ/.worktrees/watchman-$WI"
+
+# (1.5) RETENTION SWEEP (v0.41.0) — runs at the TOP of every tick, before any duty.
+# Over a 1-month continuous run, the per-tick timestamped WATCH_* files (one set
+# every 5-15 min) accumulate to ~15-25k files. Delete timestamped per-tick files
+# older than the retention window. This DELIBERATELY does NOT touch the rolling
+# SINGLE-file reports that overwrite in place — WATCH_DOCS_AUDIT.md,
+# WATCH_PR_BACKFILL.md, WATCH_TASK_AUDIT.md — because those carry forward state.
+# Retention is configurable via kingdom.json.watchman.retentionDays (default 7);
+# export it into the env as KINGDOM_WATCH_RETENTION_DAYS before the tick, e.g.
+#   KINGDOM_WATCH_RETENTION_DAYS=$(jq -r '.watchman.retentionDays // 7' "$KJSON")
+mkdir -p "$LOGS/watch"
+for pfx in WATCH_TICK_ WATCH_REVIEW_ WATCH_CVE_ WATCH_CONFLICTS_ WATCH_GIT_ \
+           WATCH_SEQ_ WATCH_CONFIG_ WATCH_TESTGAP_ 'WATCH_'*'__develop_' 'WATCH_'*'__pr-'; do
+  find "$LOGS/watch" -name "${pfx}*" -mtime "+${KINGDOM_WATCH_RETENTION_DAYS:-7}" -delete 2>/dev/null
+done
 
 # (2) Fetch + compare develop SHA to previous tick (state stored in <LOGS>/watchman_state.json)
 git fetch origin
@@ -110,7 +135,7 @@ if [ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] || [ daily_smoke_overdue ]; the
     mkdir -p "$LOGS/watch"
     echo "# develop smoke pass at $UTC" > "$LOGS/watch/WATCH_${UTC}__develop_green.md"
   else
-    # Develop is RED — write report + alert King/Ter
+    # Develop is RED — write report + alert King/you
     UTC=$(date -u +%Y-%m-%dT%H%MZ)
     # K10 (v0.37.0): RED reports go to $LOGS/watch/, not the project tree
     mkdir -p "$LOGS/watch"
@@ -148,7 +173,7 @@ gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,merg
 #     green + approved +
 #     idle ≥30 min       → cmux_notify "$KING_WS" "🕵️ watchman-$WI" \
 #                            "Ready to merge · PR #$N" \
-#                            "All checks pass, lead approved, idle 30m+. Ter to merge."
+#                            "All checks pass, lead approved, idle 30m+. You to merge."
 
 # (7) Update sidebar status
 cmux_set_state "$CMUX_WORKSPACE_ID" "▶" "develop: <green|RED> | open PRs: <n> (<g> green, <r> red)"
@@ -158,7 +183,15 @@ jq -n --arg sha "$NEW_DEVELOP_SHA" --argjson prs "$(cat /tmp/prs.json)" \
   '{develop_sha: $sha, last_smoke_ts: now|todate, pr_states: $prs}' \
   > "$LOGS/watchman_state.json"
 
-# Dynamic pacing: 5 min if any transition this tick, 15 min if quiet
+# Dynamic pacing (three tiers, v0.41.0):
+#   5 min  — churn: any transition this tick (PR state change, develop moved, finding)
+#   15 min — quiet: no transition this tick
+#   30 min — deep-quiet: QUIET_STREAK consecutive zero-finding ticks AND develop SHA
+#            unchanged AND no open-PR state change. See § Deep-quiet cadence below.
+# Track quiet_streak in watchman_state.json (gates.quiet_streak): reset to 0 on any
+# finding / develop move / PR change; increment otherwise. Deep-quiet kicks in at
+# kingdom.json.watchman.cadence.deepQuietStreak ticks (default 3), scheduling the next
+# tick at kingdom.json.watchman.cadence.deepQuietMin (default 30 min).
 ```
 
 In addition to these 8 steps, every tick also runs the autonomous Haiku surveillance fan-out (§ Per-tick autonomous duties), the PR-number backfill (§ PR-number backfill duty), the orphan-tab sweep, the blocked-lane scan, the on-demand verification pickup, and — when the tick is otherwise quiet — the idle-time docs audit. All of these are detailed below.
@@ -167,7 +200,9 @@ In addition to these 8 steps, every tick also runs the autonomous Haiku surveill
 
 ## Dispatch (King spawns this once at kingdom startup)
 
-Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King sends the watchman prompt via `cmux_send` (or `tmux send-keys -l` in fallback mode). The watchman `/loop` is auto-dispatched via the `spawn_loop` helper (see [`../functions/index.md`](../functions/index.md)):
+Inside the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom), after `watchman-1`'s worktree + Claude session are up, the King first injects `/kingdom:self-watchman` as the lane's FIRST message (R52 — role knowledge is pull-from-disk: the watchman re-reads its canonical rules + this spec from `.kingdom/.setting/` before any work), THEN sends the watchman loop prompt via `cmux_send`. The watchman `/loop` is auto-dispatched via the `spawn_loop` helper (see [`../functions/index.md`](../functions/index.md)).
+
+> **Backend-agnostic.** Every multiplexer op in this spec goes through the `cmux_*` wrappers (`cmux_send`, `cmux_set_state`, `cmux_notify`, …). When the host is plain tmux (FALLBACK), `KINGDOM_BACKEND=tmux` transparently routes those same calls to the tmux mirror (`tmux_send`, `tmux_set_state`, …) — the watchman never calls a multiplexer directly, exactly as the King and Senior do.
 
 ```bash
 HANDLE=$(cmux_list_panes "$WS_ID" | jq -r '.[] | select(.title=="watchman-1") | .id')
@@ -185,14 +220,18 @@ every 5-15 min (dynamic pacing) until I tell you to stop. Each tick:
      On fail: write WATCH_<UTC>__develop_RED__<reason>.md + cmux_notify 'develop RED: <reason>'
      On pass: write WATCH_<UTC>__develop_green.md (TL;DR only)
 4. gh pr list --state open --json number,headRefName,statusCheckRollup,reviews,mergeable > /tmp/prs.json
-   Compare to previous snapshot in $LOGS/watchman_state.json:
-     CI just failed     → WATCH_<UTC>__pr-<N>_CI_failed.md + cmux_notify King
-     CI just passed     → WATCH_<UTC>__pr-<N>_CI_green.md (log only)
-     lead approved      → cmux_notify Ter 'PR #<N> approved'
-     mergeable + green + approved + idle 30min → cmux_notify Ter 'PR #<N> ready to merge'
+   Compare to previous snapshot in $LOGS/watchman_state.json. ALL notifications target
+   $KING_WS (positional: cmux_notify $KING_WS title subtitle body) — the watchman has no
+   user workspace ref; the King mediates the user conversation, so even "ready to merge"
+   alerts go to the King, who surfaces them to the user before any "push?" prompt:
+     CI just failed     → WATCH_<UTC>__pr-<N>_CI_failed.md + cmux_notify $KING_WS 'CI failed · PR #<N>'
+     CI just passed     → WATCH_<UTC>__pr-<N>_CI_green.md (log only, no notify)
+     lead approved      → cmux_notify $KING_WS 'PR #<N> approved'
+     mergeable + green + approved + idle 30min → cmux_notify $KING_WS 'Ready to merge · PR #<N>'
 5. cmux_set_state \"<self>\" \"▶\" \"develop: <green|RED> | open PRs: <n> (<g> green, <r> red)\"
 6. Write new snapshot to $LOGS/watchman_state.json (develop_sha, last_smoke_ts, pr_states)
-7. Schedule next tick via /loop dynamic pacing (5 min if any transition, 15 min if quiet)
+7. Schedule next tick via /loop dynamic pacing: 5 min if any transition, 15 min if quiet,
+   30 min (deepQuietMin) after deepQuietStreak consecutive zero-finding ticks (deep-quiet)
 
 You DO NOT edit code, claim TODO tasks, or push anything. Read-only + test runner + alerter."
 
@@ -205,7 +244,7 @@ cmux_send "$HANDLE" "$LANE_WATCHMAN_PROMPT"
 
 Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents in parallel across its surveillance duties:
 
-- **Duty 1** — senior-dev review with doc cross-check (R31)
+- **Duty 1** — senior-dev review with doc cross-check (R45 doc orientation)
 - **Duty 2** — CVE scan
 - **Duty 3** — cross-lane conflict scan
 - **Duty 4** — git hygiene scan
@@ -220,7 +259,7 @@ Each duty is independently toggleable in `kingdom.json.watchman.duties` (all def
 - **Every finding carries a one-line `suggested action`** — not just "X is wrong" but "→ worker-2 renumbers its migration to 0007 and rebases." The King (or you) can act without re-deriving the fix.
 - **Findings flow through the cross-tick findings ledger** (§ Findings ledger) — the watchman remembers what it already reported, so it never re-flags the same issue every 5 minutes, escalates a finding only if it persists unactioned, and auto-resolves (with a log line) when an issue disappears.
 
-These sub-agents are spawned either via `Agent(model="haiku", ...)` (when running inside a Claude Code session) or via `cmux_tab_action new-terminal-right --workspace $WATCHMAN_WS` (when running in PRIMARY/cmux mode, per R38). All duties run in parallel at every tick; no duty waits for another.
+**Fan-out mechanism (R53, v0.43.0).** When the session exposes the Claude Code **Workflow tool**, this per-tick duty fan-out is the watchman's preferred R53 surface: run it as ONE Workflow run per tick (phases `Duties → Reconcile`), which renders the live `/workflows` view of every duty agent. When the tool is NOT in the session's toolset, fall back to the existing bounded mechanism — `Agent(model="haiku", ...)` (bounded per R42) inside a Claude Code session, or `cmux_tab_action new-terminal-right --workspace $WATCHMAN_WS` in PRIMARY/cmux mode (per R38). **Either way, the [`R40`](../rules/R40-watchman-haiku-fan-out-cap.md) HARD Haiku cap (`kingdom.json.watchman.haikuCapPerTick`) still bounds the fan-out** — it is not relaxed when the work runs through Workflow; encode the cap as the run's concurrency exactly as § `haiku_cap_per_tick` enforcement requires. All duties run in parallel at every tick; no duty waits for another. Canonical pattern + per-role shape: [`reference/workflow-fanout.md`](../reference/workflow-fanout.md).
 
 **R41 — Skill-aware (v0.29.3+):** Watchman Haiku sub-agents may optionally invoke domain skills to strengthen their analysis. Duty 1 (code review) may use `code-review:code-review`; Duty 2 (CVE scan) may use `security-review`. Invocation is optional — skip if the skill adds no material benefit for a shallow diff or trivial audit file. No cap beyond the normal 3-skill-per-brief limit.
 
@@ -245,11 +284,98 @@ Count all Haiku sub-agents spawned this tick across all duties. If the combined 
 
 ---
 
+### Change-gating — don't re-compute on unchanged inputs (v0.41.0)
+
+The findings ledger (§ Findings ledger) dedups **notifications** — it stops the same urgent flag firing every 5 min. It does NOT stop the **computation**: before v0.41.0, Duty 1 and Duty 3 already gated on lane SHA, but Duties 2/4/6/7/8 re-ran a Haiku **every tick on unchanged inputs**. Over a month that's tens of thousands of redundant Haiku. v0.41.0 change-gates the remaining duties the same way Duty 1 gates on `lane_shas`: **before** fanning out each duty, compute a cheap input marker; if it matches the marker stored in `watchman_state.json` from last tick, **skip the fan-out entirely** (and mark the duty `no (unchanged)` in the tick aggregation). The ledger prevents re-notify; this prevents re-compute.
+
+Compute these markers ONCE near the top of the duty block and reuse them:
+
+```bash
+# Lane advance marker (shared by Duty 1, 3, 6, 7, 8 — their inputs are lane diffs).
+# "Did ANY in-flight lane move since last tick?" If not, all lane-diff duties skip.
+LANES_ADVANCED=false
+for LANE in $(git -C "$PROJ" for-each-ref --format='%(refname:short)' 'refs/heads/worker-*' 'refs/heads/co-worker-*' 'refs/heads/story/*' 2>/dev/null); do
+  LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
+  NEW_SHA=$(git -C "$WORKTREES/$LANE" rev-parse HEAD 2>/dev/null)
+  [ -n "$NEW_SHA" ] && [ "$LAST_SHA" != "$NEW_SHA" ] && LANES_ADVANCED=true
+done
+
+# CVE marker — hash of all lockfiles. Cheap; lockfiles are small + rarely change.
+LOCK_HASH=$(find "$PROJ" \( -name package-lock.json -o -name pnpm-lock.yaml \
+  -o -name yarn.lock -o -name requirements.txt -o -name Cargo.lock -o -name go.sum \) \
+  -not -path '*/node_modules/*' -print0 2>/dev/null | sort -z | xargs -0 cat 2>/dev/null | shasum | cut -d' ' -f1)
+LAST_LOCK_HASH=$(jq -r '.gates.last_cve_sha // empty' "$LOGS/watchman_state.json")
+LAST_CVE_TS=$(jq -r '.gates.last_cve_ts // 0' "$LOGS/watchman_state.json")
+NOW_TS=$(date -u +%s)
+CVE_SLOW_TIMER_S=21600   # 6h — re-scan even on unchanged lockfile (new CVEs published upstream)
+CVE_SHOULD_RUN=false
+{ [ "$LOCK_HASH" != "$LAST_LOCK_HASH" ] || [ $((NOW_TS - LAST_CVE_TS)) -ge $CVE_SLOW_TIMER_S ]; } && CVE_SHOULD_RUN=true
+
+# Git-hygiene marker — "did any branch/worktree/sentinel change?" (cheap, no Haiku).
+GIT_STATE_HASH=$( { git for-each-ref --format='%(refname) %(objectname)' refs/heads 2>/dev/null;
+                    ls -1 "$PROJ/.worktrees" 2>/dev/null;
+                    ls -1 "$LOGS/done" 2>/dev/null; ls -1 "$LOGS/claims" 2>/dev/null; } | shasum | cut -d' ' -f1)
+LAST_GIT_STATE_HASH=$(jq -r '.gates.last_git_state_sha // empty' "$LOGS/watchman_state.json")
+```
+
+The markers persist in a new `gates` block of `watchman_state.json` (see § Watchman state snapshot): `gates.last_cve_sha`, `gates.last_cve_ts`, `gates.last_git_state_sha`. The lane-diff duties reuse the existing `lane_shas` cache, so they need no new marker — `LANES_ADVANCED` is derived from it.
+
+| Duty | Gate | Skip when |
+|---|---|---|
+| 2 — CVE | lockfile hash OR 6h slow timer | `CVE_SHOULD_RUN = false` |
+| 4 — git hygiene | branch/worktree/sentinel hash | `GIT_STATE_HASH = LAST_GIT_STATE_HASH` |
+| 6 — seq-collision | lane advance | `LANES_ADVANCED = false` |
+| 7 — config parity | lane advance | `LANES_ADVANCED = false` |
+| 8 — missing-tests | lane advance | `LANES_ADVANCED = false` |
+
+After running each gated duty, persist its marker (`gates.last_cve_sha=$LOCK_HASH` + `gates.last_cve_ts=$NOW_TS` for Duty 2; `gates.last_git_state_sha=$GIT_STATE_HASH` for Duty 4) into `watchman_state.json` alongside the existing `lane_shas` write.
+
+---
+
+### Deep-quiet cadence tier (v0.41.0) — a third pace below "quiet"
+
+The existing pacing is two tiers: 5 min on churn, 15 min when quiet. Over a month, a kingdom that's parked overnight / over a weekend still wakes every 15 min to fetch + diff + reconcile for nothing. v0.41.0 adds a **deep-quiet** tier: after `QUIET_STREAK` consecutive ticks that ALL had zero findings, an unchanged develop SHA, and no open-PR state change, schedule the next tick at `deepQuietMin` (default 30 min) instead of 15. The first sign of life (any finding, develop moves, a PR transitions) resets the streak and drops back to 5/15.
+
+```bash
+# Compute this tick's quietness (after all duties + PR-snapshot diff are done).
+TICK_HAD_FINDINGS=$([ "$(jq -r '[.findings[]? | select(.status=="open")] | length' "$LOGS/watchman_state.json")" -gt 0 ] && echo true || echo false)
+DEVELOP_MOVED=$([ "$NEW_DEVELOP_SHA" != "$PREV_DEVELOP_SHA" ] && echo true || echo false)
+# PR_CHANGED is the same boolean the 5-min tier already computes from the gh pr snapshot diff.
+
+QUIET_STREAK=$(jq -r '.gates.quiet_streak // 0' "$LOGS/watchman_state.json")
+if [ "$TICK_HAD_FINDINGS" = "false" ] && [ "$DEVELOP_MOVED" = "false" ] && [ "$PR_CHANGED" = "false" ]; then
+  QUIET_STREAK=$((QUIET_STREAK + 1))
+else
+  QUIET_STREAK=0
+fi
+jq '.gates.quiet_streak = ($s|tonumber)' --arg s "$QUIET_STREAK" \
+  "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+
+DEEP_QUIET_STREAK=$(jq -r '.watchman.cadence.deepQuietStreak // 3' "$KJSON")
+DEEP_QUIET_MIN=$(jq -r '.watchman.cadence.deepQuietMin // 30' "$KJSON")
+if [ "$DEVELOP_MOVED" = "true" ] || [ "$PR_CHANGED" = "true" ] || [ "$TICK_HAD_FINDINGS" = "true" ]; then
+  NEXT_TICK_MIN=5                                  # churn
+elif [ "$QUIET_STREAK" -ge "$DEEP_QUIET_STREAK" ]; then
+  NEXT_TICK_MIN="$DEEP_QUIET_MIN"                  # deep-quiet
+else
+  NEXT_TICK_MIN=15                                 # quiet
+fi
+# Pass NEXT_TICK_MIN to /loop as the next-tick interval.
+```
+
+The deep-quiet tier is purely a pacing change — it never skips a duty (the change-gates above already do that). It just lets a parked kingdom breathe at 30-min intervals instead of 15, halving the idle-tick count overnight without ever delaying a response to real churn (the very next tick after activity is back to 5 min).
+
+---
+
 ### Duty 1 — Senior-dev review fan-out (with doc cross-check) — v0.31.1+
 
-For each lane that has new commits since the last tick — **worker-N**, **co-worker-N**, AND the **King's overlay state on kingdom** — spawn one Haiku sub-agent that reads the diff plus the project's documented architecture, and writes a one-page senior-dev review.
+For each lane that has new commits since the last tick — **worker-N**, **co-worker-N**, **story/<id>** (Senior-owned pod branches), AND the **King's overlay state on kingdom** (the SOLO path only — the King overlays gated `worker-N`/`co-worker-N` lanes onto kingdom for review per R15; in the POD path the King never overlays, it carves `story/<id> -> develop` from the Senior's story branch per R47/R48, so the king-overlay review block below self-gates on `kingdom` being the checked-out branch and dirty) — spawn one Haiku sub-agent that reads the diff plus the project's documented architecture (R45 orientation), and writes a one-page senior-dev review.
+
+> This is a **cheap per-lane mechanical scan that only flags** — it does NOT replace the Senior's authoritative within-story review (R48). The Senior owns deep, story-scoped review and routes fixes; the watchman's per-lane Haiku review is advisory context the King (or Senior) reads, never a gate. The two do not overlap (see [`senior.md`](senior.md) → Senior vs watchman boundary).
 
 **Trigger:** `git log --oneline <last-tick-sha>..<lane>-HEAD` returns at least one commit, OR (for King) the kingdom working tree shows uncommitted changes against `origin/$BASE`.
+
+> **Reading a `story/<id>` branch.** Its worktree dir does NOT match its branch name — the Senior owns it at `.worktrees/senior-N/` (see [`senior.md`](senior.md) → Workspace + worktree), so `$WORKTREES/story/<id>` does not exist. For story branches resolve the diff against the **primary checkout** instead — `git -C "$PROJ" rev-parse story/<id>` / `git -C "$PROJ" diff <range> story/<id>` (every local branch is visible from any worktree of the same repo). The `$WORKTREES/$LANE` form below is correct only for `worker-N` / `co-worker-N`, whose worktree dir equals the branch name.
 
 **Doc context — read ONCE per tick, reused across lanes (R28 parallel-safe).** Before fan-out, gather the project's architectural ground truth:
 
@@ -379,6 +505,17 @@ Update `watchman_state.json` after fan-out: `lane_shas["$LANE"] = $NEW_SHA`.
 
 ### Duty 2 — CVE scan
 
+**Change-gate (v0.41.0):** skip this duty entirely unless `CVE_SHOULD_RUN = true` — i.e. a lockfile changed since `gates.last_cve_sha`, OR ≥6h elapsed since `gates.last_cve_ts` (the slow timer catches newly-published advisories on an unchanged lockfile). On a quiet month with no dependency churn, this collapses CVE scanning from every tick to once per 6h. After running, persist `gates.last_cve_sha = $LOCK_HASH` and `gates.last_cve_ts = $NOW_TS`.
+
+```bash
+# Change-gate (v0.41.0): run Duty 2 only when a lockfile changed since
+# gates.last_cve_sha, OR ≥6h elapsed since gates.last_cve_ts. Otherwise skip.
+if [ "$CVE_SHOULD_RUN" != "true" ]; then
+  echo "skip Duty 2 — lockfiles unchanged, slow timer not elapsed"   # mark "no (unchanged)" in tick summary
+  return
+fi
+```
+
 Detect the project's package manager(s) by inspecting the project root. Spawn ONE Haiku per detected manager.
 
 **Detection → audit command map:**
@@ -419,6 +556,14 @@ Write ONLY the CVE file — no other edits."
 
 If no indicator files are found, skip this duty and note in the tick summary.
 
+```bash
+# After the per-manager Haiku fan-out completes, persist the gate state so the
+# next tick can skip when nothing changed:
+jq '.gates.last_cve_sha = $h | .gates.last_cve_ts = ($t|tonumber)' \
+  --arg h "$LOCK_HASH" --arg t "$NOW_TS" "$LOGS/watchman_state.json" \
+  > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+```
+
 ---
 
 ### Duty 3 — Cross-lane conflict scan
@@ -430,13 +575,17 @@ UTC=$(date -u +%Y-%m-%dT%H%MZ)
 mkdir -p "$LOGS/watch"
 CONFLICT_FILE="$LOGS/watch/WATCH_CONFLICTS_${UTC}.md"
 
-# Build per-lane changed-file lists (using last-tick SHA from watchman_state.json)
-declare -A LANE_FILES
-for LANE in worker-1 worker-2 worker-3 co-worker-1; do
+# Build per-lane changed-file lists. PORTABLE — no associative arrays: `declare -A` + `${!arr[@]}`
+# is bash-only (zsh throws "bad substitution" and stores quoted keys wrong → empty reads), and the
+# watchman runs under zsh. Accumulate a plain text block instead.
+LANE_FILES_BLOCK=""
+for LANE in $(git -C "$PROJ" for-each-ref --format='%(refname:short)' 'refs/heads/worker-*' 'refs/heads/co-worker-*' 'refs/heads/story/*' 2>/dev/null); do
   LAST_SHA=$(jq -r ".lane_shas[\"$LANE\"] // empty" "$LOGS/watchman_state.json")
   [ -z "$LAST_SHA" ] && continue
   CHANGED=$(git -C "$WORKTREES/$LANE" diff --name-only "$LAST_SHA"..HEAD 2>/dev/null)
-  LANE_FILES["$LANE"]="$CHANGED"
+  LANE_FILES_BLOCK="${LANE_FILES_BLOCK}=== ${LANE} ===
+${CHANGED}
+"
 done
 
 Agent(
@@ -445,7 +594,7 @@ Agent(
 by 2+ lanes since last tick is a potential conflict.
 
 Lane file lists:
-$(for L in "${!LANE_FILES[@]}"; do echo "=== $L ==="; echo "${LANE_FILES[$L]}"; done)
+$LANE_FILES_BLOCK
 
 Output file: $CONFLICT_FILE
 Format:
@@ -469,6 +618,17 @@ If no overlaps exist, Haiku writes a minimal `## TL;DR — info: no overlaps thi
 ### Duty 4 — Git hygiene scan
 
 Spawn one Haiku to scan for git-state drift across the kingdom worktree layout.
+
+**Change-gate (v0.41.0):** skip this duty unless the git-state hash changed since last tick — i.e. `GIT_STATE_HASH != LAST_GIT_STATE_HASH`. The hash covers every local branch ref, the `.worktrees/` listing, and the `done/` + `claims/` sentinel listings — exactly the inputs the five hygiene checks read. If none of those moved, the hygiene verdict can't have changed, so the Haiku is redundant. After running, persist `gates.last_git_state_sha = $GIT_STATE_HASH`.
+
+```bash
+# Change-gate (v0.41.0): run this duty only when the git-state hash moved since
+# last tick (branch refs, .worktrees/, done/ + claims/ listings). Otherwise skip.
+if [ "$GIT_STATE_HASH" = "$LAST_GIT_STATE_HASH" ]; then
+  echo "skip git-hygiene duty — no branch/worktree/sentinel change"   # mark "no (unchanged)" in tick summary
+  return
+fi
+```
 
 **What to scan:**
 
@@ -509,6 +669,8 @@ Output file: $GIT_FILE
 
 Write ONLY the git hygiene file — no other edits."
 )
+jq '.gates.last_git_state_sha = $h' --arg h "$GIT_STATE_HASH" \
+  "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
 ```
 
 ---
@@ -517,7 +679,7 @@ Write ONLY the git hygiene file — no other edits."
 
 When `kingdom.json.watchman.duties.crossStoryScan` is true and story pods are in flight, the watchman runs `cross_story_scan "$PROJ"` (see [`../functions/index.md`](../functions/index.md)) each tick. It does a pairwise `git merge-tree` across all `story/*` branches and emits a drift summary.
 
-This is the King's cross-story signal (R50): the watchman only **detects and reports** drift (it never resolves). The King consumes the latest drift line at push time and coordinates a rebase / re-merge of the affected story branch before opening its PR. The boundary with the Senior holds: the Senior owns *within-story* conflicts (R49); the watchman flags *between-story* drift; the King resolves it. Output severity: `warn` (a documented-decision contradiction across stories may be `urgent`).
+This is the King's cross-story signal (R50): the watchman only **detects and reports** drift (it never resolves). The King consumes the latest drift line at push time (at a Senior's push-eligible hand-back) and coordinates a rebase / re-merge of the affected story branch before opening its `story/<id> -> develop` PR. The three-way boundary holds exactly as the counterpart files describe it: the **Senior** owns *within-story* integration conflicts (R49, see [`senior.md`](senior.md)); the **watchman** flags *between-story* drift (this duty); the **King** resolves the cross-story drift at push (R50, see [`king.md`](king.md) → Story-pod delegation + cross-story). Output severity: `warn` (a documented-decision contradiction across stories may be `urgent`).
 
 ---
 
@@ -527,7 +689,12 @@ The most valuable catch is the one with **no git conflict**: two lanes that each
 
 When `kingdom.json.watchman.duties.seqCollision` is true (default), one Haiku scans — across all in-flight `worker-*`/`co-worker-*`/`story/*` branches AND open PRs:
 
+**Change-gate (v0.41.0):** skip unless `LANES_ADVANCED = true`. The inputs are lane diffs vs `origin/$BASE`; if no lane advanced since last tick, no new numbered files were added, so a re-scan would re-derive the identical verdict. Reuses the shared `lane_shas` cache — no new marker.
+
 ```bash
+if [ "$LANES_ADVANCED" != "true" ]; then
+  : # skip Duty 6 — no lane advanced since last tick; mark "no (unchanged)" in tick summary
+else
 # Gather every numbered file added on each in-flight branch vs origin/$BASE, then look for
 # duplicate numbers OR multiple leaves sharing a parent.
 SEQ_FILE="$LOGS/watch/WATCH_SEQ_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
@@ -539,6 +706,7 @@ Flag, per sequence: (a) the SAME number used by ≥2 branches, or (b) ≥2 migra
 For Django, parse the dependencies tuple; for Prisma, the migration folder order. severity=urgent if a real collision (it WILL break migrate/merge), else info.
 Write to $SEQ_FILE: TL;DR (status + the colliding number/parent + which branches), then a 'suggested action' line naming WHICH lane should renumber/rebase (rule of thumb: the oldest-claimed lane keeps the slot, the later one bumps to the next free number and rebases). NO edits — flag only."
 )
+fi   # end seq-collision change-gate
 ```
 
 Output severity `urgent` on a real collision (surface immediately — it blocks `migrate`/merge). Suggested action always names which lane renumbers.
@@ -549,10 +717,15 @@ Output severity `urgent` on a real collision (surface immediately — it blocks 
 
 Two cheap checks one Haiku runs over each in-flight lane diff when `kingdom.json.watchman.duties.configParity` is true (default):
 
-1. **New config key with no home.** A lane adds or reads a new env var / config key (`process.env.FOO`, `os.environ["FOO"]`, `Deno.env`, a new yaml/`kingdom.json` key) that is NOT declared in any of the project's config sources — configmaps, `.env.example`, `infra/params/*`, helm values, templates. Real miss (2026-05-27): `KEYCLOAK_ISSUER` was added in code but absent from both k8s ConfigMaps; a Senior caught it, the watchman should have. Severity `warn`; suggested action names the config files to add the key to.
+1. **New config key with no home.** A lane adds or reads a new env var / config key (`process.env.FOO`, `os.environ["FOO"]`, `Deno.env`, a new yaml/`kingdom.json` key) that is NOT declared in any of the project's config sources — configmaps, `.env.example`, `infra/params/*`, helm values, templates. Example miss: an `AUTH_ISSUER` env var added in code but absent from every config source; a Senior catches it late when the watchman should have caught it on the lane diff. Severity `warn`; suggested action names the config files to add the key to.
 2. **Committed secret.** Regex scan of lane diffs for high-entropy / secret patterns (AWS keys, `-----BEGIN * PRIVATE KEY-----`, `password=`, bearer/API tokens). Severity `urgent`; suggested action: rotate + strip from history. Flag only — the watchman never edits.
 
+**Change-gate (v0.41.0):** skip unless `LANES_ADVANCED = true` — the two checks read lane diffs, so an unchanged set of lanes yields the same finding. Reuses the shared `lane_shas` cache.
+
 ```bash
+if [ "$LANES_ADVANCED" != "true" ]; then
+  : # skip Duty 7 — no lane advanced since last tick; mark "no (unchanged)" in tick summary
+else
 CFG_FILE="$LOGS/watch/WATCH_CONFIG_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
 Agent(
   model="haiku",
@@ -561,6 +734,7 @@ Agent(
 (2) Scan the diff for committed secrets (AWS AKIA, PRIVATE KEY blocks, password=/token=/bearer with a literal value). Any hit → severity urgent, suggested action = 'rotate + remove from history'.
 Write TL;DR + findings + suggested actions to $CFG_FILE. Flag only; never edit."
 )
+fi   # end config-parity change-gate
 ```
 
 ---
@@ -569,12 +743,18 @@ Write TL;DR + findings + suggested actions to $CFG_FILE. Flag only; never edit."
 
 When `kingdom.json.watchman.duties.missingTests` is true (default), one Haiku checks each in-flight lane: did it add/modify source files (by the project's source globs) WITHOUT a corresponding test file (the project's convention — `*.test.*`, `*_test.py`, `*_spec.rb`, `tests/`, …)? Real miss (2026-05-20): a lane shipped 5 new modules with zero tests. Flags lanes with new source but no new/changed tests; severity `warn`; suggested action: "worker-N added <N> source files, 0 tests — request a test pass before its PR." This is a heuristic, NOT a gate — some changes legitimately need no tests (docs, config, pure refactors), so the King decides; the watchman only surfaces the gap.
 
+**Change-gate (v0.41.0):** skip unless `LANES_ADVANCED = true` — the heuristic reads lane diffs, so unchanged lanes yield an unchanged gap list. Reuses the shared `lane_shas` cache.
+
 ```bash
+if [ "$LANES_ADVANCED" != "true" ]; then
+  : # skip Duty 8 — no lane advanced since last tick; mark "no (unchanged)" in tick summary
+else
 TESTGAP_FILE="$LOGS/watch/WATCH_TESTGAP_$(date -u +%Y-%m-%dT%H%MZ).md"; mkdir -p "$LOGS/watch"
 Agent(
   model="haiku",
   prompt="For each in-flight lane (git diff --name-status origin/$BASE..<lane>): count source files added/modified vs test files added/modified, using the project's source + test conventions (infer from the repo — e.g. src/**/*.ts vs *.test.ts / __tests__; *.py vs *_test.py / tests/). Flag any lane with ≥N new/changed source files and 0 new/changed tests → severity warn, suggested action naming the lane + the untested files. Skip docs-only / config-only / pure-refactor diffs (no behavior change). Write TL;DR + per-lane gap list to $TESTGAP_FILE."
 )
+fi   # end missing-tests change-gate
 ```
 
 ---
@@ -598,14 +778,14 @@ At the END of each `/loop` tick (after all fan-out duties complete and their Hai
 ## Duty results
 | Duty | Ran? | Findings | Severity | Output file |
 |---|---|---|---|---|
-| Code review fan-out | yes / no (cap) | N reviews written | urgent/warn/info | WATCH_REVIEW_... |
-| CVE scan | yes / no (no lockfile) | N advisories | urgent/warn/info | WATCH_CVE_... |
-| Cross-lane conflict scan | yes / no (cap) | N overlaps | urgent/warn/info | WATCH_CONFLICTS_... |
-| Git hygiene scan | yes / no (cap) | N issues | urgent/warn/info | WATCH_GIT_... |
+| Code review fan-out | yes / no (cap) / no (unchanged) | N reviews written | urgent/warn/info | WATCH_REVIEW_... |
+| CVE scan | yes / no (no lockfile) / no (unchanged) | N advisories | urgent/warn/info | WATCH_CVE_... |
+| Cross-lane conflict scan | yes / no (cap) / no (unchanged) | N overlaps | urgent/warn/info | WATCH_CONFLICTS_... |
+| Git hygiene scan | yes / no (cap) / no (unchanged) | N issues | urgent/warn/info | WATCH_GIT_... |
 | Cross-story drift scan | yes / no (off) | N drift pairs | warn/urgent/info | (drift summary) |
-| Sequence-collision scan | yes / no (off) | N collisions | urgent/info | WATCH_SEQ_... |
-| Config/secret parity | yes / no (off) | N keys / secrets | urgent/warn/info | WATCH_CONFIG_... |
-| Missing-tests heuristic | yes / no (off) | N lanes with gaps | warn/info | WATCH_TESTGAP_... |
+| Sequence-collision scan | yes / no (off) / no (unchanged) | N collisions | urgent/info | WATCH_SEQ_... |
+| Config/secret parity | yes / no (off) / no (unchanged) | N keys / secrets | urgent/warn/info | WATCH_CONFIG_... |
+| Missing-tests heuristic | yes / no (off) / no (unchanged) | N lanes with gaps | warn/info | WATCH_TESTGAP_... |
 
 ## Lane activity
 | Lane | New commits | Files changed | Conflicts |
@@ -635,21 +815,52 @@ The worker commits TODO/CSV close-suffix as `(PR #pending)` because the PR numbe
 **Scan logic (parallel by default, per [rules.md R28](../rules/R28-parallel-by-default-for-scan.md)) — calls the `parallel_edit_fanout` helper from [`../functions/index.md`](../functions/index.md):**
 
 ```bash
-# Build feature/<topic> → PR #N map from King's master_agent.log
-declare -A PR_MAP
+# Build feature/<topic> → PR #N map from King's master_agent.log.
+# v0.41.0: read only the LAST 500 lines, not the whole file. Open feature branches
+# are always recent (a stale feature is either merged or abandoned), so the tail
+# always carries every open feature→PR mapping. Over a month the full log grows to
+# tens of thousands of lines; re-parsing it every tick is wasted I/O. The log itself
+# is rotated/truncated by /kingdom:archive, so the tail stays a sound window.
+# Portable feat→PR map as newline-delimited "feat pr" pairs — NOT a bash
+# associative array. `declare -A` + `${PR_MAP[$feat]}` is bash-only: under zsh
+# (the King may run either shell) `${!arr[@]}` throws `bad substitution` and a
+# quoted-key write stores the brackets literally, so the lookup reads back empty
+# and EVERY backfill silently no-ops. A plain string + awk lookup is shell-agnostic.
+PR_PAIRS=""
 while IFS= read -r line; do
   feat=$(echo "$line" | grep -oE 'feature/[a-z0-9-]+' | head -1)
   prn=$(echo  "$line" | grep -oE 'PR #[0-9]+'        | grep -oE '[0-9]+' | head -1)
-  [ -n "$feat" ] && [ -n "$prn" ] && PR_MAP["$feat"]="$prn"
-done < "$LOGS/master_agent.log"
+  [ -n "$feat" ] && [ -n "$prn" ] && PR_PAIRS="$PR_PAIRS$feat $prn
+"
+done < <(tail -n 500 "$LOGS/master_agent.log")
 
 # Build the lane=pr spec for the helper. Lane → feature → PR resolution is
-# watchman's local concern; the helper just needs <lane>=<pr> tuples.
+# watchman's local concern; the helper just needs <lane>=<pr> tuples. Enumerate
+# live lanes dynamically (R28-style) — a fleet shape with worker-5 or story/*
+# lanes would be silently skipped by a hardcoded worker-1..co-worker-1 list.
+#
+# Resolve lane → feature from master_agent.log, NOT from state.json. state.json
+# (written by save_session_state) carries `lanes.<lane>.{branch,head_sha,task}`
+# but NO `.dispatch.<lane>.feature` key — reading that phantom path returns empty
+# and silently no-ops the entire backfill (R27 broken). The King's carve/push log
+# line is the real source: it names BOTH the lane and the `feature/<topic>` it
+# carved (R9 — feature is byte-for-byte from the lane tip), in the same tail window
+# already scanned for PR_PAIRS. Parse lane→feature from those same lines.
+LANE_FEAT_PAIRS=""
+while IFS= read -r line; do
+  lf=$(echo "$line" | grep -oE '(co-)?worker-[0-9]+|story/[a-z0-9._-]+' | head -1)
+  ff=$(echo "$line" | grep -oE 'feature/[a-z0-9-]+'                     | head -1)
+  [ -n "$lf" ] && [ -n "$ff" ] && LANE_FEAT_PAIRS="$LANE_FEAT_PAIRS$lf $ff
+"
+done < <(tail -n 500 "$LOGS/master_agent.log")
+
 spec=""
-for lane in worker-1 worker-2 worker-3 co-worker-1; do
-  feat=$(jq -r ".dispatch.$lane.feature // empty" "$LOGS/state.json" 2>/dev/null)
+for lane in $(git -C "$PROJ" for-each-ref --format='%(refname:short)' \
+                'refs/heads/worker-*' 'refs/heads/co-worker-*' 'refs/heads/story/*' 2>/dev/null); do
+  # awk lookup: lane → feature (last carve wins), then feature → PR (freshest log line).
+  feat=$(printf '%s' "$LANE_FEAT_PAIRS" | awk -v l="$lane" '$1==l{v=$2} END{print v}')
   [ -z "$feat" ] && continue
-  pr="${PR_MAP[$feat]}"
+  pr=$(printf '%s' "$PR_PAIRS" | awk -v f="$feat" '$1==f{v=$2} END{print v}')
   [ -z "$pr" ] && continue
   spec="$spec $lane=$pr"
 done
@@ -657,8 +868,12 @@ done
 # One call — handles parallel-across-branches, MERGED/CLOSED skip, amend +
 # --force-with-lease, and master_agent.log line. Per-lane stdout lines reach
 # the WATCH_PR_BACKFILL.md report. (K10 v0.37.0: WATCH_* live in $LOGS/watch/.)
+# The replacement carries the `%PR%` token: parallel_edit_fanout substitutes each
+# lane's OWN pr (from the spec tuple) per-branch. A literal `(PR #${pr})` here
+# would bake in whatever `$pr` held after the loop — the LAST lane's number — and
+# stamp it onto every lane's commit. The token keeps each lane's number distinct.
 mkdir -p "$LOGS/watch"
-parallel_edit_fanout "(PR #pending)" "(PR #${pr})" "$spec" > "$LOGS/watch/WATCH_PR_BACKFILL.md" 2>&1
+parallel_edit_fanout "(PR #pending)" "(PR #%PR%)" "$spec" > "$LOGS/watch/WATCH_PR_BACKFILL.md" 2>&1
 ```
 
 **On per-lane `(PR #${pr})` expansion:** the helper does literal string replace, not shell expansion, so the second argument must already encode the lane's own PR number. The wrapper above is illustrative; in practice watchman calls `parallel_edit_fanout` **once per lane** when PR numbers differ across lanes, or once collectively when the search/replace is identical (e.g. a structural footer change). The library favours the latter — different PR numbers per lane is the watchman-specific edge.
@@ -701,8 +916,10 @@ Sub-agent tabs in master workspaces are SUPPOSED to auto-close via the 5-step cl
 Watchman sweeps for these every `/loop` tick. Logic:
 
 ```bash
-# For each lane master workspace, enumerate its tabs/surfaces
-for WS_VAR in $(env | grep -E '^(WORKER|COWORKER)_WS_[0-9]+' | cut -d= -f1); do
+# For each lane master workspace, enumerate its tabs/surfaces. Include SENIOR_WS_*
+# — Seniors fan out review sub-agents (review_tick, see senior.md) as visible tabs too,
+# so they can leave orphan tabs just like workers/co-workers.
+for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|SENIOR)_WS_[0-9]+' | cut -d= -f1); do
   WS_REF=$(eval echo "\$$WS_VAR")
 
   # List all surfaces in this workspace
@@ -745,7 +962,9 @@ Watchman scans for this every `/loop` tick:
 # For each lane workspace ref in $LOGS/workspace-refs.env:
 source "$LOGS/workspace-refs.env"
 
-for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN)_WS_[0-9]+' | cut -d= -f1); do
+# Include SENIOR_WS_* — a Senior is an Opus master lane that can also stall on a
+# permission prompt (it dispatches its pod + runs the story gate).
+for WS_VAR in $(env | grep -E '^(WORKER|COWORKER|WATCHMAN|SENIOR)_WS_[0-9]+' | cut -d= -f1); do
   WS_REF=$(eval echo "\$$WS_VAR")
   LANE_LABEL=$(echo "$WS_VAR" | sed 's/_WS_/ /' | tr 'A-Z' 'a-z')   # e.g. "worker 1"
 
@@ -817,8 +1036,8 @@ King drops a request file at `<LOGS>/watchman-requests/<UTC>__verify-<slug>.md`:
 to confirm BE-AUTH-3 doesn't regress the login flow.">
 
 ## Commands
-- pnpm --filter @bfg-swt/backend-bac test:integration
-- pnpm --filter @bfg-swt/webshop test:e2e -- --grep login
+- pnpm --filter @my-app/backend test:integration
+- pnpm --filter @my-app/web test:e2e -- --grep login
 
 ## Scope
 - Read-only — DO NOT edit test code, fixtures, or project files
@@ -982,10 +1201,13 @@ Watchman writes `WATCH_*` reports to `.kingdom/<project>/logs/watch/` — monito
 ├── WATCH_<UTC>__pr-<N>_lead_approved.md           ← lead just approved a PR
 ├── WATCH_<UTC>__pr-<N>_ready_to_merge.md          ← PR green + approved + idle ≥30 min
 ├── WATCH_<UTC>__verify-<slug>.md                  ← on-demand verification report
-├── WATCH_REVIEW_<UTC>__<lane>.md                  ← Duty 1 senior-dev review (per lane + king-overlay)
+├── WATCH_REVIEW_<UTC>__<lane>.md                  ← Duty 1 senior-dev review (per lane; also __king-overlay)
 ├── WATCH_CVE_<UTC>.md                             ← Duty 2 CVE scan
 ├── WATCH_CONFLICTS_<UTC>.md                       ← Duty 3 cross-lane conflict scan
 ├── WATCH_GIT_<UTC>.md                             ← Duty 4 git hygiene scan
+├── WATCH_SEQ_<UTC>.md                             ← Duty 6 sequence-collision scan
+├── WATCH_CONFIG_<UTC>.md                          ← Duty 7 config/secret parity scan
+├── WATCH_TESTGAP_<UTC>.md                         ← Duty 8 missing-tests heuristic
 ├── WATCH_TICK_<UTC>.md                            ← per-tick aggregation
 ├── WATCH_PR_BACKFILL.md                           ← PR-number backfill report
 ├── WATCH_TASK_AUDIT.md                            ← verifying-checkbox audit (flag-only)
@@ -1019,19 +1241,19 @@ stateDiagram-v2
     approved --> idle : no activity ≥ 30 min
     idle --> ready_to_merge : mergeable + green\n+ approved + idle ≥30 min
 
-    ready_to_merge --> [*] : Ter merges
+    ready_to_merge --> [*] : you merge
 
     pending --> CI_failed : CI fails (re-run)
     CI_green --> pending : new commit pushed\n(CI re-runs)
 
     note right of CI_failed
-        cmux_notify King\n"CI failed on PR #N"
+        cmux_notify $KING_WS\n"CI failed · PR #N"
     end note
     note right of approved
-        cmux_notify Ter\n"PR #N approved"
+        cmux_notify $KING_WS\n"PR #N approved"
     end note
     note right of ready_to_merge
-        cmux_notify Ter\n"PR #N ready to merge"
+        cmux_notify $KING_WS\n"Ready to merge · PR #N"
     end note
 ```
 
@@ -1057,6 +1279,12 @@ Schema:
     "248": { "ci": "red", "reviews": "pending", "mergeable": true },
     "249": { "ci": "pending", "reviews": "pending", "mergeable": true }
   },
+  "gates": {
+    "last_cve_sha": "9f3a...",
+    "last_cve_ts": 1747476600,
+    "last_git_state_sha": "1c4e...",
+    "quiet_streak": 0
+  },
   "findings": {
     "seq-collision:0004-product-variant": {
       "duty": "seqCollision", "severity": "urgent", "first_seen_tick": "2026-05-17T1015Z",
@@ -1068,7 +1296,7 @@ Schema:
 }
 ```
 
-Watchman writes; King reads (for alert context); no human edit. Cleared/reset when watchman is torn down. The same file also carries the per-lane SHA cache (`lane_shas`) used by the Duty 1–8 fan-out, the `blocked_lanes` debounce map, and the `surface_idle_ts` map used by the orphan-tab sweep.
+Watchman writes; King reads (for alert context); no human edit. Cleared/reset when watchman is torn down. The same file also carries the per-lane SHA cache (`lane_shas`) used by the Duty 1–8 fan-out, the `blocked_lanes` debounce map, the `surface_idle_ts` map used by the orphan-tab sweep, and the v0.41.0 `gates` block — the change-gate markers (`last_cve_sha`, `last_cve_ts`, `last_git_state_sha`) that let Duties 2/4/6/7/8 skip re-compute on unchanged inputs, plus `quiet_streak` driving the deep-quiet cadence tier.
 
 `develop_health.trend` is the last ~12 smoke results (oldest→newest); `consecutive_red` drives the "sustained RED" escalation; `flaky` is set when the trend oscillates pass/fail/pass on an unchanged develop SHA. `findings` is the cross-tick ledger — see below.
 
@@ -1076,13 +1304,14 @@ Watchman writes; King reads (for alert context); no human edit. Cleared/reset wh
 
 ## Findings ledger (v0.40.0) — memory across ticks so the watchman is signal, not noise
 
-The `findings` map in `watchman_state.json` is keyed by a stable **finding key** (`<duty>:<stable-slug>`, e.g. `seq-collision:0004-product-variant`, `config:KEYCLOAK_ISSUER`, `testgap:worker-2`). Each tick, after the duties run, the watchman reconciles this tick's findings against the ledger:
+The `findings` map in `watchman_state.json` is keyed by a stable **finding key** (`<duty>:<stable-slug>`, e.g. `seq-collision:0004-product-variant`, `config:AUTH_ISSUER`, `testgap:worker-2`). Each tick, after the duties run, the watchman reconciles this tick's findings against the ledger:
 
 | Situation | What the watchman does |
 |---|---|
 | **New finding** (key not in ledger) | Add it (`first_seen_tick`, `ticks_open: 1`, `status: open`); `cmux_notify` if severity ≥ warn; include in the tick's "New this tick" + the `WATCH_*` report. |
 | **Carried finding** (key already open) | Increment `ticks_open`; do **NOT** re-notify (dedup — this is what kills the "same urgent flag every 5 min" noise). **Escalate** severity one step (info→warn→urgent) once `ticks_open` crosses a threshold (default: warn after 3 ticks, urgent after 6) — a problem nobody fixed for 30 min deserves louder. Re-notify only on an escalation step, not every tick. |
-| **Resolved finding** (key in ledger, absent this tick) | Mark `status: resolved`, write a one-line "✅ resolved: <finding> (was open N ticks)" to the tick summary + `master_agent.log`, then drop it next tick. Auto-close = the watchman tells you when it fixed itself, instead of silently forgetting. |
+| **Resolved finding** (key in ledger, absent this tick **AND its owning duty actually RAN this tick**) | Mark `status: resolved`, write a one-line "✅ resolved: <finding> (was open N ticks)" to the tick summary + `master_agent.log`, then drop it next tick. Auto-close = the watchman tells you when it fixed itself, instead of silently forgetting. |
+| **Finding whose duty was SKIPPED this tick** (change-gated off — Duty 2/4/6/7/8) | **Carry it forward unchanged — do NOT auto-resolve.** A skipped duty produced no findings because it didn't run, NOT because the issue is gone. Auto-resolving here would silently drop a real open finding (e.g. a seq-collision on an idle lane). Reconcile/auto-resolve ONLY for duties that ran this tick; for skipped duties, leave their open findings as-is. |
 
 **Notify fallback (the dead-notification fix).** Every `cmux_notify` the watchman fires also appends the finding (key + severity + suggested action) to `<LOGS>/king-inbox/WATCH_<UTC>__<key>.md`. So if cmux can't deliver (the 2026-05-20 run: `workspace-refs.env` was empty for 24+ ticks → every alert was lost), the King still picks it up from king-inbox at its next decision point. A finding is never *only* a sidebar badge.
 
@@ -1117,7 +1346,7 @@ Watchman writes ONLY: `WATCH_*.md` reports, `watchman_state.json`, `cmux_notify`
 
 | Action | Trigger | How |
 |---|---|---|
-| **Spawn** | Kingdom startup (part of the spawn checklist) | `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `spawn_loop` auto-dispatch of `cmux_send "<self>" "$LANE_WATCHMAN_PROMPT"` (primary) or `tmux send-keys -l` (fallback) |
+| **Spawn** | Kingdom startup (part of the spawn checklist) | King injects `/kingdom:self-watchman` first (R52), then `git worktree add -b "watchman-1" "$PROJ/.worktrees/watchman-1" "origin/develop"` + `spawn_loop` auto-dispatch of `cmux_send "<self>" "$LANE_WATCHMAN_PROMPT"` (routed to the tmux mirror under `KINGDOM_BACKEND=tmux`) |
 | **Pause** | The user says "pause watchman" | King sends `/loop cancel` to the watchman pane: `cmux_send "<self>" "/loop cancel"` |
 | **Resume** | The user says "resume watchman" | King re-sends the `LANE_WATCHMAN_PROMPT` |
 | **Teardown** | Kingdom close | `cmux_send "<self>" "/loop cancel"` → `git worktree remove "$PROJ/.worktrees/watchman-1" --force; git branch -D "watchman-1" 2>/dev/null \|\| true` |

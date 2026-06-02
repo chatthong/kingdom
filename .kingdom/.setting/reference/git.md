@@ -124,7 +124,7 @@ graph TB
     W2["👷 worker-2 🏠"]
     W3["👷 worker-3 🏠"]
     C1["🧑‍💼 co-worker-1 🏠"]
-    KG["👑 kingdom 🏠\nmerged integration view\nNEVER PUSHED\nadvisory — Ter can checkout to inspect"]
+    KG["👑 kingdom 🏠\nmerged integration view\nNEVER PUSHED\nadvisory — you can checkout to inspect"]
 
     OD --> KG
     W1 --> KG
@@ -242,7 +242,7 @@ Per-project conventions live in the project's own `CLAUDE.md` and (optionally, T
 | Head branch | `feature/<topic>` (carved fresh at push time) |
 | Title pattern | `feat(scope): subject` (Conventional Commits) |
 | Body | Summary / Test plan / Out of scope sections; `cc @<reviewer>` |
-| Reviewer | per project (e.g., `@eruditus-vir` for bfg-swt) |
+| Reviewer | per project (e.g., `@your-reviewer` for my-app) |
 | Labels | per project (tier / component / type) |
 | Merge style | per project (merge-commit or squash) |
 | Force-push | `--force-with-lease` only, never bare `--force` |

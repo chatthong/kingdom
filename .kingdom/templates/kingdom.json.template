@@ -98,8 +98,17 @@
     "_comment": "Autonomous watchman config (v0.29.0+, per rules.md R39 + R40). The watchman runs its /loop fully autonomously; King never dispatches to it. Per tick, watchman can spawn up to haikuCapPerTick Haiku sub-agents in parallel for: code review (diff per touched file), CVE scan (npm/pnpm/pip/cargo audit), cross-lane conflict scan, git hygiene scan.",
     "haikuCapPerTick": 5,
     "haikuCapMax": 10,
+    "retentionDays": 7,
+    "_retentionComment": "Sweep window (days) for the watchman's WATCH_* artifacts: digests/notes older than this are pruned each tick. Lower it for tighter disk use, raise it to keep a longer audit trail.",
+    "cadence": {
+      "_comment": "Dynamic tick pacing. churnMin: minutes between ticks when develop/PRs are actively moving. quietMin: when things are calm. deepQuietMin: a longer interval for the heavier change-gated duties (CVE/git-hygiene/seq/config/test) so they don't re-run every tick on a still repo. deepQuietStreak: how many consecutive zero-finding, no-change ticks must pass before dropping to the deepQuietMin cadence.",
+      "churnMin": 5,
+      "quietMin": 15,
+      "deepQuietMin": 30,
+      "deepQuietStreak": 3
+    },
     "duties": {
-      "_comment": "Each duty can be disabled per-project. Defaults all-on. Disable selectively for projects where the duty isn't valuable.",
+      "_comment": "Each duty can be disabled per-project. Defaults all-on. CVE/git-hygiene/seq-collision/config-parity/missing-tests duties are change-gated — they only re-run when the relevant inputs (manifests, branches, config, test files) actually changed since the last tick.",
       "codeReview": true,
       "cveScan": true,
       "conflictScan": true,

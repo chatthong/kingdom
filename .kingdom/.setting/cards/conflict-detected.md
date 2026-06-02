@@ -27,7 +27,7 @@
 | Var | Source | Example |
 |---|---|---|
 | `${LANE}` | lane being pushed | `worker-2` |
-| `${CONFLICT_FILES_LIST}` | conflicting file paths from `git merge-tree`, one per line prefixed `    • ` | `    • apps/webshop/middleware.ts` |
+| `${CONFLICT_FILES_LIST}` | conflicting file paths from `git merge-tree`, one per line prefixed `    • ` | `    • apps/shop/middleware.ts` |
 
 ## Response handling
 

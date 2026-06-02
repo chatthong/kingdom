@@ -30,7 +30,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | project being audited | `bfg-swt` |
+| `${PROJECT}` | project being audited | `my-app` |
 | `${N_SPECIALISTS}` | parallel-spawn count | `4` |
 | `${DURATION}` | wall-clock | `2m 14s` |
 | `${N_CHECKBOXES_FLIPPED}` | low-risk auto-fixes | `7` |
@@ -39,7 +39,7 @@
 | `${N_DIGESTS_STALE}` | high-risk: digest text doesn't match raw | `0` |
 | `${N_TASK_MERGES}` | task files that should consolidate | `1` |
 | `${N_SUSPECT}` | sentinels with no matching commit | `0` |
-| `${REPORT_PATH}` | path to the full audit report | `.kingdom/bfg-swt/logs/kingdom-update-2026-05-18T1142Z.md` |
+| `${REPORT_PATH}` | path to the full audit report | `.kingdom/my-app/logs/kingdom-update-2026-05-18T1142Z.md` |
 
 ## Notes
 

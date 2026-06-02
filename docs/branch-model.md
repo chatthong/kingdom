@@ -6,6 +6,8 @@
 
 Lanes work on `worker-N` (local). King overlays their changes onto `kingdom`'s working tree as **UNCOMMITTED files**, never as commits, so you can review every line in GitHub Desktop's Changes tab. Tier-2 gate runs against the overlay. After you approve, King carves `feature/<topic>` from the `worker-N` tip byte-for-byte and pushes that one-commit branch as a PR to `develop`. **Only `feature/<topic>` ever reaches origin.** After push, King discards the kingdom overlay (`git restore .`); kingdom is back to clean `origin/develop`.
 
+> **Convention note:** the `develop` / `feature/<topic>` / `main` flow shown here is one **example** branch convention. The kit is domain-agnostic — point the PR target at whatever base your project uses (`main`, `trunk`, a release branch, etc.). The invariants below (lanes stay local, `kingdom` is an overlay that never commits, PRs carve byte-for-byte from the lane tip) hold regardless of the base-branch names.
+
 ## The lifecycle
 
 ```mermaid
@@ -38,7 +40,7 @@ graph LR
 
     DEV ==>|"git fetch + reset --hard origin/develop<br/>start of each review cycle"| K
 
-    W1 ==>|"Ter reviews live diff in GitHub Desktop,<br/>approves push,<br/>King carves from worker-1 tip,<br/>git push + gh pr create,<br/>git restore . to discard overlay"| F1
+    W1 ==>|"you review the live diff in GitHub Desktop,<br/>approve push,<br/>King carves from worker-1 tip,<br/>git push + gh pr create,<br/>git restore . to discard overlay"| F1
     W2 ==> F2
     W3 ==> F3
 
@@ -84,6 +86,21 @@ Click any file to see the diff in the right pane. No commit history to navigate.
 2. **`kingdom` is a local working-tree overlay. Never commit on it.** King resets `kingdom` to `origin/develop`, then overlays each in-flight lane's changes onto the working tree (via `git diff worker-N | git apply` or `git checkout worker-N -- <files>`). Result: every change shows up as UNCOMMITTED in GitHub Desktop's "Changes" tab, VS Code's source-control panel, or `git status`. Review files line-by-line in one view. Tier-2 gate runs on this overlay. After push, `git restore .` discards the overlay; `kingdom` is clean for the next cycle. `kingdom` is never pushed AND never commits.
 3. **PRs carve from `worker-N` tip, not from `kingdom`, and stay byte-for-byte identical.** Each `feature/<topic>` is a fast-forward checkout of the lane's tip; no commits are added on the feature branch after carving. Whatever's on `worker-N` IS what ships. If you want extra content in the PR, put it on `worker-N` first (worker commits it) or open a separate PR (different concern, different PR). Adding commits to `feature/*` after carving breaks the kingdom-as-truth-of-what-ships invariant.
 
+## Story pods: the `story/<id>` integration path
+
+The solo path above (one worker → one `feature/<topic>` → one PR) is the default for single-worker tasks. When several workers attack one unit (a story, milestone, or issue) in parallel, the work integrates and ships through a **story pod** instead.
+
+A **Senior** (Opus) is the per-story sub-orchestrator and the SOLE within-story reviewer. It owns a worker pod and merges their `worker-N` tips into a **local-only `story/<id>` integration branch** — using **real merge commits** (not an overlay; the story branch is a normal branch that accumulates history). The Senior runs the Tier-2 gate on the integrated story branch, runs an autonomous review loop (route fixes back to the owning worker, re-review), then marks the story push-eligible.
+
+The result is a **three-tier gate**:
+
+1. **Worker Tier-1** — `gate.typecheck` in each `.worktrees/worker-N` (seconds).
+2. **Story Tier-2** — `gate.tests` + `gate.smoke` + `gate.lint` on the integrated `story/<id>` branch (minutes).
+3. **Senior review** — the Senior reviews the whole pod's integrated work once, routing fixes back to workers until the story is clean.
+4. **Human push** — you give the single-shot `push` word.
+
+Only the final `story/<id>` → `develop` PR reaches origin — the whole pod ships as **one PR**. The `story/<id>` branch itself stays local, exactly like `worker-N` and `kingdom`. Review never happens twice on the same code: the Senior owns within-story depth, the King owns cross-story breadth (partitioning scopes, sequencing dependencies, resolving drift at push). The solo `worker-N` → `feature/<topic>` path is retained for one-worker tasks.
+
 ## What lives where
 
 | Branch | Lives | Lifetime | Touched by | Reaches origin? |
@@ -91,6 +108,7 @@ Click any file to see the diff in the right pane. No commit history to navigate.
 | `main` | online (protected) | permanent | release manager | ✅ origin/main |
 | `develop` | online | permanent | lead via PR merge | ✅ origin/develop |
 | `feature/<topic>` | online | one PR, then deleted | 👑 King (carve from worker-N tip + push + PR) | ✅ origin/feature/* |
+| `story/<id>` | **local only** | transient integration branch (one story, then the pod ships as one PR) | 🎓 Senior (Opus): merge worker pod via real merge commits + Tier-2 gate + review | ❌ never |
 | `kingdom` | **local only · no commits** | permanent branch, transient working-tree overlay (reset to origin/develop, overlay lanes, review, discard) | 👑 King (reset + overlay + Tier-2 gate + discard) | ❌ never |
 | `worker-N` | **local only** | slot identity; same lane does many tasks over time | 👷 worker-N | ❌ never |
 | `co-worker-N` | **local only** | slot identity | 🧑‍💼 co-worker-N | ❌ never |

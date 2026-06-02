@@ -10,6 +10,8 @@ A worker, co-worker, senior, or the King that hits heavy work — multi-file rea
 
 **Applies to:** `worker-N`, `co-worker-N`, `senior-N` (as lane masters), **and** the King. The King fans out only via its existing visible mechanisms — `cmux_send` to lanes (R37) and visible tabs (R38) — **never** in-process `Agent()` in the King's own session (R38). Lane masters fan out via tabs / the pre-warmed pool per `kingdom.json.cmux.subAgentSpawnByModel`.
 
+**Preferred mechanism — [R53](R53-fan-out-via-workflow-tool.md):** when the session exposes the Claude Code **Workflow tool**, do the fan-out through it (one Workflow run per task → the live `/workflows` view), falling back to the bounded `Agent()` / cmux-tab mechanisms below when it isn't available. R51 is *what* to fan out; R53 is *how*.
+
 **Still bounded by [R42](R42-every-parallel-fan-out-uses.md):** every parallel fan-out uses `_bounded_wait`, never bare `wait`.
 
 **Distinct from [R40](R40-watchman-haiku-fan-out-cap.md):** the watchman keeps its OWN *hard* per-tick cap (`watchman.haikuCapPerTick`); R51's soft target neither applies to nor overrides it.

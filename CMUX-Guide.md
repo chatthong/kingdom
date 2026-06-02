@@ -1,147 +1,93 @@
-# CMUX-Guide.md — manaflow-ai/cmux for the kingdom
+# CMUX-Guide — the kingdom's PRIMARY backend
 
-> This guide is about [manaflow-ai/cmux](https://github.com/manaflow-ai/cmux), the
-> macOS terminal app that is the kingdom's primary outer host. For raw tmux (the
-> fallback path), see TMUX-Guide.md. For per-lane git worktrees, see
-> .kingdom/.setting/reference/git.md — the kingdom uses plain `git worktree` directly.
+> A reading guide for humans. It explains what [manaflow-ai/cmux](https://github.com/manaflow-ai/cmux) is and how the kingdom uses it as its primary host on macOS. For the exact command surface the roles call, see the shipped wrapper catalog [`.kingdom/.setting/reference/cmux.md`](.kingdom/.setting/reference/cmux.md). For the fallback path, see [`TMUX-Guide.md`](TMUX-Guide.md). For per-lane worktrees, see [`.kingdom/.setting/reference/git.md`](.kingdom/.setting/reference/git.md).
+
+---
 
 ## What is manaflow/cmux?
 
-manaflow-ai/cmux is a Swift/AppKit native macOS terminal app built on libghostty,
-designed specifically for parallel AI coding sessions. It provides workspaces, panes,
-tabs, desktop notifications, a scriptable CLI/socket API, and an in-app browser —
-all as first-class features rather than afterthoughts bolted onto a general-purpose
-terminal.
+manaflow-ai/cmux is a native macOS terminal app (built on libghostty) designed for parallel AI coding. Unlike a general-purpose terminal, it treats **workspaces**, **tabs**, **splits**, **desktop notifications**, a **colour-coded sidebar**, a scriptable **CLI**, and an in-app **browser** as first-class features.
 
-The key design goal is letting an orchestrating agent (King) control multiple Claude
-Code teammate sessions — spawning them, sending keystrokes, reading their output,
-and receiving alerts — through a clean CLI surface. Inside cmux.app, Claude Code's
-`teammateMode: "tmux"` is intercepted by a `__tmux-compat` translation layer that
-produces native cmux splits rather than real tmux panes.
+That's exactly what an orchestrator needs. The kingdom's King runs in one cmux workspace and drives a fleet of lane workspaces — spawning each, sending it task briefs, reading its screen, setting its sidebar colour and live status, and receiving notifications back — all through cmux's CLI. The screenshot in the [README](README.md) is a live kingdom in cmux.app.
+
+> **Target version: manaflow/cmux ≥ 0.64.6.** Not to be confused with `craigsc/cmux` (a different worktree CLI — the kingdom does not use it).
 
 ---
 
 ## Install
 
 ```bash
-brew tap manaflow-ai/cmux && brew install --cask cmux
+brew install --cask cmux
 # or download the DMG from https://github.com/manaflow-ai/cmux/releases
 ```
 
+Then run `/kingdom:self-care` in a Claude Code session inside cmux.app — it confirms cmux (plus `tmux`, `jq`, `gh`, `git`) is present and ready.
+
 ---
 
-## Key features the kingdom uses
+## How the kingdom uses cmux (the model)
 
-| Feature | CLI | Used by |
+The kingdom maps onto cmux's three-tier hierarchy:
+
+| Tier | Who | Lifetime | Purpose |
+|---|---|---|---|
+| 🏢 **Workspace** | 👑 King + every 👷 Worker / 🧑‍💼 Co-worker / 🕵️ Watchman / 🎓 Senior | Long-lived (persists across sessions) | One Claude Code session per role — these are the colour-coded entries in the sidebar |
+| 📑 **Tab** | 🐱 visible sub-agents inside a master's workspace | Short-lived (auto-closes on its sentinel flag) | Watchable sub-agent execution |
+| 🪟 **Split** | Watchman's dual monitor view; optional paired-co-worker editor | Same as the workspace | Two panes in one workspace |
+
+The flow, end to end:
+
+1. **King boots** in its own workspace (`cd <workspace> && claude`); the project's auto-memory loads at the workspace root.
+2. On `/kingdom:work`, the King renames its workspace to `👑 King · <project>` and **spawns one workspace per lane** with `cmux new-workspace --command "claude"` — *not* panes, *not* a teammate-spawn. Each lane's `--cwd` is its own `git worktree`. Captured workspace refs are persisted to `<LOGS>/workspace-refs.env` so lanes stay addressable across restarts.
+3. The King **dispatches** each lane its task brief (text + a real Enter keypress).
+4. Lanes work in parallel, each updating its **sidebar colour, status line, and attention badge** to mirror progress. On completion a lane fires a **notification** (sidebar badge + bell-panel entry) and drops a sentinel flag in `<LOGS>/done/`.
+5. The King polls those sentinels, gates the work, overlays it for your review, and pushes only on your explicit approval.
+
+### Everything goes through wrappers (since v0.36.0)
+
+Roles never type raw `cmux …`. Every subcommand has a one-line wrapper in [`.kingdom/.setting/functions/cmux/`](.kingdom/.setting/functions/cmux/) — `cmux_send`, `cmux_notify`, `cmux_new_workspace`, `cmux_set_state`, `cmux_workspace_action`, `cmux_close_workspace`, and friends (plus `browser_*` for the in-app browser). One wrapper per subcommand means one place to fix if cmux's CLI shifts, and the tmux fallback mirrors the same names. The authoritative list, with the exact raw command each wrapper runs, is the shipped catalog:
+
+➡️ **[`.kingdom/.setting/reference/cmux.md`](.kingdom/.setting/reference/cmux.md)** — read this for any specific invocation.
+
+---
+
+## Backend auto-detection (you don't flip a switch)
+
+The kingdom detects its host at session start and routes every `cmux_*` call accordingly — there's no config toggle:
+
+| Backend | When | What lanes are |
 |---|---|---|
-| Spawn Claude Code teammates as native splits | `cmux claude-teams` | /kingdom:start (PRIMARY mode) |
-| Send keystrokes to a pane | `cmux send --pane <handle> "<text>"` | King dispatching tasks to lanes |
-| Send a single key | `cmux send-key --pane <handle> Enter` | King confirming permission prompts |
-| Push a notification | `cmux notify --workspace <id> "<message>"` | Lanes/Watchman alerting King/Ter |
-| Set sidebar status pill | `cmux set-status --pane <handle> "<text>"` | Watchman + lane masters reporting state |
-| Read terminal text | `cmux read-screen --pane <handle>` | King peeking at lane state |
-| Capture pane scrollback | `cmux capture-pane --pane <handle> -S -200` | Tmux-compat alias; same as above |
-| List panes (discover handles) | `cmux list-panes --workspace <id> --json` | King resolving lane to pane handle |
-| Print workspace tree | `cmux tree --json` | King discovering the layout |
+| **cmux** (PRIMARY) | `$CMUX_CLAUDE_PID` is set **and** the `cmux` CLI is present (you're inside cmux.app) | cmux workspaces in the colour-coded sidebar |
+| **tmux** (FALLBACK) | any other terminal (Ghostty, iTerm2, Terminal.app, Linux) with `tmux` available | tmux windows; the status-bar window list stands in for the sidebar — see [`TMUX-Guide.md`](TMUX-Guide.md) |
+| **standalone** | neither | no lane workspaces; the King uses in-process `Agent()` sub-agents only |
+
+Requiring **both** the env var and the binary means a stray `CMUX_*` variable alone never mis-routes the King to a missing CLI — it falls cleanly to tmux.
 
 ---
 
-## How the kingdom uses cmux.app
+## What you see in the sidebar
 
-- King launches via `cd <workspace> && claude` inside cmux.app (auto-memory loads at
-  workspace root).
-- King's slash command `/kingdom:start` runs `cmux claude-teams` to spawn Claude Code
-  teammates as native cmux splits.
-- King then runs `cmux list-panes` to discover handles, `cmux rename-tab` to label
-  each pane (worker-1, worker-2, …), and `cmux send` to inject task briefs into each.
-- Lanes signal completion via `cmux notify` (sidebar badge lights up). King polls
-  sentinel flag files in `.kingdom/<project>/logs/done/`.
-- Watchman uses `cmux set-status` to keep develop / open-PR health visible in the
-  sidebar at a glance.
-
----
-
-## Prerequisites
-
-The setting `"teammateMode": "tmux"` in `~/.claude/settings.json` is required. Inside
-cmux.app, this routes Claude Code's teammate-spawn commands through cmux's
-`__tmux-compat` layer — Claude Code thinks it is talking to tmux, but cmux.app
-intercepts and produces native cmux splits. No real tmux process is started.
-
-If you are NOT inside cmux.app, the same setting causes Claude Code to spawn teammates
-as actual tmux panes (fallback path) — see TMUX-Guide.md.
-
----
-
-## Common patterns
-
-### Dispatch a task brief to a lane
-
-```bash
-# Discover what panes exist after /kingdom:start
-cmux tree --json | jq '.panes[] | {handle, label}'
-
-# Send a multi-line task brief (write to file first to avoid paste fragmentation)
-cat > /tmp/brief-lane1.txt << 'EOF'
-Your task: audit bfg-swt/apps/account-center/src for missing auth guards.
-Write findings to .kingdom/bfg-swt/logs/T42.md and drop a done flag at
-.kingdom/bfg-swt/logs/done/T42__sonnet-audit.flag when complete.
-EOF
-cmux send --pane lane-1 "cat /tmp/brief-lane1.txt"
-cmux send-key --pane lane-1 Enter
-```
-
-### Confirm a permission prompt
-
-```bash
-cmux send-key --pane lane-2 y
-cmux send-key --pane lane-2 Enter
-```
-
-### Alert Ter when work is done (from a lane)
-
-```bash
-cmux notify --workspace "$CMUX_WORKSPACE_ID" "Lane 1 done: T42 audit complete"
-```
-
-### Poll for completion (from King)
-
-```bash
-until [ -f ".kingdom/bfg-swt/logs/done/T42__sonnet-audit.flag" ]; do
-  sleep 5
-done
-cmux notify --workspace "$CMUX_WORKSPACE_ID" "All lanes finished — ready for review"
-```
-
-### Discovery after layout changes
-
-```bash
-cmux list-panes --workspace "$CMUX_WORKSPACE_ID" --json | jq '.[].handle'
-```
+- **Colour-coded workspaces** — one entry per role, coloured by role (King amber, Senior teal, Worker purple, Co-worker blue, Watchman rose). You read the whole fleet at a glance.
+- **Live status lines** — each workspace's description is a real-time activity line (`▶ working`, `⚠ Push?`, `✅ done`, `🐾 idle`), updated by the role on every state transition.
+- **Notifications, three surfaces** — a blue ring on the sending pane, a numbered badge on the destination workspace card, and a rolling list under the bell icon. The kingdom reserves these for events that change what you'd do next (a lane finished, `develop` went red, the King needs a push decision) — never for routine churn.
 
 ---
 
 ## Gotchas
 
-- `cmux send` returns no error but pane is unchanged: the `--pane` handle is wrong.
-  Run `cmux tree --json` to inspect the current layout and get the correct handle.
-- Pane discovery after `cmux claude-teams` may need a manual `cmux list-panes` first;
-  the layout depends on what claude-teams produced and how many teammates were spawned.
-- `__tmux-compat` is a translation layer, not full tmux semantics. Complex tmux scripts
-  (window splitting flags, socket paths, `-t session:window.pane` addressing) may not
-  map perfectly. Use cmux's native commands when possible.
-- `cmux notify` requires the workspace ID, not the pane handle. Stash
-  `$CMUX_WORKSPACE_ID` at session start so lanes can reference it without a tree lookup.
-- Sidebar status pills set via `cmux set-status` persist until overwritten; always
-  update them to a terminal state ("done", "blocked", "idle") so stale pills don't
-  mislead at a glance.
+- **A brief lands in the lane but it never starts.** `cmux send <ref> Enter` types the literal word "Enter" — `send` only emits text. To submit you need a real keypress (`cmux send-key`). The `cmux_send` wrapper does both (text, then Enter), so calling the wrapper avoids this entirely.
+- **Renamed a workspace but the sidebar still shows the old name.** Use the workspace-level rename (`workspace-action --action rename`), not the tab-level one — the latter renames the focused tab, not the sidebar label.
+- **Workspace refs drift after a cmux.app restart.** They aren't stable across app restarts. The kingdom persists refs to `<LOGS>/workspace-refs.env` and rebuilds on resume; `/kingdom:self-care` flags a mismatch.
+- **`new-workspace` ignores `--color`.** Set the colour in a separate `workspace-action --action set-color` call right after creation (the wrappers already do this).
+- **Status lines and colours are cosmetic.** If cmux is briefly unreachable, work continues — `master_agent.log` and the task files are the source of truth, not the sidebar.
 
 ---
 
 ## See also
 
-- TMUX-Guide.md — raw tmux 101 (the fallback path when not inside cmux.app)
-- .kingdom/.setting/reference/git.md — git worktree usage (plain `git worktree`, no external tool)
-- .kingdom/.setting/roles/king.md — King's spawn checklist (uses everything above)
-- .kingdom/.setting/index.md — workspace rules, priority chain, three-tier logging,
-  worker dispatch, 4-step closer template, archivist merge
+- [`.kingdom/.setting/reference/cmux.md`](.kingdom/.setting/reference/cmux.md) — the authoritative wrapper catalog (every `cmux_*` call + the raw command it runs)
+- [`.kingdom/.setting/functions/index.md`](.kingdom/.setting/functions/index.md) — the function manifest (cmux + tmux + browser wrappers)
+- [`TMUX-Guide.md`](TMUX-Guide.md) — the fallback backend, with the full cmux → tmux mapping
+- [`.kingdom/.setting/reference/git.md`](.kingdom/.setting/reference/git.md) — per-lane worktrees (plain `git worktree`, no external tool)
+- [`.kingdom/.setting/roles/king.md`](.kingdom/.setting/roles/king.md) — the King's spawn + dispatch + gate checklist
+- [`.kingdom/.setting/index.md`](.kingdom/.setting/index.md) — workspace rules, backend detection, the priority chain

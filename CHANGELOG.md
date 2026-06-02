@@ -4,6 +4,60 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.0] — 2026-06-02
+
+Sub-agent fan-out gets a visible, trackable execution surface: the Claude Code **Workflow tool** and its live `/workflows` view.
+
+### Added
+
+- **R53 (Tier 2) — sub-agent fan-out runs through the Workflow tool when available.** When a role fans heavy work out to parallel sub-agents (R51), the preferred mechanism is now the Claude Code **Workflow tool** — *if the session exposes it*. A Workflow run renders the live `/workflows` progress tree (phases, per-agent token/tool/time, optional judge/verify stages), so **each kingdom task's sub-agent army is visible and trackable**, one Workflow run per task. Richer than headless `Agent()` and aligned with R36/R38's visibility intent.
+- **All five roles wired to R53.** King, Senior, Worker, Co-worker, and Watchman each prefer the Workflow tool for their heavy fan-out (the King's *sanctioned in-session visible* fan-out; the watchman still bounded by its R40 hard Haiku cap). Built by a 5-agent Opus army (one per role) + a consistency judge.
+- **`reference/workflow-fanout.md`** — the canonical pattern: the self-detect-then-fall-back decision, a script skeleton (Discover → Execute → Verify), per-role shapes, and the fallback idiom. Role docs point here rather than restating it.
+
+### Changed
+
+- **Graceful fallback is first-class (the kit stays shape-only).** Where the Workflow tool isn't in the session's toolset, roles fall back to the existing bounded mechanism unchanged: lane roles use `Agent()` (R42) or visible cmux tabs; the King uses tabs / lane-dispatch (R37/R38), never bare `Agent()` in its own session. No hard dependency on the harness feature.
+- **Boundaries preserved.** Lanes stay persistent cmux/tmux workspaces (R36) — Workflow governs only the *ephemeral within-task army*, never lane spawning. The task file (R23) and the closer (R22) are unchanged; the sentinel flag is still the load-bearing signal. R42 bounds, the R51 soft target, and the watchman's R40 hard cap all carry over.
+- Rules now **53** (Tier 1 = 10, Tier 2 = 38, Tier 3 = 5). `plugin.json` description refreshed (11 commands, 53 rules, R53 fan-out note).
+
+---
+
+## [0.42.0] — 2026-06-02
+
+Opus-army audit pass targeting a **1-month King session** (was degrading at ~7 days). Fixes three classes of bug + adds the retention/optimization machinery a month-long run needs.
+
+### Fixed (critical correctness — found by the Opus bug-hunt)
+
+- **`_bounded_wait` was a no-op under zsh** (the shell Claude Code's Bash tool uses) — zsh doesn't word-split a plain `$PIDS`, so the loop ran ONCE over the joined string and `wait`ed for nothing. **R42's hang-protection never actually worked under zsh.** Same root cause silently broke `parallel_edit_fanout` (PR-backfill processed 0 lanes), `cross_story_scan` (dropped the last story, compared empty refs), and `random_task_done_line` (`mapfile` is bash-only). Fix: `emulate -L sh` (function-local sh word-splitting + 0-indexed arrays) on the affected helpers; `mapfile` replaced with a portable read loop. **Verified live under zsh**: `_bounded_wait` now waits and kills survivors on timeout (rc=124).
+- **Gates could PASS on zero checks** — `run_tier1_gate`/`run_tier2_gate` fell back to `${project}` (a non-exported local) instead of `${PROJECT}`; an empty name → `.kingdom//kingdom.json` → jq read nothing → loop never ran → false pass. Fixed to `${PROJECT}` + **fail-closed** if the config file is missing. (Same `${project}`→`${PROJECT}` fix in compute_task_duration / extract_pr_title / poll_for_sentinels.)
+- **tmux FALLBACK silently failed** — the activator overrode only 11 of ~17 `cmux_*` the roles call; `cmux_tab_action` (R38 sub-agent tabs + closer self-close), `cmux_tree` (R31 lane-readiness gate), `cmux_workspace_action`, `cmux_rpc`, `cmux_list_pane*` fell through to a missing `cmux`. Added `tmux_tab_action` / `tmux_tree` / `tmux_workspace_action` wrappers + routed/no-op'd all of them; fixed `cmux_new_split`'s arg-order mismatch. **Verified: 20/20 `cmux_*` now route under tmux.**
+- **`kingdom_reset`** used bare `git` (cwd-dependent) + unguarded `$BASE` — now takes a project root, uses `git -C`, defaults BASE to develop (the v0.37.0 `git -C` discipline that this one had missed).
+- **PR-backfill wrote the wrong PR numbers (or none)** — found in the post-build recheck. The watchman built its feat→PR map as a bash associative array (`declare -A PR_MAP`), which throws `bad substitution` under zsh and stores keys with literal brackets → every lookup read empty → backfill silently no-op'd. Worse, the helper call passed a single `(PR #${pr})` (the post-loop value = the **last** lane's number), so when it *did* run it stamped one lane's PR onto all of them. Fixed: portable newline `"feat pr"` pairs + `awk` lookup (no assoc array), a `%PR%` token in `parallel_edit_fanout` that substitutes **each lane's own** number via `sed` (the `${x//%PR%/n}` form is a silent no-op under zsh — `%` is zsh's end-anchor metachar), and dynamic lane enumeration via `git for-each-ref` (a hardcoded `worker-1..co-worker-1` list skipped `worker-5`/`story/*`). **Verified under zsh** (awk lookup last-write-wins; per-lane `%PR%` substitution distinct).
+- **Done-flag deletion emptied the review surface** — recheck flagged that deleting `done/*.flag` at gate-time (the v0.42.0 hot-path prune) broke the multi-lane overlay rebuild, which derives *which lanes to re-overlay* from those flags: a session resume (or a `git reset --hard` before push) would rebuild an **empty** kingdom overlay, losing the exact dirty files the user was about to review (R15/R29). Fixed: the flag now survives review and is pruned **after push** (Step 8) instead — still bounded (only gated-unpushed flags linger, one review cycle wide), the gate never re-runs (the un-gated detector keys on the `KING_*` report, not the flag). Same loop's lane extraction also fixed to strip the model prefix (`sonnet-worker-2` → `worker-2`) so `kingdom_overlay_lane` targets a branch that exists.
+- **`cadence.deepQuietStreak` was undefined** — watchman.md reads it (`// 3` default) but it was missing from `kingdom.json.template` and `configuration.md`; added to both so the deep-quiet tier is configurable, not just a hidden default.
+
+### Added (longevity — to survive 1 month)
+
+- **`/kingdom:archive`** (new, 11th command) — moves aged/closed task files + logs to `tasks/archive/<YYYY-Qn>/` + `logs/archive/`, sweeps old `WATCH_*`, rotates `master_agent.log`; `--older-than=Nd` + `--dry-run`; never touches in-flight/state/config/memory. Safe from `/kingdom:save` or a weekly watchman duty.
+- **Watchman retention + change-gating** — a `WATCH_*` retention sweep at each tick (`watchman.retentionDays`, default 7) bounds the ~20k-files/month flat dir; Duties 2/4/6/7/8 are now **change-gated** (CVE only on lockfile change or 6h timer; seq/config/test only when a lane advanced; git-hygiene only on branch/worktree/sentinel change) — the ledger already deduped *notifications*, this stops the redundant *computation* (~tens of thousands of Haiku/month saved); a **deep-quiet cadence tier** (`cadence.deepQuietMin`, 30 min); PR-backfill reads `tail -n 500` of the log, not the whole file.
+- **Hot-path pruning** — the King prunes each `done/*.flag` after the lane is **pushed** (was never deleted → full-scanned every 10s + every resume → quadratic; deleting at gate-time instead would empty the overlay-rebuild set, so post-push is the safe point), consumes-and-deletes `king-inbox/` items, and `kingdom_resync_after_merge` deletes the merged `feature/*` branch (local+remote) so out-of-band merges don't leak. R33 resume scan capped at `head -40`.
+- **Doc-orientation caching** — `haiku_read_docs_orientation` writes stable-name artifacts (overwrite, not ~thousands of timestamped scratch files/month) + a content-hash cache that skips the ~50-file Haiku fan-out when docs are unchanged (re-grounding stops being expensive).
+
+### Changed
+
+- Command surface is now **11**. `configuration.md` synced (8 watchman duties, retention/cadence knobs incl. `cadence.deepQuietStreak`); `kingdom.json.template` gains `watchman.retentionDays` + `watchman.cadence` (`churnMin`/`quietMin`/`deepQuietMin`/`deepQuietStreak`). Functions: 100 (52 core + 23 cmux + 8 browser + 17 tmux).
+
+---
+
+## [0.41.0] — 2026-06-02
+
+### Added
+
+- **tmux FALLBACK backend (`functions/tmux/` (one wrapper per file)).** When cmux.app is unavailable (Linux, or macOS without cmux — e.g. Ghostty), the kingdom now runs on plain tmux: one session whose **windows are the lanes**, with the status-bar window list serving as the cmux colored-workspace sidebar (per-role `@rolecolor`; live `@state` glyph set WITHOUT renaming, so a lane's target handle stays stable through state changes). `load_feature tmux` + `export KINGDOM_BACKEND=tmux` redefines the `cmux_*`/`spawn_*` names to route to tmux, so every existing role/command call site works in FALLBACK with zero changes. Wrappers mirror the cmux ops: send (`send-keys -l` + Enter), set-state, notify (display-message + ⚠ glyph + a durable `king-inbox/` fallback file — an alert is never only a transient flash), read-screen / capture-pane, list / close-workspace, new-split, identify, and spawn (new-window + boot `claude`). New `tmux` feature in `manifest.json` (14 one-function-per-file wrappers, parity with `cmux/`); `TMUX-Guide.md` rewritten with the full cmux→tmux mapping. Verified live on tmux 3.6 under Ghostty — spawn → dispatch → set-state → notify → capture → teardown all pass via the real `load_feature` path.
+- **Backend auto-detection + per-process robustness.** `core` now deps BOTH `cmux` + `tmux` (wherever cmux loads, tmux loads too). `kingdom_detect_backend` returns `cmux` (needs `$CMUX_CLAUDE_PID` AND the `cmux` binary — a stray env var won't mis-route) / `tmux` / `standalone`; `kingdom_backend_init` exports `KINGDOM_BACKEND`, activates the backend, prints which, and runs at `commands/work.md` Step 0.4. Detection is **per-process**, so it's robust to mixed setups — cmux.app + Ghostty both open with a King in each, or two Kings in one app: each detects its own host independently (env is inherited from the launching app, never globally scanned). tmux sessions are **project-scoped** (`kingdom-<project>`) so two tmux kingdoms never collide; the isolation boundary is the project (one King per project per workspace). Full matrix: `index.md` § Multi-session.
+
+---
+
 ## [0.40.0] — 2026-06-02
 
 Structural cleanup for clarity + flexibility (consumer-directed), plus a smarter watchman.

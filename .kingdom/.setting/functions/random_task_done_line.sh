@@ -2,12 +2,15 @@
 # kingdom function: random_task_done_line
 
 random_task_done_line () {
+  [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: 0-indexed arrays (no `mapfile` in zsh — replaced below)
   local pool_file="$WS/.kingdom/.setting/cards/task-complete.md"
   local last_file="$LOGS/.last-task-done-line"
   local last=$(cat "$last_file" 2>/dev/null || echo "0")
 
-  # Extract the 20 numbered lines from the pool file
-  mapfile -t lines < <(grep -E '^[0-9]+\. ' "$pool_file" | sed 's/^[0-9]\+\. //')
+  # Extract the numbered lines from the pool file. `mapfile` is bash-only (absent in zsh),
+  # so build the array with a portable read loop.
+  local lines=() l
+  while IFS= read -r l; do lines+=("$l"); done < <(grep -E '^[0-9]+\. ' "$pool_file" | sed 's/^[0-9]\+\. //')
   local count=${#lines[@]}
   [ "$count" -eq 0 ] && return 0
 

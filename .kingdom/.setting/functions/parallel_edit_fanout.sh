@@ -4,13 +4,16 @@
 parallel_edit_fanout () {
   # Inputs:
   #   $1 = search term            (literal string, no regex)
-  #   $2 = replacement term       (literal string)
+  #   $2 = replacement term       (literal string; the token %PR% is replaced PER LANE
+  #                               with that lane's pr_number from the spec, so one call
+  #                               can stamp a different PR number into each branch)
   #   $3 = lane spec              (space-separated: "worker-1=246 worker-2=247 co-worker-1=248")
   #                               format = "<lane>=<pr_number>"; pr_number resolves the lane's target PR
   #   $4 = file glob              (relative to lane worktree; default '**/*')
   # Outputs:
   #   per-lane stdout line: "OK <lane> <files_changed>" or "SKIP <lane> <reason>"
   #   exit 0 iff every lane succeeded or skipped cleanly
+  [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: split `$spec` in the for-loop (else 1 garbage iteration)
   local search="$1" replace="$2" spec="$3" glob="${4:-}"
   local rc=0 lane pr lane_wt pids=""
   local tmpdir=$(mktemp -d)
@@ -18,6 +21,13 @@ parallel_edit_fanout () {
   for unit in $spec; do
     lane="${unit%=*}"
     pr="${unit#*=}"
+    # Per-lane replacement: substitute the %PR% token with THIS lane's pr. Done via
+    # sed, NOT ${replace//%PR%/$pr} — that bash-ism is a silent no-op under zsh (both
+    # native and `emulate -L sh`, which this function runs under), leaving the literal
+    # token in the commit. `pr` is a bare integer from the spec, so no sed-escaping is
+    # needed. A replacement with no token passes through unchanged → non-backfill
+    # callers are unaffected.
+    lane_replace=$(printf '%s' "$replace" | sed "s/%PR%/$pr/g")
     lane_wt="$WORKTREES/$lane"
     [ -d "$lane_wt" ] || { echo "SKIP $lane no-worktree" >> "$tmpdir/out"; continue; }
 
@@ -45,9 +55,9 @@ parallel_edit_fanout () {
       n=0
       while IFS= read -r f; do
         if [ "$(uname)" = "Darwin" ]; then
-          sed -i '' "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
+          sed -i '' "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$lane_replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
         else
-          sed -i "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
+          sed -i "s|$(printf '%s' "$search" | sed 's/[][\/.*^$|]/\\&/g')|$(printf '%s' "$lane_replace" | sed 's/[\/&|]/\\&/g')|g" "$f"
         fi
         n=$((n + 1))
       done <<< "$files"

@@ -28,7 +28,7 @@
 
 | Var | Source | Example |
 |---|---|---|
-| `${PROJECT}` | project name | `bfg-swt` |
+| `${PROJECT}` | project name | `my-app` |
 | `${N_RESUME}` | count of items in `${RESUME_LIST}` | `2` |
 | `${RESUME_LIST}` | one bullet per resume item: `  • <lane> · <task-id> · status=<status> · last note: <last-progress-line>` | (multi-line, see below) |
 | `${N_DECISION}` | count of items in `${DECISION_LIST}` | `1` |
@@ -48,7 +48,7 @@
 ```text
   • worker-1 · FE-P0-FOUND.5
     blocker A: legal:terms translation_key seed
-    blocker B: @workspace/db dep route via webshop or account?
+    blocker B: @workspace/db dep route via shop or account?
 ```
 
 ## Empty-queue behaviour

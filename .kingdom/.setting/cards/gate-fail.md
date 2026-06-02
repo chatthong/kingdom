@@ -31,7 +31,7 @@
 | `${TASK_ID}` | task ID | `FE-P0-FOUND.7` |
 | `${TIER}` | `Tier-1` or `Tier-2` | `Tier-2` |
 | `${TIER_SCOPE}` | scope description | `kingdom overlay` (Tier-2) / `lane worktree` (Tier-1) |
-| `${FAILURE_SUMMARY}` | one-line failure summary | `3 tests failed in apps/webshop` |
+| `${FAILURE_SUMMARY}` | one-line failure summary | `3 tests failed in apps/shop` |
 | `${REPORT_PATH}` | test-report file path | `docs/test-reports/KING_…__worker-2__FE-….md` |
 
 ## Response handling

@@ -1,10 +1,10 @@
 # functions — index
 
-> One bash helper per file. Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder. 80 functions total.
+> One bash helper per file (the `tmux/` backend is a single cohesive module). Source `_load.sh` then `load <names>` (or `load_feature <feature>` via `manifest.json`). `load` finds a bare name whether it sits flat here or in a backend subfolder.
 
-> Layout: flat files = backend-agnostic mechanics, all in feature **core**; **`cmux/`** = the cmux.app backend (one wrapper per `cmux` subcommand + the `browser_*` wrappers). Function NAMES are action-based, not role-based (v0.40.0) — any role loads any helper. Features group by BACKEND/CAPABILITY only: **core** (always) deps **cmux** (always); **browser** loads on demand.
+> Layout: flat files = backend-agnostic mechanics, all in feature **core**; **`cmux/`** = the cmux.app PRIMARY backend (one wrapper per `cmux` subcommand + the `browser_*` wrappers); **`tmux/`** = the FALLBACK backend (v0.41.0; one wrapper per file, like `cmux/`; `kingdom_use_tmux_backend` routes `cmux_*` calls to tmux when `KINGDOM_BACKEND=tmux`). Function NAMES are action-based, not role-based — any role loads any helper. Features group by BACKEND/CAPABILITY only: **core** (always) deps **cmux** (always); **tmux** + **browser** load on demand.
 
-## core (49)
+## core (51)
 | function | purpose | file |
 |---|---|---|
 | `_bounded_wait` | — | [_bounded_wait.sh](_bounded_wait.sh) |
@@ -27,6 +27,8 @@
 | `guard_no_worktree_cd` | — | [guard_no_worktree_cd.sh](guard_no_worktree_cd.sh) |
 | `haiku_read_docs_orientation` | — | [haiku_read_docs_orientation.sh](haiku_read_docs_orientation.sh) |
 | `init_subagent_pool` | — | [init_subagent_pool.sh](init_subagent_pool.sh) |
+| `kingdom_backend_init` | Detect cmux.app vs other, export KINGDOM_BACKEND, activate the backend (v0.41.0). | [kingdom_backend_init.sh](kingdom_backend_init.sh) |
+| `kingdom_detect_backend` | Echo `cmux`/`tmux`/`standalone` from the host terminal (v0.41.0). | [kingdom_detect_backend.sh](kingdom_detect_backend.sh) |
 | `kingdom_discard_overlay` | — | [kingdom_discard_overlay.sh](kingdom_discard_overlay.sh) |
 | `kingdom_overlay_lane` | — | [kingdom_overlay_lane.sh](kingdom_overlay_lane.sh) |
 | `kingdom_reset` | — | [kingdom_reset.sh](kingdom_reset.sh) |
@@ -96,3 +98,26 @@
 | `browser_snapshot` | Snapshot the page's interactive accessibility tree (JSON with element refs) — the basis for | [cmux/browser_snapshot.sh](cmux/browser_snapshot.sh) |
 | `browser_verify` | Composite UI smoke check any role can call: open <url>, wait, assert <expect> (text or | [cmux/browser_verify.sh](cmux/browser_verify.sh) |
 
+
+## tmux (17) — FALLBACK backend (v0.41.0)
+One micro-wrapper per tmux op (mirrors `cmux/`). `load_feature tmux` + `KINGDOM_BACKEND=tmux` routes `cmux_*`/`spawn_*` calls here. This table is the in-workspace catalog; the full prose cmux→tmux mapping lives in the kingdom repo's `TMUX-Guide.md` (a repo reading guide, not shipped into the workspace).
+
+| function | purpose | file |
+|---|---|---|
+| `tmux_target` | Shared resolver: `tmux_session` (session name) + `tmux_target` (ref → `<session>:<slug>`). | [tmux/tmux_target.sh](tmux/tmux_target.sh) |
+| `tmux_setup_session` | Create the kingdom session + cmux-like sidebar styling (status-bar window list). | [tmux/tmux_setup_session.sh](tmux/tmux_setup_session.sh) |
+| `tmux_new_workspace` | New lane window; slug name + @emoji/@rolecolor/@state options. Mirror of cmux_new_workspace. | [tmux/tmux_new_workspace.sh](tmux/tmux_new_workspace.sh) |
+| `tmux_send` | Send text + submit (`send-keys -l` + Enter). Mirror of cmux_send. | [tmux/tmux_send.sh](tmux/tmux_send.sh) |
+| `tmux_send_key` | Send a raw key/chord. Mirror of cmux_send_key. | [tmux/tmux_send_key.sh](tmux/tmux_send_key.sh) |
+| `tmux_set_state` | Set @state glyph WITHOUT renaming (stable target). Mirror of cmux_set_state. | [tmux/tmux_set_state.sh](tmux/tmux_set_state.sh) |
+| `tmux_notify` | display-message + ⚠ glyph + durable king-inbox fallback. Mirror of cmux_notify. | [tmux/tmux_notify.sh](tmux/tmux_notify.sh) |
+| `tmux_read_screen` | Visible viewport (`capture-pane -p`). Mirror of cmux_read_screen. | [tmux/tmux_read_screen.sh](tmux/tmux_read_screen.sh) |
+| `tmux_capture_pane` | Last N lines incl. scrollback. Mirror of cmux_capture_pane. | [tmux/tmux_capture_pane.sh](tmux/tmux_capture_pane.sh) |
+| `tmux_list_workspaces` | List lanes (the sidebar). Mirror of cmux_list_workspaces. | [tmux/tmux_list_workspaces.sh](tmux/tmux_list_workspaces.sh) |
+| `tmux_close_workspace` | Teardown one lane (`kill-window`). Mirror of cmux_close_workspace. | [tmux/tmux_close_workspace.sh](tmux/tmux_close_workspace.sh) |
+| `tmux_new_split` | Split a lane into a pane. Mirror of cmux_new_split. | [tmux/tmux_new_split.sh](tmux/tmux_new_split.sh) |
+| `tmux_identify` | Caller context (`<session>:<window>.<pane>`). Mirror of cmux_identify. | [tmux/tmux_identify.sh](tmux/tmux_identify.sh) |
+| `tmux_tab_action` | new-terminal-right → split pane; close → kill-pane (FALLBACK for cmux_tab_action). | [tmux/tmux_tab_action.sh](tmux/tmux_tab_action.sh) |
+| `tmux_tree` | Window→pane topology for the R31 lane-readiness check (FALLBACK for cmux_tree). | [tmux/tmux_tree.sh](tmux/tmux_tree.sh) |
+| `tmux_workspace_action` | set-color→@rolecolor, set-description→@statetext; rename/pin→no-op (FALLBACK for cmux_workspace_action). | [tmux/tmux_workspace_action.sh](tmux/tmux_workspace_action.sh) |
+| `kingdom_use_tmux_backend` | Activator: redefines `cmux_*`/`spawn_*` to route to the tmux wrappers (auto-runs when KINGDOM_BACKEND=tmux). | [tmux/kingdom_use_tmux_backend.sh](tmux/kingdom_use_tmux_backend.sh) |
