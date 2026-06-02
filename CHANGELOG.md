@@ -4,6 +4,16 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.2] — 2026-06-02
+
+Follow-on to the v0.43.1 zsh sweep: a second reserved-name shadowing, found by auditing the whole tied/special-parameter family.
+
+### Fixed
+
+- **`local status` aborted `/kingdom:save` under zsh.** zsh's `status` is a **read-only** special parameter (alias for `$?`), so `save_session_state`'s `local task_id status layer blockers_json` threw `read-only variable: status` and aborted the in-flight-task block — state snapshots errored for any lane with an active task file. Renamed the local to `task_status` (declaration, assignment, and the `jq --arg st` reference). Verified under zsh 5.9. A full sweep of `functions/` for shadowing of every zsh reserved/tied parameter — the path-arrays (`path`/`cdpath`/`fpath`/`manpath`/`mailpath`/`module_path`/`psvar`) and the specials (`argv`/`status`/`options`/`commands`/`functions`/`aliases`/`parameters`/`dirstack`/`pipestatus`/`signals`/`reply`/`match`/…), across `local`/`typeset`/`declare`, bare assignments, `for`-loop vars, and `read` targets — now returns zero hits.
+
+---
+
 ## [0.43.1] — 2026-06-02
 
 Critical zsh fix: the lane-spawn path no longer clobbers `$PATH`. Caught in a live consumer `/kingdom:work` run.

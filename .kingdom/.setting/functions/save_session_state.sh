@@ -41,10 +41,13 @@ save_session_state () {
         done)
 
     if [ -n "$task_file" ]; then
-      local task_id status layer blockers_json
+      # `task_status` not `status`: zsh's `status` is a read-only special (alias
+      # for $?), so `local … status …` throws "read-only variable: status" and
+      # aborts the block.
+      local task_id task_status layer blockers_json
       task_id=$(basename "$task_file" .md | sed 's/.*__//')
       # Read Status and Layer fields from the task file header block
-      status=$(grep -m1 '^Status:' "$task_file" 2>/dev/null | awk '{print $2}' || echo "unknown")
+      task_status=$(grep -m1 '^Status:' "$task_file" 2>/dev/null | awk '{print $2}' || echo "unknown")
       layer=$(grep -m1 '^Layer:' "$task_file" 2>/dev/null | awk '{print $2}' || echo "")
       # Blockers: lines under a "## Blockers" section
       blockers_json=$(awk '/^## Blockers/,/^##/' "$task_file" 2>/dev/null \
@@ -54,7 +57,7 @@ save_session_state () {
       task_obj=$(jq -n \
         --arg id "$task_id" \
         --arg tf "$rel_task_file" \
-        --arg st "$status" \
+        --arg st "$task_status" \
         --arg ly "$layer" \
         --argjson bl "$blockers_json" \
         '{id: $id, task_file: $tf, status: $st, layer: $ly, blockers: $bl}')
