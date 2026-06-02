@@ -4,6 +4,16 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.4] — 2026-06-02
+
+Completes the v0.43.3 `nomatch` fix: the inline bash in the role/command docs is now covered too, session-wide.
+
+### Fixed
+
+- **`nomatch` glob-abort also bit the inline bash in `roles/`/`commands/`.** v0.43.3 guarded the eight glob-using helper *functions*, but the King and lanes also run ad-hoc globs straight from the role/command docs — `for FLAG in "$LOGS"/done/*.flag`, `ls "$LOGS"/raw/fix-task-*.md 2>/dev/null`, `ls "$LOGS/done/"*.flag 2>/dev/null` (king.md, work.md, save.md, worker.md, watchman.md). Those can't all be pre-guarded (the LLM writes new globs ad hoc), so `functions/_load.sh` — the one file every role and command sources at session start — now sets `setopt no_nomatch` once (zsh only, no-op under bash). An unmatched glob then passes through literally instead of aborting, which is **bash's default semantics**, so the existing `[ -f "$FLAG" ] || continue` guards in the for-loops handle the literal-passthrough exactly as intended. `no_nomatch` (literal passthrough) is the right choice over `null_glob` (empty expansion), which would diverge from bash and make a bare `ls *` list the cwd. The per-function `local_options no_nomatch` guards from v0.43.3 stay as belt-and-suspenders for standalone sourcing. Verified under zsh 5.9: the king.md/work.md/save.md inline patterns run clean over empty dirs with zero "no matches found" spew.
+
+---
+
 ## [0.43.3] — 2026-06-02
 
 Third zsh-correctness pass: the `nomatch` glob-abort trap, found by a full shell-syntax audit of `functions/`.

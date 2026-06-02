@@ -23,6 +23,17 @@ else
   _KFN_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 fi
 
+# Session-wide nomatch off (zsh). zsh's default `nomatch` makes an UNMATCHED glob a
+# fatal shell error ("zsh: no matches found: …") that `2>/dev/null` can't suppress —
+# the error fires during expansion, before the redirect. Every kingdom shell runs
+# ad-hoc globs over maybe-empty dirs (tasks/*.md, logs/done/*.flag, raw/fix-task-*.md)
+# in BOTH the loaded helpers AND the inline bash in roles/commands; a kingdom session
+# never wants that abort (empty is the expected case). This is the one file every
+# role/command sources at start, so disabling it here covers inline bash everywhere.
+# (Glob-using helpers ALSO self-guard with `local_options no_nomatch` so they're
+# correct even when sourced standalone.) No-op under bash.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+
 load () {
   # NB: the resolved-file local is `srcfile`, NOT `path`. Under zsh the lowercase
   # `path` array is TIED to $PATH — `local path=<file>` would clobber command

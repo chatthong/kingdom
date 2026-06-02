@@ -1,6 +1,6 @@
 {
   "name": "kingdom",
-  "version": "0.43.3",
+  "version": "0.43.4",
   "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with git worktrees and native cmux.app, all from one conversation. A King (👑 Opus) coordinates generic workers (👷), co-workers (🧑‍💼), watchmen (🕵️ Sonnet), and per-story Seniors (🎓), each in its own worktree + cmux workspace. The kingdom branch is a working-tree overlay for human review (never committed, sacred until push); PRs carve from the lane tip byte-for-byte; every push is human-gated. 11 commands: /kingdom:work (daily cycle), :init (scaffold), :update (migrate a workspace after a plugin update without losing state/memory), :self-care (prereq + drift checks), :save (state snapshot), :archive (trim a long-running session's hot paths), and :self-<role> (re-ground any role from disk, R52). Each task's sub-agent army runs through the Workflow tool when available (the live /workflows view), falling back to bounded Agent()/tabs (R53). Modular kit under .kingdom/.setting/: one rule per file (53, three-tier), one ACTION-named bash helper per file (any role loads any), ONE doc per role, 26 display cards. Domain-agnostic — gate.* is arbitrary bash. Won't touch your project files, develop/main, shell config, or git config.",
   "author": {
     "name": "kingdom contributors"
