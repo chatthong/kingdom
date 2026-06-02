@@ -187,6 +187,7 @@ echo "👑 King's workspace renamed. Spawning lanes next..."
 **Within ~5-10 seconds:** spawn all lane workspaces from the effective shape in parallel (per R28 parallel-by-default). Every `worker-N`, `co-worker-N`, `watchman-N` appears in the sidebar BEFORE audit/dispatch starts.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: split $LANES_EXPECTED/$SPAWN_PIDS in the loops below (zsh doesn't word-split a scalar → else 1 bogus iteration); auto-reverts
 PROJ="$PWD/${project}"
 REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
 WORKER_COLOR=$(jq -r '.cmux.workspaceColors.worker // "violet"' "$KJSON")
@@ -270,6 +271,7 @@ render_card "spawn-complete"
 Before ANY further step, verify lane infrastructure. Per R31, the kingdom runs in three modes (PRIMARY=cmux / FALLBACK=tmux / AGENT=in-process) and the universal "lanes exist" check is **`.worktrees/<lane>/` directories**.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $LANES_EXPECTED in the loops below (else 1 iteration over the whole blob); auto-reverts
 MISSING_WORKTREES=""
 for lane in $LANES_EXPECTED; do
   [ -d "$PROJ/.worktrees/$lane" ] || MISSING_WORKTREES="$MISSING_WORKTREES $lane"
@@ -340,21 +342,21 @@ for task_file in $(ls -1t "$TASKS_DIR"/*.md 2>/dev/null | head -40); do
   lane=$(echo "$base" | sed 's/^[0-9-]*T[0-9]*Z__//;s/__.*//')
   task_id=$(echo "$base" | sed 's/.*__//')
 
-  status=$(grep -E '^- \[x\] (planning|executing|verifying|done|blocked|cancelled)' "$task_file" \
-    | tail -1 | grep -oE '(planning|executing|verifying|done|blocked|cancelled)')
-  [ -z "$status" ] && status="planning"
+  task_status=$(grep -E '^- \[x\] (planning|executing|verifying|done|blocked|cancelled)' "$task_file" \
+    | tail -1 | grep -oE '(planning|executing|verifying|done|blocked|cancelled)')   # NB: `task_status` not `status` — zsh `status` is a read-only special (alias for $?)
+  [ -z "$task_status" ] && task_status="planning"
 
   has_sentinel=0
   ls "$DONE_DIR"/*"__${lane}__${task_id}.flag" >/dev/null 2>&1 && has_sentinel=1
 
-  case "$status" in
+  case "$task_status" in
     done|cancelled)
       continue ;;
     blocked)
       DECISION_QUEUE+="${lane}|${task_id}|blocked"$'\n' ;;
     planning|executing|verifying)
       if [ "$has_sentinel" = "0" ]; then
-        RESUME_QUEUE+="${lane}|${task_id}|${status}"$'\n'
+        RESUME_QUEUE+="${lane}|${task_id}|${task_status}"$'\n'
       fi
       ;;
   esac
@@ -499,6 +501,7 @@ Pods now run autonomously and in parallel. The King does NOT re-review their int
 **R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching: STOP and dispatch with the brief as-is.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $LANES_EXPECTED in the loop below (else 1 iteration over the whole blob); auto-reverts
 DISPATCH_START=$(date +%s)
 TASKS_DISPATCHED_TODAY=0
 PRS_OPENED_TODAY=0      # incremented at Step 6 (gh pr create)

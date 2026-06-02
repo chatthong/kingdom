@@ -211,6 +211,7 @@ cat "$STATE_FILE"
 Per R28 (parallel-by-default), close all lane workspaces concurrently. King's workspace (`$KING_WS`) is NOT closed — your conversation persists.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $LANE_WSes/$CLOSE_PIDS in the loops below (else 1 iteration over the whole blob); auto-reverts
 echo "Closing lane workspaces..."
 
 # Collect lane workspace refs

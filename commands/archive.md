@@ -94,9 +94,9 @@ if [ -d "$TASKS_DIR" ]; then
     ls "$DONE_DIR"/*"__${lane}__${task_id}.flag" >/dev/null 2>&1 && closed=1
     # Or terminal status checked off in the file
     if [ "$closed" = "0" ]; then
-      status=$(grep -E '^- \[x\] (done|cancelled)' "$tf" | tail -1 \
-        | grep -oE '(done|cancelled)' 2>/dev/null)
-      [ -n "$status" ] && closed=1
+      term_status=$(grep -E '^- \[x\] (done|cancelled)' "$tf" | tail -1 \
+        | grep -oE '(done|cancelled)' 2>/dev/null)   # NB: `term_status` not `status` — zsh `status` is a read-only special (alias for $?)
+      [ -n "$term_status" ] && closed=1
     fi
 
     [ "$closed" = "1" ] && TASK_MOVES="${TASK_MOVES}${tf}"$'\n'

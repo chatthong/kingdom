@@ -881,6 +881,7 @@ parallel_edit_fanout "(PR #pending)" "(PR #%PR%)" "$spec" > "$LOGS/watch/WATCH_P
 For the common case (one PR per lane), watchman fans out per-lane:
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $spec/$FANOUT_PIDS in the loop below (else 1 iteration over the whole blob); auto-reverts
 FANOUT_PIDS=""
 for unit in $spec; do
   lane="${unit%=*}"

@@ -4,6 +4,17 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.5] — 2026-06-02
+
+zsh audit extended to the inline bash in `commands/` + `roles/`: two more divergences fixed (word-split + read-only `status`).
+
+### Fixed
+
+- **`for X in $scalar` iterated once under zsh (no word-split) in 10 inline-bash loops.** zsh does not word-split an unquoted scalar in a `for` list (bash/sh do), so `for lane in $LANES_EXPECTED`, `for KJSON in $SCOPE_PROJECTS`, `for ws in $LANE_WSes`, `for rel in $STALE_FILES`, `for unit in $spec` each ran **once over the entire blob** instead of once per item — breaking lane spawn/dispatch (work.md ×4), multi-project migration (update.md ×3), teardown (save.md), stale-file import (self-care.md), and the watchman PR-backfill illustration (watchman.md). Fixed by adding `[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null` at the top of each affected fenced block — the codebase's existing idiom (archive.md's `$ARGUMENTS` loop already used it). `emulate -L sh` turns on `sh_word_split` (and `no_nomatch`) locally and **auto-reverts on block exit**, so it aligns zsh with the sh/bash semantics the bash was written for without a global option change. Verified under zsh 5.9 that the guard preserves the non-POSIX constructs inside those blocks (`[[ … == pat* ]]`, `comm <(…) <(…)` process substitution) and that the `_bounded_wait $PIDS` word-split calls in the same blocks now split correctly too. Chosen over a session-wide `setopt sh_word_split` (in `_load.sh`, as was done for `no_nomatch`) because word-split affects *every* unquoted scalar expansion — too broad a blast radius for the loaded helper functions — whereas per-block `emulate -L sh` is local and proven.
+- **Bare `status=` in inline bash hit the zsh read-only special (work.md, archive.md).** Same root cause as v0.43.2: `status` is a read-only parameter in zsh (alias for `$?`), so `status=$(grep …)` in the resume-scan (work.md) and the archive close-detection (archive.md) threw `read-only variable: status` and the assignment failed — the status was never captured. `emulate -L sh` does **not** make it writable (verified), so these were renamed to `task_status` / `term_status`. A full sweep of every fenced bash block in `commands/` + `roles/` for the other zsh divergences (reserved-name shadowing, `${!…}`, `${var//%…}`, case-conversion, `BASH_REMATCH`, `read -a`, `echo -e`, array indexing) returned no further issues. Every edited block passes `zsh -n`.
+
+---
+
 ## [0.43.4] — 2026-06-02
 
 Completes the v0.43.3 `nomatch` fix: the inline bash in the role/command docs is now covered too, session-wide.

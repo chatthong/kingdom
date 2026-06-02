@@ -64,6 +64,7 @@ Read this back to the user in plain English: how many kit files will be refreshe
 For each in-scope `kingdom.json`, show exactly which keys the additive merge would ADD (nothing is removed or overwritten):
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $SCOPE_PROJECTS (all-projects scope is newline-separated from find → else 1 iteration over the whole blob); auto-reverts
 for KJSON in $SCOPE_PROJECTS; do                          # scope from Step 0 (one project or all)
   proj=$(basename "$(dirname "$KJSON")")
   echo "=== $proj: keys the merge would ADD (existing values untouched) ==="
@@ -82,6 +83,7 @@ Report per project: the list of keys to be added (e.g. `integration.*`, `shape.s
 Show the user, explicitly, what is **NOT** touched:
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $SCOPE_PROJECTS (else 1 iteration over the whole blob); auto-reverts
 for KJSON in $SCOPE_PROJECTS; do
   proj=$(basename "$(dirname "$KJSON")")
   d="$PWD/.kingdom/$proj"
@@ -132,6 +134,7 @@ echo "Kit re-synced to v$NEW_VERSION ($(find "$DST" -type f | wc -l | tr -d ' ')
 ### 5b — Additively merge each project's kingdom.json (K8)
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $SCOPE_PROJECTS (else 1 iteration over the whole blob); auto-reverts
 # $SCOPE_PROJECTS was set in Step 0 (one project if a `project` arg was given, else all).
 for KJSON in $SCOPE_PROJECTS; do
   proj=$(basename "$(dirname "$KJSON")")

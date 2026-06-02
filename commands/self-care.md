@@ -315,6 +315,7 @@ These usually accumulate after a plugin upgrade. Import them now? [y/N]
 On `y`:
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $STALE_FILES in the loop below (else 1 iteration over the whole blob); auto-reverts
 mkdir -p "$DEST"
 for rel in $STALE_FILES; do
   mkdir -p "$DEST/$(dirname "$rel")"
