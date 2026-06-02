@@ -40,9 +40,9 @@ kingdom_use_tmux_backend () {
   # spawn_master_workspace(label, path, color) → a tmux window. Derive slug + emoji from the
   # label's tokens (e.g. "👷 worker-1" → emoji "👷", slug "worker-1"); boot claude in the window.
   spawn_master_workspace() {
-    local label="$1" path="$2" color="$3" slug emoji ref
+    local label="$1" proj="$2" color="$3" slug emoji ref   # `proj` not `path`: zsh ties `path`→$PATH
     slug="${label##* }"; emoji="${label%% *}"
-    ref="$(tmux_new_workspace "$slug" "$path" "$emoji" "${color:-colour141}")"
+    ref="$(tmux_new_workspace "$slug" "$proj" "$emoji" "${color:-colour141}")"
     tmux send-keys -t "$ref" -l "claude"; tmux send-keys -t "$ref" Enter   # boot the REPL
     printf '%s' "$ref"
   }

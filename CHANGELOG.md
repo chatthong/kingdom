@@ -4,6 +4,16 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.1] — 2026-06-02
+
+Critical zsh fix: the lane-spawn path no longer clobbers `$PATH`. Caught in a live consumer `/kingdom:work` run.
+
+### Fixed
+
+- **`$path` ⟷ `$PATH` tie broke command resolution under zsh (lane spawn dead).** zsh ties the lowercase `path` array to `PATH`, so any `local path=…` silently overwrites the command search path for the duration of that function. Four helpers declared a local named `path`, and since the Claude Code Bash tool runs **zsh** on macOS, this fired on every real run: `spawn_master_workspace` set `local path="$2"` (the project dir) and then died on `basename`/`date`/`head` with "command not found"; `_load.sh`'s `load()` set `local … path=<file>.sh` mid-loop, so the next subfolder lookup's `find … | head` lost `PATH` — the original "command not found: head" during load. `cmux`/`jq` survived only because zsh had already hashed their absolute locations. Renamed the locals off the reserved name (`srcfile` in the loader, `proj`/`wt` in the spawn + worktree helpers); `attach_or_create_worktree` and the tmux-fallback `spawn_master_workspace` had the same trap and were fixed too. Verified under zsh 5.9: the old pattern reproduces "command not found: basename"; the fixed loader does a mixed flat+subfolder `load` with `rc=0` and every wrapper defined, and `basename`/`date`/`head` resolve through the spawn. No other `path`/`fpath`/`cdpath`/`manpath` local-shadowing sites remain.
+
+---
+
 ## [0.43.0] — 2026-06-02
 
 Sub-agent fan-out gets a visible, trackable execution surface: the Claude Code **Workflow tool** and its live `/workflows` view.

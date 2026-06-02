@@ -24,19 +24,23 @@ else
 fi
 
 load () {
-  local f path
+  # NB: the resolved-file local is `srcfile`, NOT `path`. Under zsh the lowercase
+  # `path` array is TIED to $PATH — `local path=<file>` would clobber command
+  # resolution mid-loop, so the next subfolder lookup's `find`/`head` would fail
+  # with "command not found". (Same trap as fpath/cdpath/manpath — all reserved.)
+  local f srcfile
   for f in "$@"; do
     if [ -f "$_KFN_DIR/$f.sh" ]; then
-      path="$_KFN_DIR/$f.sh"
+      srcfile="$_KFN_DIR/$f.sh"
     else
       # fall back to one level of provider/feature subfolders (cmux/, tmux/, browser/, …).
       # `find` instead of a shell glob: zsh aborts the whole function on a no-match
       # glob (NOMATCH), and the 2>/dev/null on `ls` can't suppress that.
-      path=$(find "$_KFN_DIR" -mindepth 2 -maxdepth 2 -name "$f.sh" 2>/dev/null | head -1)
+      srcfile=$(find "$_KFN_DIR" -mindepth 2 -maxdepth 2 -name "$f.sh" 2>/dev/null | head -1)
     fi
-    if [ -n "$path" ] && [ -f "$path" ]; then
+    if [ -n "$srcfile" ] && [ -f "$srcfile" ]; then
       # shellcheck disable=SC1090
-      source "$path"
+      source "$srcfile"
     else
       echo "load: no function file '$f.sh' in $_KFN_DIR or its subfolders (see functions/index.md)" >&2
       return 1

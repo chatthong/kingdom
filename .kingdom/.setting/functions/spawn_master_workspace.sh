@@ -2,7 +2,10 @@
 # kingdom function: spawn_master_workspace
 
 spawn_master_workspace () {
-  local label="$1" path="$2" color="$3"
+  # `proj`, not `path`: zsh ties the lowercase `path` array to $PATH, so
+  # `local path="$2"` would wipe command resolution and basename/date/head
+  # below would fail "command not found".
+  local label="$1" proj="$2" color="$3"
 
   # v0.27.0+: respect kingdom.json.cmux.spawnWindow for multi-window users
   # Default = "current": no --window flag → sticks to caller's process window
@@ -33,8 +36,8 @@ spawn_master_workspace () {
   # bash prompt and King's subsequent `cmux send -- "<brief>"` landed in the
   # shell. Explicit post-spawn `claude\n` (Step 1b below) replaces it; the
   # `spawn_loop` helper already proved this pattern works.
-  local desc="Kingdom lane · $(basename "$path") · $(date -u +%Y-%m-%dT%H%MZ)"
-  local ref=$(cmux_new_workspace "$label" "$path" "$desc" "$window_flag")
+  local desc="Kingdom lane · $(basename "$proj") · $(date -u +%Y-%m-%dT%H%MZ)"
+  local ref=$(cmux_new_workspace "$label" "$proj" "$desc" "$window_flag")
   [ -z "$ref" ] && { echo "❌ spawn failed for $label (cmux_new_workspace returned no ref)" >&2; return 1; }
 
   # Step 1b (v0.31.1): explicitly launch claude in the workspace's surface.
