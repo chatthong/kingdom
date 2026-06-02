@@ -3,6 +3,7 @@
 
 poll_for_sentinels () {
   # $1 = name glob under <LOGS>/done (e.g. "audit-*"); $2 = timeout secs (default 180).
+  [ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched glob passes literally instead of aborting "no matches found"; auto-reverts on return
   local pat="$1" budget="${2:-180}" logs="${LOGS:-$PWD/.kingdom/${PROJECT}/logs}" start
   start=$(date +%s)
   while [ $(( $(date +%s) - start )) -lt "$budget" ]; do

@@ -4,6 +4,16 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.43.3] — 2026-06-02
+
+Third zsh-correctness pass: the `nomatch` glob-abort trap, found by a full shell-syntax audit of `functions/`.
+
+### Fixed
+
+- **Unmatched globs aborted with visible "no matches found" spew under zsh.** zsh's default `nomatch` option makes an unmatched glob (e.g. `ls -1t "$dir"/*"__${lane}__"*.md 2>/dev/null`) a **shell-level error** — it prints `zsh: no matches found: …` to the terminal and skips the command, and crucially `2>/dev/null` does **not** suppress it (the error fires during expansion, before the redirect applies). Latent because it only triggers on the empty-match path: a fresh workspace, a lane with no in-flight task file, a `logs/done/` with no flags yet — exactly the early-session state. Eight helpers were affected (12 glob sites): `pattern_grep_fanout`, `pick_skills_for_task`, `extract_pr_title_from_task_file`, `generate_pr_body_from_task_file`, `latest_test_report`, `poll_for_sentinels`, `compute_task_duration`, `save_session_state`. Each now opens with `[ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch` — under zsh an unmatched glob passes through literally (so `ls` fails quietly and `2>/dev/null` works), `local_options` auto-reverts the setting on return (zero global side-effect), and the guard is a no-op under bash. Verified under zsh 5.9: empty-match calls now return clean fallbacks (`[]`/`unknown`/title-fallback) with no spew. A full audit of `functions/` for the remaining zsh-vs-bash divergences — bash-only builtins (`mapfile`/`readarray`/`shopt`/`declare -A`/`local -n`), `${!…}` indirection, `${var//%…}` anchor-metachar substitution, `${var^^}`/`${var,,}` case conversion, `BASH_REMATCH`, `read -a`, `echo -e`, and other glob forms (`for…in *`, `[ … * ]`, array assigns) — returned zero further issues.
+
+---
+
 ## [0.43.2] — 2026-06-02
 
 Follow-on to the v0.43.1 zsh sweep: a second reserved-name shadowing, found by auditing the whole tied/special-parameter family.

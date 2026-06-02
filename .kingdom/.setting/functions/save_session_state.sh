@@ -2,6 +2,7 @@
 # kingdom function: save_session_state
 
 save_session_state () {
+  [ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched task/flag globs below pass literally instead of aborting "no matches found"; auto-reverts on return
   local state_file="$WS/.kingdom/$PROJECT/state.json"
   local saved_at
   saved_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)

@@ -2,6 +2,7 @@
 # kingdom function: pattern_grep_fanout
 
 pattern_grep_fanout () {
+  [ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched glob passes literally instead of aborting "no matches found"; auto-reverts on return
   local key_term="$1" project_root="$2"
 
   # Fan out N Haiku scanners in parallel (capacity is unlimited per v0.15.0)

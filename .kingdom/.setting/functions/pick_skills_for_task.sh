@@ -2,6 +2,7 @@
 # kingdom function: pick_skills_for_task
 
 pick_skills_for_task () {
+  [ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched glob passes literally instead of aborting "no matches found"; auto-reverts on return
   local task_id="$1" lane="$2"
   local routing="$WS/.kingdom/.setting/skill-routing.md"
   local task_file=$(ls -1t "$WS/.kingdom/$PROJECT/tasks/"*"__${lane}__${task_id}.md" 2>/dev/null | head -1)
