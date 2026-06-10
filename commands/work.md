@@ -3,7 +3,7 @@ description: Daily work cycle. Audit + spawn lanes + dispatch + poll. Shape over
 argument-hint: [project] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]
 ---
 
-You are running the kingdom's **full daily work cycle** as one orchestrated flow. The user typed ONE command and expects the kingdom to "just run the day": audit the project state, spawn the lanes, brief the user with the local date+time and a suggested next task, then auto-dispatch + auto-gate until something needs a human decision. Block ONLY on genuine human-decision points.
+You are running the kingdom's **full daily work cycle** as one orchestrated flow. The user typed ONE command and expects the kingdom to "just run the day": audit the project state, spawn the lanes, brief the user with the local date+time and a suggested next task, then — after the user picks a dispatch mode (Step 3.6: seek / assign / resume-only) — auto-gate the resulting work until something needs a human decision. Block ONLY on genuine human-decision points (the dispatch-mode choice, review/push approval, blocked lanes).
 
 ## Step 0 — Resolve project + parse arguments (3 invocation modes)
 
@@ -28,14 +28,34 @@ You are running the kingdom's **full daily work cycle** as one orchestrated flow
 **Parsing is forgiving:** singular OR plural is accepted (`worker=`/`workers=`, `senior=`/`seniors=`, `watchman=`/`watchmen=`, `co-worker=`/`co-workers=`, `lane=`/`lanes=`). This doc and the argument hint always show the **singular** form.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null  # H4: this block precedes _load.sh; guard bare globs locally
+
+# Resolve project (first positional, non-key token) + derive KJSON HERE so the
+# jq shape reads below see the real config. (H-x: bash state does NOT persist
+# across markdown bash blocks — KJSON was historically assigned in Step 0.4, so
+# the shape jq reads in THIS block always fell back to hardcoded defaults.)
+# Interactive no-args mode resolves $project later (Step 0.0); this is for the
+# standard `/kingdom:work <project> …` shape.
+project=$(echo " $ARGUMENTS" | tr ' ' '\n' | grep -vE '=' | grep -vE '^$' | head -1)
+if [ -n "$project" ] && [ -d "$PWD/.kingdom/${project}" ]; then
+  KJSON="$PWD/.kingdom/${project}/kingdom.json"
+  export project KJSON
+else
+  KJSON=""   # interactive mode: set after Step 0.0 resolves $project
+fi
+
 # Normalize args — accept singular or plural; canonical form is singular.
 arg () { echo " $ARGUMENTS" | grep -oE "(^| )$1=[^ ]+" | tail -1 | cut -d= -f2; }
 ARG_WORKER=$(arg 'workers?');     ARG_COWORKER=$(arg 'co-workers?')
 ARG_WATCHMAN=$(arg 'watch(man|men)'); ARG_SENIOR=$(arg 'seniors?')
 ARG_LANE=$(arg 'lanes?');          PR_LIMIT=$(arg 'pr-limit'); POD_LIMIT=$(arg 'pod-limit')
 
-# Effective shape resolution (lane=N auto-composes; else per-role override wins over JSON):
-if [ -n "$ARG_LANE" ]; then
+# Effective shape resolution (lane=N auto-composes; else per-role override wins over JSON).
+# Guard: in interactive mode $KJSON is empty until Step 0.0 resolves $project; defer
+# shape resolution to Step 0.4 in that case (the jq reads there re-derive KJSON).
+if [ -z "$KJSON" ]; then
+  echo "ℹ️ Shape deferred to Step 0.4 (interactive mode — project not yet resolved)."
+elif [ -n "$ARG_LANE" ]; then
   CAPV=$(jq -r '.shape.sanityCap // 10' "$KJSON"); LANE_BUDGET="$ARG_LANE"
   [ "$LANE_BUDGET" -gt "$CAPV" ] && { echo "⚠️ lane=$LANE_BUDGET exceeds sanityCap=$CAPV; capping to $CAPV"; LANE_BUDGET="$CAPV"; }
   WATCHMEN=${ARG_WATCHMAN:-$([ "$LANE_BUDGET" -ge 2 ] && echo 1 || echo 0)}
@@ -58,6 +78,10 @@ Any shape value (or `lane=N`) over `sanityCap` is warned + capped. `pr-limit` an
 If `$ARGUMENTS` is empty, do NOT default to `basename "$PWD"`. Instead:
 
 ```bash
+# H4: this block runs BEFORE Step 0.4 sources _load.sh, so the session-wide
+# no_nomatch it sets isn't active yet. Guard locally so a bare glob with no
+# match (e.g. no .kingdom/ projects scaffolded) doesn't abort the whole block.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
 PROJECTS=$(ls -d "$PWD"/.kingdom/*/ 2>/dev/null \
   | xargs -I{} basename {} | grep -v '^\.setting$')
 N_PROJECTS=$(echo "$PROJECTS" | grep -c .)
@@ -160,10 +184,15 @@ kingdom_backend_init           # → export KINGDOM_BACKEND=cmux|tmux|standalone
 ```
 
 ```bash
-# Capture King's window + workspace refs
-KING_WS=$(cmux_identify | jq -r .caller.workspace_ref)
-KING_WIN=$(cmux_identify | jq -r .caller.window_ref)
+# Capture King's window + workspace refs (identify ONCE, parse twice — the call
+# is a cmux round-trip; no reason to pay it twice for one JSON blob).
+KING_ID=$(cmux_identify)
+KING_WS=$(echo "$KING_ID" | jq -r .caller.workspace_ref)
+KING_WIN=$(echo "$KING_ID" | jq -r .caller.window_ref)
+# H-x: re-derive + export KJSON here so a fresh bash invocation of this block
+# (state does not persist across blocks) still has the config path.
 KJSON="$PWD/.kingdom/${project}/kingdom.json"
+export KJSON KING_WS KING_WIN
 KING_COLOR=$(jq -r '.cmux.workspaceColors.king // "amber"' "$KJSON")
 
 # Rename + describe in parallel (cosmetic, fire-and-forget; R42: bounded wait)
@@ -190,7 +219,10 @@ echo "👑 King's workspace renamed. Spawning lanes next..."
 [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: split $LANES_EXPECTED/$SPAWN_PIDS in the loops below (zsh doesn't word-split a scalar → else 1 bogus iteration); auto-reverts
 PROJ="$PWD/${project}"
 REFS_FILE="$PWD/.kingdom/${project}/logs/workspace-refs.env"
-WORKER_COLOR=$(jq -r '.cmux.workspaceColors.worker // "violet"' "$KJSON")
+LOGS="$PWD/.kingdom/${project}/logs"
+KJSON="${KJSON:-$PWD/.kingdom/${project}/kingdom.json}"   # H-x: re-derive if a fresh invocation
+export PROJ REFS_FILE LOGS KJSON PROJECT="$project"
+WORKER_COLOR=$(jq -r '.cmux.workspaceColors.worker // "Purple"' "$KJSON")
 COWORKER_COLOR=$(jq -r '.cmux.workspaceColors.coworker // "blue"' "$KJSON")
 WATCHMAN_COLOR=$(jq -r '.cmux.workspaceColors.watchman // "rose"' "$KJSON")
 SENIOR_COLOR=$(jq -r '.cmux.workspaceColors.senior // "Teal"' "$KJSON")
@@ -210,6 +242,7 @@ LANES_EXPECTED=$(
   )
 )
 BASE=$(jq -r '.git.base // "develop"' "$KJSON")
+export BASE   # H-x: poll loop (Step 5) + Step 6 re-use this; export so separate invocations see it
 
 SPAWN_PIDS=""
 for lane in $LANES_EXPECTED; do
@@ -306,6 +339,30 @@ echo "Dispatch mode: $MODE"
 
 **If worktrees exist but PRIMARY/FALLBACK verification failed:** drop to `MODE=AGENT` and dispatch via `Agent(subagent_type=general-purpose, prompt="cd .worktrees/<lane> && ...")`. Do NOT re-spawn cmux workspaces. Re-spawning when worktrees are alive wastes time and may re-enter prior silent-failure modes.
 
+**Stale-lane repair (U11, before the dispatch gate).** A rebase/merge can leave a lane's worktree pointing at a branch that no longer exists, or a `workspace-refs.env` entry whose cmux/tmux workspace died — the worktree dir exists (so the gate above passes) but the lane is effectively dead. Run the detect-and-report sweep; if it reports anything, show the user the report and offer the repair.
+
+```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+PROJ="${PROJ:-$PWD/${project}}"; REFS_FILE="${REFS_FILE:-$PWD/.kingdom/${project}/logs/workspace-refs.env}"
+
+# Detect-and-report (no-args). Helper lives in functions/ (A1). It cross-checks
+# each lane's worktree branch vs `git worktree list` + each refs.env entry vs the
+# live backend, and prints a human-readable report of anything broken (empty = healthy).
+STALE_REPORT=$(kingdom_repair_stale_lanes 2>/dev/null)
+if [ -n "$STALE_REPORT" ]; then
+  echo "⚠️ Stale lanes detected (worktree dir present but lane unusable):"
+  echo "$STALE_REPORT"
+  echo ""
+  echo "Reply 'repair' to run kingdom_repair_stale_lanes --repair, or 'skip' to dispatch only to healthy lanes."
+  # On 'repair': run the fixer, then re-run Step 0.4 spawn for any lane it freed.
+  #   kingdom_repair_stale_lanes --repair
+  # On 'skip': continue; the dispatch guards (guard_lane_workspace_exists) will
+  #   route around the broken lanes.
+fi
+```
+
+This is a human-decision point (repair mutates worktrees/branches per R35-adjacent caution): the King reports and waits for `repair`/`skip`, it does NOT auto-fix.
+
 Render the `spawn-complete` card with the detected MODE.
 
 **Never dispatch to a lane whose worktree directory does not exist.** That is the silent-failure invariant.
@@ -315,8 +372,10 @@ Render the `spawn-complete` card with the detected MODE.
 Read existing task state BEFORE deciding what to dispatch. King MUST resume in-flight work before opening new task files.
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null  # glob-heavy block; safe if a fresh invocation precedes _load.sh
 TASKS_DIR="$PWD/.kingdom/${project}/tasks"
 DONE_DIR="$PWD/.kingdom/${project}/logs/done"
+export TASKS_DIR DONE_DIR   # Step 4 re-uses TASKS_DIR
 
 STATE_FILE="$PWD/.kingdom/${project}/state.json"
 RESUME_QUEUE=""
@@ -346,8 +405,12 @@ for task_file in $(ls -1t "$TASKS_DIR"/*.md 2>/dev/null | head -40); do
     | tail -1 | grep -oE '(planning|executing|verifying|done|blocked|cancelled)')   # NB: `task_status` not `status` — zsh `status` is a read-only special (alias for $?)
   [ -z "$task_status" ] && task_status="planning"
 
+  # H2: sentinels are written as `<UTC>__<model>-<lane>__<id>.flag` (e.g.
+  # `…__opus-worker-1__FE-1.flag`), so the lane segment carries a model prefix.
+  # The old `*"__${lane}__…"` glob never matched → every completed task looked
+  # in-flight on session restart. Match the model-prefixed shape.
   has_sentinel=0
-  ls "$DONE_DIR"/*"__${lane}__${task_id}.flag" >/dev/null 2>&1 && has_sentinel=1
+  ls "$DONE_DIR"/*"__"*"-${lane}__${task_id}.flag" >/dev/null 2>&1 && has_sentinel=1
 
   case "$task_status" in
     done|cancelled)
@@ -379,7 +442,7 @@ The audit's specialists dispatch to lane workspaces via `cmux send`, not to in-p
 ```bash
 echo "👑 Step 1/5 · Dispatching audit specialists to lanes (R37)..."
 
-cmux_set_state "$KING_WS" "▶" "Audit in flight · 4 specialists across lanes"
+cmux_set_state "$KING_WS" "▶" "Audit in flight · 5 specialists across lanes"
 
 SPECIALISTS=("audit-lead" "audit-a-project-scan" "audit-b-checkbox-reconcile" \
              "audit-c-digest-quality" "audit-d-log-repair")
@@ -426,7 +489,8 @@ render_card "dispatch-plan"
 
 cat <<'EOF'
 
-I'll auto-dispatch + auto-gate + overlay onto kingdom as work completes.
+Audit + resume scan complete. I'll auto-gate + overlay + request push approval
+as work completes — but I won't dispatch new work until you choose how (Step 3.6).
 You'll be notified when I need: review approval, push approval, or blocked-lane resolution.
 EOF
 ```
@@ -450,45 +514,103 @@ King picks 1-3 candidates and presents them as a numbered choice; the user can p
 
 Cards that fire later in the cycle (task-complete, push-prompt, gate-fail, limit-reached, end-of-day, pr-merged, conflict-detected, resume-queue) and the points they fire at: [`docs/work-cycle.md` § Cards fired later in the cycle](../docs/work-cycle.md#cards-fired-later-in-the-cycle-workmd-step-3).
 
+## Step 3.6 — Dispatch-mode choice (U6 · the King STOPS and asks)
+
+**The King does NOT auto-seek jobs.** After the audit (Step 1) and the resume scan (Step 0.6) are complete, the King presents what it found and asks the user ONE question before any new dispatch fires. This is a hard gate: **Step 3.5 (pods) and Step 4 (solo) do not run until the user answers.**
+
+The King prints (a) the resume queue from Step 0.6 (in-flight work it can continue immediately, R33), and (b) the three dispatch modes, then waits for the user's reply:
+
+```text
+👑 Audit + resume scan done. How should I proceed?
+
+   In-flight (resume-eligible, R33):
+     • worker-1 · FE-P0-5  (executing — last: "wired the form, tests pending")
+     • worker-2 · BE-P1-2  (verifying)
+
+   Pick a dispatch mode:
+   (s) seek      — I scan the ledger and PROPOSE up to N tasks for your approval
+                   before anything dispatches. You see the list, then say go.
+   (a) assign    — You name the task(s)/lane(s) yourself; I dispatch exactly those.
+   (r) resume-only — Only continue the in-flight work above; open no new tasks.
+
+   (Resume work is listed above either way, but I won't dispatch it until you choose.)
+```
+
+Behaviour per choice:
+
+- **(s) seek** — King runs the suggested-task synthesis (the 5 priority sources above), proposes up to `N` candidates (default 3, or the lane count, whichever is smaller) as a numbered list via the `suggested-task` card, and **waits again** for the user to approve the list (`go` accepts all proposed; the user may strike or reorder). Auto-dispatch (Step 3.5 + Step 4) fires ONLY after this approval.
+- **(a) assign** — King parses the user's named tasks/lanes (free-form, e.g. `worker-1 do FE-P0-7, senior-1 take story BILL`), confirms the parse, then dispatches exactly those — no ledger seeking.
+- **(r) resume-only** — King dispatches ONLY the Step 0.6 resume queue (the `[RESUME]` briefs in Step 4) and opens no fresh task files. Step 4's new-task seeking is skipped entirely.
+
+Until the user answers, the King stays in the Step 5 poll loop for gating/overlay/push of any **already-in-flight** sentinels — it just does not open new work. Record the chosen mode for Step 3.5 / Step 4:
+
+```bash
+# Set by the King from the user's reply: "seek" | "assign" | "resume-only".
+# Step 3.5 (pods) and Step 4 (solo) branch on this; neither dispatches new work
+# unless DISPATCH_MODE is "seek" (post-approval) or "assign".
+export DISPATCH_MODE="<seek|assign|resume-only>"
+export PROPOSED_TASKS=""   # seek mode, post-approval: the approved task ids (newline-separated)
+```
+
 ## Step 3.5 — Story-pod assignment (R46/R50, when `integration.enabled` and `seniors > 0`)
 
-If `kingdom.json.integration.enabled` is true and `SENIORS > 0`, the King runs the **pod path** for multi-worker units before the solo Step 4. The King owns cross-story only (R50); each Senior owns its story end-to-end (R48).
+If `kingdom.json.integration.enabled` is true and `SENIORS > 0`, the King runs the **pod path** for multi-worker units before the solo Step 4. The King owns cross-story only (R50); each Senior owns its story end-to-end (R48). **The pod path only runs when `DISPATCH_MODE` chose new work** (`seek` post-approval, or `assign`); under `resume-only` it is skipped entirely (Step 3.6).
+
+**The partition step (R50, C1).** `POD_ASSIGNMENTS` is composed by the King — this is judgment, not deterministic bash (same as `pick_next_task_for`): the King reads the project task-ledger (`kingdom.json.taskSource` → `TODO_*.md` / `STEP.md` / `gh issues`), selects the units to attack this session (in `seek` mode = the approved `${PROPOSED_TASKS}`; in `assign` mode = the user's named units), and groups them into pods per `$UNIT`:
+
+- `unit="pod"` (default) → group ALL of a Senior's selected stories under ONE story-id → ONE branch per Senior pod → ONE PR. Each Senior gets a pod of 1-3 workers attacking the grouped scope.
+- `unit="story"` → one pod entry (= one branch/PR) per CSV-story/issue, so a Senior owning N stories yields N entries.
+
+The King scopes pods so file-areas do not overlap (R50) and sequences dependencies, staying within `sanityCap` (King + Σ(senior + its workers) + watchman + co-workers ≤ cap). It **emits the assignments as newline-separated `<story-id>=<worker-a>,<worker-b>,…` lines** (one pod per line, no spaces inside a line) into `$POD_FILE` below, then the loop consumes them with a zsh-safe `while read` (no bare-glob, no word-split reliance):
 
 ```bash
 INTEG_ON=$(jq -r '.integration.enabled // false' "$KJSON")
 UNIT=$(jq -r '.integration.unit // "pod"' "$KJSON")   # K13: default "pod" (one branch per Senior → one PR)
+# H-x: re-derive consumed vars in case this block is a fresh invocation.
+PROJ="${PROJ:-$PWD/${project}}"
+REFS_FILE="${REFS_FILE:-$PWD/.kingdom/${project}/logs/workspace-refs.env}"
+[ -n "$BASE" ] || BASE=$(jq -r '.git.base // "develop"' "$KJSON")
 
-if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ]; then
-  # 1. PARTITION (R50): pick units from the task-ledger, scope them so file-areas
-  #    do not overlap, sequence dependencies. The King decides pod count + size
-  #    within sanityCap (King + Σ(senior + its workers) + watchman + co-workers ≤ cap).
-  #
-  #    $UNIT (K13) controls branch/PR granularity when composing POD_ASSIGNMENTS:
-  #      "pod"   (default) → group ALL of a Senior's stories under ONE story-id →
-  #                          ONE branch per Senior pod → ONE PR. Most teams want this.
-  #      "story"          → one POD entry (and thus one branch/PR) per CSV-story/issue,
-  #                          so a Senior owning N stories produces N branches.
-  #    Output: a list of "story-id=worker-a,worker-b,..." pod assignments built per $UNIT.
+if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ] && [ "$DISPATCH_MODE" != "resume-only" ]; then
+  # 1. PARTITION (R50). The King writes the pod assignments it composed (from the
+  #    ledger / approved list — see prose above) to $POD_FILE, ONE per line:
+  #        <story-id>=<worker-a>,<worker-b>,...
+  #    Example the King would write for two pods of two workers each:
+  #        printf '%s\n' 'BILL-EPIC=worker-1,worker-2' 'AUTH-EPIC=worker-3,worker-4' > "$POD_FILE"
+  #    (No code can guess the grouping — the King fills $POD_FILE before the loop.)
+  POD_FILE="$PWD/.kingdom/${project}/logs/pod-assignments.env"
+  : > "$POD_FILE"   # King overwrites this with the composed assignments (see above)
+  # >>> King: emit the composed "<story-id>=<workers>" lines into "$POD_FILE" here <<<
 
-  S=0
-  for POD in $POD_ASSIGNMENTS; do            # each POD = "<story-id>=<worker-a,worker-b,...>"
-    S=$((S + 1)); SENIOR="senior-$S"
-    [ "$S" -gt "$SENIORS" ] && { echo "queued (no free Senior): $POD"; continue; }
-    STORY_ID="${POD%%=*}"; PODWORKERS=$(echo "${POD#*=}" | tr ',' ' ')
+  if [ ! -s "$POD_FILE" ]; then
+    echo "ℹ️ No pod assignments composed (no multi-worker units selected) — all work flows through solo Step 4."
+  else
+    S=0
+    # zsh-safe consumption: while-read over the file, NOT `for POD in $POD_ASSIGNMENTS`
+    # (the old form word-split a never-assigned scalar → zero iterations, story pods dead).
+    while IFS= read -r POD; do
+      [ -n "$POD" ] || continue                # skip blank lines
+      case "$POD" in \#*) continue ;; esac     # skip comments
+      S=$((S + 1)); SENIOR="senior-$S"
+      [ "$S" -gt "$SENIORS" ] && { echo "queued (no free Senior): $POD"; continue; }
+      STORY_ID="${POD%%=*}"; PODWORKERS=$(echo "${POD#*=}" | tr ',' ' ')
 
-    # 2. Create the local story branch in the Senior's worktree (R46)
-    BRANCH=$(create_story_branch "$PROJ" "$STORY_ID" "$BASE" "$SENIOR")
+      # 2. Create the local story branch in the Senior's worktree (R46)
+      BRANCH=$(create_story_branch "$PROJ" "$STORY_ID" "$BASE" "$SENIOR")
 
-    # 3. Assign the pod to the Senior + hand cross-cutting conventions, then start
-    #    its autonomous loop. guard_dispatch_scope (called inside the Senior)
-    #    keeps the Senior in-pod + visible-only (R30 amendment).
-    SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" | cut -d= -f2)
-    guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
-    cmux_send "$SENIOR_WS" \
-      "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push."
-    spawn_loop "$SENIOR_WS" "/loop"   # kick the senior's autonomous story loop (self-senior already grounded it at spawn, R52)
-    echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
-  done
+      # 3. Assign the pod to the Senior + hand cross-cutting conventions, then start
+      #    its autonomous loop. guard_dispatch_scope (called inside the Senior)
+      #    keeps the Senior in-pod + visible-only (R30 amendment).
+      SENIOR_WS=$(grep "^${SENIOR}_WS=" "$REFS_FILE" 2>/dev/null | cut -d= -f2)
+      guard_lane_workspace_exists "$SENIOR" || { echo "⏸ $SENIOR has no workspace; skipping pod"; continue; }
+      [ -n "$SENIOR_WS" ] || { echo "⏸ $SENIOR has no workspace ref in $REFS_FILE; skipping pod"; continue; }
+      cmux_send "$SENIOR_WS" \
+        "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push.
+Questions/blockers → inbox_send king question $STORY_ID yes \"…\" (don't stall silently). Long/multi-file work: fan out via the Workflow tool (R53; check availability first)."
+      spawn_loop "$SENIOR_WS" "/loop"   # kick the senior's autonomous story loop (self-senior already grounded it at spawn, R52)
+      echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
+    done < "$POD_FILE"
+  fi
 fi
 ```
 
@@ -500,12 +622,23 @@ Pods now run autonomously and in parallel. The King does NOT re-review their int
 
 **R30 hard rule:** from this step starting, no more than 60 seconds elapses before the first `cmux send` fires to a worker. King is ORCHESTRATOR, not executor. If King catches itself drafting a multi-batch execution plan in chat instead of dispatching: STOP and dispatch with the brief as-is.
 
+**Dispatch-mode gate (U6).** Step 4 honors the `DISPATCH_MODE` chosen in Step 3.6: under `resume-only` it dispatches ONLY the resume queue and opens no fresh tasks (the `pick_next_task_for` seek is skipped); under `assign` it dispatches the user's named tasks; under `seek` (post-approval) it dispatches the approved `${PROPOSED_TASKS}`. The King never auto-seeks without a prior choice.
+
 ```bash
 [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $LANES_EXPECTED in the loop below (else 1 iteration over the whole blob); auto-reverts
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+# H-x: re-derive consumed vars (state does not persist across blocks).
+PROJ="${PROJ:-$PWD/${project}}"
+REFS_FILE="${REFS_FILE:-$PWD/.kingdom/${project}/logs/workspace-refs.env}"
+TASKS_DIR="${TASKS_DIR:-$PWD/.kingdom/${project}/tasks}"
+DISPATCH_MODE="${DISPATCH_MODE:-resume-only}"   # fail safe: if Step 3.6 didn't run, do NOT auto-seek
 DISPATCH_START=$(date +%s)
 TASKS_DISPATCHED_TODAY=0
+# H-x: export the running ceilings so the pr-limit / pod-limit comparisons hold
+# across the Step 5 poll loop + Step 6 (which run as separate bash invocations).
 PRS_OPENED_TODAY=0      # incremented at Step 6 (gh pr create)
 PODS_DONE_TODAY=0      # incremented when a pod's story PR opens or a solo task ships
+export PRS_OPENED_TODAY PODS_DONE_TODAY DISPATCH_MODE
 
 for lane in $LANES_EXPECTED; do
   # Skip co-workers (R32 — co-workers wait for explicit pair-on signal)
@@ -534,12 +667,35 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
     continue
   fi
 
+  # U6: only SEEK new work in seek/assign mode. resume-only stops here — the
+  # in-flight resume above already fired; no fresh task files are opened.
+  [ "$DISPATCH_MODE" = "resume-only" ] && { echo "$lane: resume-only mode, no new task"; continue; }
+
+  # seek (post-approval) draws from $PROPOSED_TASKS; assign + the default path
+  # fall through to pick_next_task_for (King judgment over the ledger).
   TASK=$(pick_next_task_for "$lane")
   [ -z "$TASK" ] && { echo "$lane idle (no claimable task)"; continue; }
 
   SUGGESTED_SKILLS=$(pick_skills_for_task "$TASK" "$lane")
-  export LANE="$lane" TASK_ID="$TASK" SUGGESTED_SKILLS
+
+  # U5 — "Read first" list (Shared spec 3). The King composes 3-7 entries the lane
+  # MUST read before any code/plan: the project CLAUDE.md, the most relevant docs/
+  # files for this task's domain, and the task's key source files. Pick them by:
+  #   1) always include the project CLAUDE.md if present;
+  #   2) grep the docs index / docs/ for the task's domain keywords (1-3 hits);
+  #   3) grep the source tree for the task's primary symbol/path (1-3 files).
+  # One path per line; this fills ${READ_FIRST_LIST} in the dispatch-brief card.
+  # This is King JUDGMENT (like pick_next_task_for / the skill pick) — the King
+  # builds the multi-line value from the greps above; there is no deterministic
+  # helper for it. Example of what the King assigns:
+  #   READ_FIRST_LIST=$'  • CLAUDE.md\n  • docs/auth.md\n  • src/app/login/route.ts'
+  READ_FIRST_LIST="${READ_FIRST_LIST:-  • <project CLAUDE.md>\n  • <most relevant docs/ file>\n  • <key source file(s)>}"
+  export LANE="$lane" TASK_ID="$TASK" SUGGESTED_SKILLS READ_FIRST_LIST PROJECT="$project"
   BRIEF=$(render_card "dispatch-brief")
+  # The brief card (A4) carries, near the top: the 📚 Read-first list, the R53
+  # Workflow-fanout reminder ("Long/multi-file work → Workflow tool; check
+  # availability first"), and the inbox one-liner ("Questions/blockers →
+  # inbox_send king question <task> yes \"…\" — don't stall silently").
 
   lane_ws=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
   # v0.31.0 R31+R36 hard gate: refuse dispatch if lane workspace missing.
@@ -576,9 +732,43 @@ Workers begin work in parallel (per R28 parallel-by-default).
 King enters a perpetual poll loop. Each tick:
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null  # glob-heavy loop; safe if a fresh invocation precedes _load.sh
+# H-x: re-derive every var the loop consumes — this block may be a fresh bash
+# invocation, so nothing from Step 0/3/4 is guaranteed to be in the environment.
 LOGS="$PWD/.kingdom/${project}/logs"
+PROJ="${PROJ:-$PWD/${project}}"
+KJSON="${KJSON:-$PWD/.kingdom/${project}/kingdom.json}"
+REFS_FILE="${REFS_FILE:-$LOGS/workspace-refs.env}"
+[ -n "$BASE" ] || BASE=$(jq -r '.git.base // "develop"' "$KJSON")
+[ -n "$KING_WS" ] || KING_WS=$(cmux_identify 2>/dev/null | jq -r .caller.workspace_ref)
+export LOGS PROJ KJSON REFS_FILE BASE KING_WS
 
 while true; do
+  # 5a-inbox (U4). Each tick, triage the King's inbox BEFORE gating sentinels.
+  # List pending messages (new inbox/ format + legacy king-inbox/ for back-compat),
+  # then the King handles each per the protocol prose below (answer / write memory /
+  # escalate) and consumes it. Scaffolding only — the ANSWER is King judgment.
+  for MSG in $(inbox_list king 2>/dev/null); do
+    [ -f "$MSG" ] || continue
+    inbox_read "$MSG"          # King reads the front matter (from/type/task/needs-reply) + body
+    # King decides, per the type:
+    #   question/flag + needs-reply:yes → answer the lane:  inbox_reply <from> <task> "<answer>"
+    #                                     then nudge it:     cmux_send <lane_ws> "📬 King replied in your inbox re <task>"
+    #                                     OR escalate to the user if only they can decide (don't guess).
+    #   memory-request                  → King writes the memory itself (U8), then inbox_reply confirms.
+    #   info/docs-update                → note it; no reply needed.
+    inbox_read "$MSG" --consume   # archive after handling
+  done
+  # Legacy fallback: pre-inbox king-inbox/ drops (durable tmux_notify writes, older lanes).
+  LEGACY_INBOX="$PWD/.kingdom/${project}/king-inbox"
+  if [ -d "$LEGACY_INBOX" ]; then
+    for MSG in "$LEGACY_INBOX"/*; do
+      [ -f "$MSG" ] || continue
+      cat "$MSG"          # King reads + handles as above, then consumes
+      rm -f "$MSG"
+    done
+  fi
+
   # 5a. Detect un-gated sentinels
   for FLAG in "$LOGS"/done/*.flag; do
     [ -f "$FLAG" ] || continue
@@ -610,6 +800,11 @@ while true; do
 
     LANE=$(echo "$FLAG_BASE" | sed 's/^[0-9-]*T[0-9]*Z__[a-z]*-//;s/__.*//')
     SUBTASK_ID=$(echo "$FLAG_BASE" | sed 's/.*__//')
+    # C2/H-x: set TOPIC for the SOLO push HERE, per-sentinel, so it tracks the
+    # current sub-task (not a stale value from a prior push). The story path sets
+    # its own TOPIC=STORY_ID separately (5a-pre). Step 6 reads both.
+    TOPIC="$SUBTASK_ID"
+    export LANE SUBTASK_ID TOPIC   # Step 6 (a separate invocation on 'push') reads these for the PR body + branch
 
     # Already gated? (test report exists)
     ls "$PWD/${project}/docs/test-reports/KING_"*"__${LANE}__${SUBTASK_ID}.md" \
@@ -673,33 +868,75 @@ while true; do
 done
 ```
 
+### Inbox (U4 · two-way lane↔King, non-blocking)
+
+Lanes never stall silently waiting on the King. When a lane hits a question or a blocker it posts a message and keeps any continuable work moving; the King's poll loop (5a-inbox above) drains the inbox every tick. The shared protocol (tracker Shared spec 1):
+
+- **Location/format:** `$WS/.kingdom/<project>/inbox/king/<UTC>__<from>__<type>.md`, with YAML front matter (`from`/`to`/`type`/`task`/`needs-reply`) + a free-text body. Types: `question | flag | info | memory-request | docs-update`. Handled messages move to `inbox/king/.archive/`.
+- **Lane side:** `inbox_send king question <task> yes "<text>"` (sets its own cmux state to `❓ waiting on King`, does NOT block). Lanes check their own inbox (`inbox_list <self>`) at task start, when blocked, and before the closer.
+- **King side (each tick):** `inbox_list king` → for each pending message:
+  - `question` / `flag` with `needs-reply: yes` → King answers with `inbox_reply <from> <task> "<answer>"` + a `cmux_send` nudge to that lane; OR, if only the user can decide (scope/priority/risk call), the King escalates it to the user in chat instead of guessing.
+  - `memory-request` → memory writes are King-only (U8): the King writes the memory itself, then `inbox_reply` confirms.
+  - `info` / `docs-update` → noted, no reply.
+  - Consume with `inbox_read <file> --consume` after handling.
+- **Back-compat:** the loop also drains the legacy `king-inbox/` directory (older lanes + the durable `tmux_notify` fallback write here).
+
 **Post-push overlay discard per R29:**
 
 ```bash
+[ -n "$BASE" ] || BASE=$(jq -r '.git.base // "develop"' "$PWD/.kingdom/${project}/kingdom.json")
 git checkout kingdom
-git reset --hard origin/develop
+git reset --hard "origin/${BASE}"
 git clean -fd
 ```
 
 ## Step 6 — On user's "push" approval per PR (R1)
 
 ```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null  # the done-flag prune glob below must not abort on no-match
+# H-x: re-derive everything this block consumes — 'push' arrives as a fresh
+# chat turn, so this is a separate bash invocation from the Step 5 loop.
+PROJ="${PROJ:-$PWD/${project}}"
+LOGS="${LOGS:-$PWD/.kingdom/${project}/logs}"
+KJSON="${KJSON:-$PWD/.kingdom/${project}/kingdom.json}"
+[ -n "$BASE" ] || BASE=$(jq -r '.git.base // "develop"' "$KJSON")
+
+# C2: the solo path never set TOPIC (only the story path did at line ~758), so
+# `feature/${TOPIC}` was literally `feature/` on the first solo PR and collided
+# on the second. Derive it from the sub-task id, then GUARD: never create a
+# branch named `feature/` from an empty topic.
+TOPIC="${TOPIC:-$SUBTASK_ID}"
+export TOPIC
+if [ -z "$TOPIC" ]; then
+  echo "❌ Step 6 abort: TOPIC empty (SUBTASK_ID not set). Refusing to create 'feature/'." >&2
+  echo "   Re-run gating so SUBTASK_ID is set, or pass the topic explicitly." >&2
+  return 1 2>/dev/null || exit 1
+fi
+
 git checkout -b "feature/${TOPIC}" "${LANE}"
 PR_BODY=$(generate_pr_body_from_task_file "${LANE}" "${SUBTASK_ID}")
 git push -u origin "feature/${TOPIC}"
-gh pr create --base develop --head "feature/${TOPIC}" \
+gh pr create --base "${BASE}" --head "feature/${TOPIC}" \
   --title "<from task file Brief>" \
   --body "$PR_BODY"
 
+# H3: prune this lane's done-flags now that the lane shipped (king.md:480). The
+# 10s poll scan in Step 5 globs ALL of done/*.flag every tick; without this the
+# directory grows unbounded and the scan goes O(N-pushes). Flags are written as
+# `<UTC>__<model>-<LANE>__<id>.flag`, so match the model-prefixed shape.
+rm -f "$LOGS/done/"*"-${LANE}__"*.flag
+
 # Post-push overlay discard (R29)
 git checkout kingdom
-git reset --hard origin/develop
+git reset --hard "origin/${BASE}"
 git clean -fd
 
 cmux_set_state "$KING_WS" "✅" "Pushed feature/${TOPIC}"
 cmux_workspace_action "$KING_WS" mark-read
-PRS_OPENED_TODAY=$((PRS_OPENED_TODAY + 1))     # toward pr-limit
-PODS_DONE_TODAY=$((PODS_DONE_TODAY + 1))       # this PR completed one unit (solo task or story pod)
+# H-x: counters must persist across invocations — re-read prior values, increment, re-export.
+PRS_OPENED_TODAY=$(( ${PRS_OPENED_TODAY:-0} + 1 ))   # toward pr-limit
+PODS_DONE_TODAY=$(( ${PODS_DONE_TODAY:-0} + 1 ))     # this PR completed one unit (solo task or story pod)
+export PRS_OPENED_TODAY PODS_DONE_TODAY
 ```
 
 After push, King returns to Step 5's poll loop.

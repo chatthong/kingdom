@@ -8,6 +8,10 @@ generate_pr_body_from_task_file () {
   local digest_file=$(ls -1t "$LOGS/"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
   local test_report=$(ls -1t "$PROJ/docs/test-reports/KING_"*"__${lane}__${sub_task_id}.md" 2>/dev/null | head -1)
 
+  # C6: if the glob matched nothing, $task_file is empty and the `awk … ""` calls
+  # in the heredoc below read STDIN → the function hangs forever. Fail closed first.
+  [ -n "$task_file" ] && [ -f "$task_file" ] || { echo "❌ generate_pr_body_from_task_file: no task file for ${lane}/${sub_task_id} — cannot build PR body" >&2; return 1; }
+
   cat <<EOF
 ## Summary
 

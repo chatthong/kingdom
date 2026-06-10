@@ -138,6 +138,42 @@ The user SEES the parallelism happen. Tabs appear, do work, disappear cleanly.
 
 ---
 
+## Before implementing — read, fan out, ask (do this EARLY, every task)
+
+Three habits the worker runs at task start, before writing any code. They are the antidote to the real failure modes from a week of fleet driving (lanes that didn't read docs, never used the Workflow tool, and stalled silently on questions):
+
+1. **Ground in the docs FIRST (R45).** Run the Layer-1 doc orientation (`haiku_read_docs_orientation`, see Task-file template Layer 1) before any code grep. Docs override code patterns when they conflict. Don't implement against a guess.
+2. **Fan out via the Workflow tool when the work is big (R53).** **Before implementing: if the task spans 3+ files or needs research across the codebase, fan the work out via the Workflow tool per [`reference/workflow-fanout.md`](../reference/workflow-fanout.md)** — self-detect availability first; if the Workflow tool is NOT in this session's toolset, fall back to bounded `Agent()` (R42) / visible cmux tabs (R38). **One Workflow run per task.** A trivial 1-2 file edit needs no fan-out; don't force it.
+3. **Ask the King instead of guessing (R55).** If you hit a question or a blocker, post it — never stall silently. See § Talking to the King below.
+
+## Talking to the King (two-way inbox · R55)
+
+The lane is NOT alone. When you need a decision the King must make, or you hit a blocker, use the inbox — and **keep working on anything still continuable** while you wait. You never freeze.
+
+```bash
+# Ask a question (needs a reply) — then set state + keep going on unblocked parts:
+inbox_send king question "$SUBTASK_ID" yes "Two auth patterns exist (cookie vs header). Which is canonical?"
+cmux_set_state "$CMUX_WORKSPACE_ID" "❓" "$SUBTASK_ID · waiting on King"
+# Flag a problem the King should know about (non-blocking):
+inbox_send king flag "$SUBTASK_ID" yes "develop smoke references a module this task removes — possible cross-lane break."
+```
+
+Render the [`lane-question`](../cards/lane-question.md) card in your reply so the user sees what you asked. Then **check your own inbox** for the King's reply at three points: **task start**, **when blocked**, and **before the closer**:
+
+```bash
+inbox_list worker-1                       # any replies waiting? (use your own slug)
+inbox_read "<path>" --consume             # read + archive each handled reply
+```
+
+The King triages `king` inbox every poll tick (see [`king.md`](king.md) → Inbox triage). The sentinel flag (R22) is still the only completion signal — the inbox is for questions, never task hand-off.
+
+## Conventions
+
+- **Replying with cards (R12 spirit — render, don't dump):** when you reply to the King/user, render the matching card, not raw prose: task completion → [`task-complete`](../cards/task-complete.md); blocked → [`blocked-lane`](../cards/blocked-lane.md); a question to the King → [`lane-question`](../cards/lane-question.md). A plain status answer ("still on L3, 60%") is fine as prose. One `render_card` call; never ANSI.
+- **Memory is King-only (R54):** if you discover something memory-worthy (a durable convention, a recurring user preference), do NOT write memory. Send `inbox_send king memory-request "$SUBTASK_ID" yes "<proposed memory line>"` and keep working — the King validates against R34 and writes it.
+
+---
+
 ## Task claiming
 
 Before assigning a sub-task to a lane, **King** writes a claim file:
@@ -565,10 +601,13 @@ Before the 4-step closer fires, the lane stages and commits its work on its **ow
 - Current branch is `feature/<topic>` → R9 violation (feature is carved from `worker-N` at push time, byte-for-byte)
 - Current branch doesn't match the worktree's lane name → R21 + R9 violation (worktree `.worktrees/worker-1/` must commit on branch `worker-1`)
 
+**Docs-sync FIRST (U7, v0.44.0 — before the commit, before the sentinel).** If this task changed behavior, an API, a config key, or structure that is documented anywhere in the project's `README` / `docs/`, **update those docs in the SAME task commit.** Grep the docs for any mention of what you changed (`grep -rl "<thing-you-changed>" README* docs/ 2>/dev/null`) and patch the stale parts. If nothing documented is affected, write `docs: n/a` in the task file's `## Final summary` so the King's gate sees you checked. (This catches the real failure mode where code ships and the docs silently rot.) Memory is NOT yours to update — that's a `memory-request` to the King (R54).
+
 ```bash
 # Inside a lane worktree, AT TASK CLOSE-OUT, before any other commit step:
 guard_commit_branch "$PWD" || exit 1   # blocks bad-branch commits
-git -C "$PWD" add <files-touched>
+# Docs-sync (U7): stage any README/docs/ updates alongside the source change.
+git -C "$PWD" add <files-touched> <docs-touched-or-none>
 git -C "$PWD" commit -m "<lane sub-task-id>: <one-line> — closes $SUBTASK_ID (PR #pending)"
 ```
 

@@ -21,4 +21,4 @@ The worker commits TODO/CSV close-suffix as `— ✅ closed YYYY-MM-DD (PR #pend
 
 **Why Tier 2:** Skipping leaves cosmetic `(PR #pending)` strings in TODO files — readable but ugly. Doesn't lose data or break gates. Watchman fixes on its next tick automatically.
 
-Helper: `watchman_backfill_pr_numbers` in [`_primitives.md`](../_primitives.md) — fans out per file in parallel. See [`watchman.md`](../roles/watchman.md) § PR-number backfill duty.
+Helper: `parallel_edit_fanout` in [`functions/parallel_edit_fanout.sh`](../functions/parallel_edit_fanout.sh) — fans the `(PR #pending) → (PR #N)` flip out per lane/file in parallel (bounded by `_bounded_wait`, R42). See [`watchman.md`](../roles/watchman.md) § PR-number backfill duty.

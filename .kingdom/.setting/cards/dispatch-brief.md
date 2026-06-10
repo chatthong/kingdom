@@ -10,6 +10,9 @@ This card is **flow-text, no box-drawing, no GitHub alert wrapper** — it's the
 ```text
 [BRIEF: ${LANE} · ${TASK_ID}]
 
+📚 Read first (before any code/plan — REQUIRED, R45):
+${READ_FIRST_LIST}
+
 Task: ${STORY_HEADING}
 
 Acceptance criteria (mirrored from ${LEDGER_PATH} §${TASK_ID}):
@@ -21,6 +24,11 @@ Deadline: ${DEADLINE}
 
 Suggested skills (per-task; pick what fits, ignore if unavailable):
 ${SUGGESTED_SKILLS}
+
+Long/multi-file work: fan out via the Workflow tool (R53) — self-detect
+  availability first; if absent, bounded Agent()/visible tabs. One run per task.
+Questions/blockers: inbox_send king question ${TASK_ID} yes "..." — don't stall
+  silently (R55). Keep working on continuable parts; check your own inbox between steps.
 
 Layer plan:
   L1 Discovery   — pattern grep, identify existing conventions (R8 mandatory)
@@ -59,6 +67,7 @@ King's auto-gate poll will pick it up and run Tier-1, then overlay onto kingdom 
 |---|---|---|
 | `${LANE}` | lane being dispatched | `worker-2` |
 | `${TASK_ID}` | task ID from queue | `FE-P0-FOUND.7` |
+| `${READ_FIRST_LIST}` | King-composed 3-7 entries the lane MUST read before any work: project CLAUDE.md (always); the docs/ files matching the task domain; the task's key source files. One per line, each `  • <path> — <why>`. See [`king.md`](../roles/king.md) → Composing the Read-first list. | (multi-line, see below) |
 | `${STORY_HEADING}` | full Story title from TODO ledger | `Per-app SEO metadata (URL/meta/canonical/ALT)` |
 | `${LEDGER_PATH}` | path to project's TODO file | `TODO_Webshop.md` |
 | `${AC_BULLETS}` | indented acceptance-criteria list extracted from the Story | (multi-line) |
@@ -83,6 +92,19 @@ The helper `pick_skills_for_task` (in [`_primitives.md`](../_primitives.md)) ret
 If the helper returns empty (no keyword matched), the entire `Suggested skills:` line is dropped from the brief along with its block — no hollow heading.
 
 If the user passed `skill=<name>[,<name>...]` in the instruction, the helper short-circuits and uses that list verbatim. `skill=none` → empty list → dropped section.
+
+## `${READ_FIRST_LIST}` rendering
+
+The King composes this per task — 3 to 7 entries, one per line, each `  • <path> — <why one-liner>`:
+
+```text
+  • my-app/CLAUDE.md — project conventions + gate commands (ALWAYS)
+  • docs/auth.md — the documented auth pattern this task touches
+  • src/lib/auth/session.ts — the file you're extending
+  • src/middleware.ts — the call site that consumes it
+```
+
+The list is REQUIRED (never empty): the first entry is always the project CLAUDE.md. The King picks the rest from (a) `docs/` files whose name/topic matches the task domain and (b) the task's key source files (grep the brief's nouns against the repo). This is the per-task complement to the lane's own R45 doc orientation — it points the lane straight at the load-bearing files instead of making it rediscover them. See [`king.md`](../roles/king.md) → Composing the Read-first list.
 
 ## Notes
 

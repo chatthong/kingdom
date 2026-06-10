@@ -4,6 +4,58 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.44.0] — 2026-06-10
+
+The big stability + communication release. A 5-agent Sonnet audit of the whole kit (~70 findings, saved to `docs/audits/2026-06-10-stability-audit.md`) followed by a 5-agent Opus fix army with strict per-directory file ownership, then a main-session verification pass against the **real cmux CLI contract** (`docs/cli-contract.md` from manaflow-ai/cmux, fetched 2026-06-10). All 9 critical audit findings fixed, plus 15 real-world consumer items from a week of fleet driving.
+
+### Fixed — the 9 criticals
+
+- **Story pods never dispatched** — `work.md` looped over `$POD_ASSIGNMENTS`, which no code ever built. The R50 partition step is now implemented (group claimable tasks by `integration.unit`, emit `<story-id>=<workers>` lines into a pod file consumed by a zsh-safe `while read` loop).
+- **Solo path created a branch literally named `feature/`** — `$TOPIC` was only set on the story path. Now set + exported from `$SUBTASK_ID` per task; Step 6 aborts if empty.
+- **Skill routing was dead** — `pick_skills_for_task` read `…/.setting/skill-routing.md`, a path that hasn't existed since v0.35 (`reference/skill-routing.md`). awk-on-missing-file exits 0, so every dispatch silently got zero skills. Path fixed + fail-closed guard.
+- **Overlay could silently apply nothing** — `kingdom_overlay_lane` piped `git diff | git apply`; a failed diff fed apply empty input and "succeeded", so Tier-2 gates ran against an empty kingdom branch. Now capture-then-apply with loud failure on diff error or empty patch.
+- **`run_tier2_on_story` false-passed on missing `kingdom.json`** — gained the same fail-closed guard its tier-1/tier-2 siblings got in v0.42.0, plus a zero-gates-found guard (gates can never pass vacuously).
+- **`generate_pr_body_from_task_file` hung the session** — `awk` on an empty `$task_file` read stdin inside a heredoc and blocked forever. Guarded before the heredoc.
+- **Watchman reviewed nothing, every tick** — `watchman.md` used `$WORKTREES` in 4 duty sites without ever defining it (`git -C /worker-1` against filesystem root, errors swallowed). Defined in the tick preamble; unquoted use fixed.
+- **tmux fallback was deeply broken** — `cmux_new_split` direction words ran as shell commands (now mapped right/left→`-h`, up/down→`-v`); the entire sub-agent pool grepped `surface:[0-9]+` which never matches tmux `%N` pane ids (pool no-op'd under tmux; real tmux `spawn_subagent_tab` implemented, pool pre-warming disabled); `cmux_list_panes`/`cmux_list_pane_surfaces` returned non-JSON / ignored `--workspace` (now jq-shaped); `cmux_attention_override` dropped the King notification entirely (blocked lanes went unnoticed on tmux — now routes glyph + description + `tmux_notify`).
+- **`render_card` resolved cards via `$WS`, which nothing sets** — now falls back to `$_KFN_DIR/..`; the parsed-then-ignored variant suffix (`welcome/morning`) actually selects the matching template section; `save`/`init`/`update`/`self-care` now `source _load.sh && load_feature core` before rendering.
+
+### Fixed — cmux contract compliance (the docs re-read)
+
+- **`cmux_send` Enter failed ~50% of sends** (the worst real-world pain): the Enter keypress depended on the sibling `cmux_send_key` wrapper, which is silently function-not-found when unloaded. `cmux_send` is now self-sufficient (`cmux send-key` inline), verifies submission via read-screen, and the paste-collapse re-check finally uses `--surface` for surface refs (the K3 fix never applied to them).
+- **Browser wrappers used flags that don't exist in the current contract**: `new-split --type browser` (no such flag — now `cmux browser open-split [url] --workspace <ws>`, one documented call that opens AND navigates), `click --ref` → `--selector`, `fill --ref/--value` → `--selector/--text`, `screenshot --path` → `--out`. `browser_verify` now waits on `browser wait --load-state complete` instead of a fixed `sleep 2`, and the `eval "location.href=…"` injection vector is gone.
+- **`cmux_first_surface` empty right after spawn** — internal bounded retry (6 × ~1s) + a loud stderr diagnostic on final failure; `spawn_master_workspace` retries discovery too. Wrapper self-sufficiency sweep: every cmux/browser wrapper that called a sibling wrapper now has a `command -v` guard + inline raw fallback.
+
+### Added — two-way inbox (R55) + King-only memory (R54)
+
+- **`inbox_send` / `inbox_list` / `inbox_read` / `inbox_reply` / `inbox_pending_count`** (5 new core helpers, round-trip tested under zsh): file-based messages at `.kingdom/<project>/inbox/<recipient>/` (`<UTC>__<from>__<type>.md`, typed front matter, `.archive/` on consume) + best-effort `cmux_notify` nudge. Lanes ask questions / raise flags WITHOUT stalling (state `❓ waiting on King`, keep working on continuable parts); the King drains `inbox_list king` every poll tick (answer via `inbox_reply` + nudge, escalate user-decisions, consume). `tmux_notify`'s durable fallback now writes inbox-spec messages (replacing bare `king-inbox/` files; legacy dir still swept for back-compat). New rule R55 (Tier 2); "Talking to the King" sections in all four lane roles; "Inbox triage" in king.md.
+- **R54 (Tier 2): memory writes are King-only** — lanes send `type: memory-request` via the inbox; the King validates against R34 and writes or declines.
+
+### Added — `/kingdom:self-learn` (12th command) + dispatch/work UX
+
+- **`/kingdom:self-learn`**: any role grounds itself in the project docs in 3 layers (all README/index/CLAUDE.md → essentials read-list → deep docs pass; parallel fan-out per R51/R53 with caps 30/25/15) and renders 1-3 new `self-learn-summary` cards (Big picture / Map / Deep notes). The King may inject it as a lane's SECOND message after `/kingdom:self-<role>`.
+- **`/kingdom:work` no longer auto-seeks jobs**: after audit + resume scan it asks `(s) seek-and-propose / (a) you assign / (r) resume-only` (fail-safe default resume-only). Dispatch fires only after an explicit choice.
+- **Dispatch briefs carry a required `📚 Read first` section** (`${READ_FIRST_LIST}`, 3-7 files: project CLAUDE.md + domain docs + key source) so lanes get the big picture before implementing, plus one-liners for R53 Workflow fan-out and the inbox protocol. All lane roles got an early imperative "fan out via the Workflow tool for 3+-file tasks" step (R53 was previously King-only in practice) and a "Replying with cards" convention (new `lane-question` card).
+- **Docs-sync on close**: the worker/senior closer now updates affected README/docs in the same task commit (or records `docs: n/a`).
+
+### Added — watchman overhaul + stale-lane repair
+
+- **`kingdom_repair_stale_lanes`** (new helper): detects workspace↔worktree disconnects (workspace alive, worktree/branch deleted underneath — the classic post-rebase mess) and the reverse; `--repair` closes the stale workspace, recreates the worktree from `origin/$BASE`, respawns, and re-grounds via `/kingdom:self-<role>` (R52). Wired into `work.md` Step 0.5 (report → user confirms repair).
+- **Watchman three new duties** (zero extra Haiku, R40-safe): inbox-triage assist (nudges the King when questions wait > 2 ticks), stale-lane detection each tick (flags via inbox), and a once-per-day `watchman-digest` card to the user (lanes' health, PRs, pending questions, drift flags).
+
+### Fixed — longevity + correctness (highs)
+
+- Cross-block variable hygiene in `work.md`: `KJSON` assigned where shape reads happen; `PROJ KING_WS REFS_FILE KJSON BASE LOGS PROJECT SUBTASK_ID TOPIC` + pr/pod counters exported, with re-derivation guards at block tops (each bash block may be a fresh invocation).
+- Sentinel globs missed the model prefix (`*__worker-1__id.flag` never matches `…__opus-worker-1__id.flag`) in resume scan / archive / save — completed tasks re-listed as in-flight every session. Fixed in all three.
+- Done-flags now pruned post-push in `work.md` Step 6 (the v0.42.0 longevity fix existed in king.md but was never wired into the command), so the 10s poll scan stays O(active).
+- `kingdom_resync_after_merge`: guards `$WORKTREE` before its destructive git ops (empty var = `reset --hard` on cwd); rebase loop now covers `co-worker-*` + `watchman-*` too.
+- `random_task_done_line` infinite-looped on a 1-line pool; `spawn_loop`/`spawn_subagent_tab` JSON payloads now built with `jq -n --arg` (briefs with quotes/backslashes silently failed); `spawn_subagent_tab` captures its own tab's surface instead of the racy `tail -1`.
+- zsh `nomatch` guards in `self-care.md` / `init.md` / `work.md` Step 0.0 (blocks that run before `_load.sh`); `self-care` doctor-report variables actually assigned; `init` `N_ROLE_DOCS` counts the modular tree; `update` runs `diff -rq` once instead of 4×; king.md kingdom-branch creation uses `reset --hard` instead of a merge commit (R4); R27's nonexistent `watchman_backfill_pr_numbers` reference corrected; king.md Step −1 now includes all R14-mandated reads; `violet` → `Purple` fallback in work.md.
+
+Counts: functions 105 (57 core + 23 cmux + 8 browser + 17 tmux) · commands 12 (7 core + 5 role-bootstrap) · rules 55 (Tier 1 = 10 / Tier 2 = 40 / Tier 3 = 5) · cards 29.
+
+---
+
 ## [0.43.5] — 2026-06-02
 
 zsh audit extended to the inline bash in `commands/` + `roles/`: two more divergences fixed (word-split + read-only `status`).

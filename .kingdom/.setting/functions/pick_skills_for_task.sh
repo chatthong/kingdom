@@ -4,7 +4,9 @@
 pick_skills_for_task () {
   [ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched glob passes literally instead of aborting "no matches found"; auto-reverts on return
   local task_id="$1" lane="$2"
-  local routing="$WS/.kingdom/.setting/skill-routing.md"
+  # init/update copy skill-routing.md into reference/, not the .setting/ root (C3 fix).
+  local routing="$WS/.kingdom/.setting/reference/skill-routing.md"
+  [ -f "$routing" ] || { echo "⚠️ pick_skills_for_task: routing table not found ($routing) — skipping skill routing" >&2; return 1; }
   local task_file=$(ls -1t "$WS/.kingdom/$PROJECT/tasks/"*"__${lane}__${task_id}.md" 2>/dev/null | head -1)
   [ -f "$task_file" ] || return 0
 

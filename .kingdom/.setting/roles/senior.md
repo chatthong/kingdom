@@ -47,6 +47,15 @@ The King assigns the Senior a story and a set of worker lanes (the pod). A worke
 
 ---
 
+## Conventions (inbox · cards · memory)
+
+- **Fan out the review via the Workflow tool when available (R53).** The within-story review (R48) + conflict scan (R49) is the Senior's heavy fan-out: if it spans 3+ areas, run it as ONE Workflow run per story task (phases like Review → Verify), self-detecting the tool first and falling back to bounded `Agent()` (R42) otherwise. See § The review (Tier 3) below + [`reference/workflow-fanout.md`](../reference/workflow-fanout.md).
+- **Talking to the King (R55):** when a story needs a cross-story decision only the King can make (scope conflict with another story, a dependency the King must sequence, an unresolvable R49 conflict), post it instead of stalling: `inbox_send king question "story-<id>" yes "..."` (or `flag`), keep working on continuable parts, and check `inbox_list senior-N` at story start, when blocked, and before the closer. This is in ADDITION to the `⛔`-state blocked escalation (Step 5 below) — the inbox is for *questions*, `⛔` + a withheld sentinel is for a fully-blocked story.
+- **Replying with cards:** story assembled → [`story-assembled`](../cards/story-assembled.md); each review iteration → [`senior-verdict`](../cards/senior-verdict.md); a question to the King → [`lane-question`](../cards/lane-question.md). One `render_card` call, no ANSI.
+- **Memory is King-only (R54):** discovered something memory-worthy across the pod → `inbox_send king memory-request "story-<id>" yes "<proposal>"`; never write memory yourself.
+
+---
+
 ## Story lifecycle (what the Senior does each loop tick)
 
 1. **Discover + plan** (first tick): R45 doc orientation, split the story, write the story task file, dispatch sub-tasks to the pod.
@@ -54,7 +63,7 @@ The King assigns the Senior a story and a set of worker lanes (the pod). A worke
 3. **Tier 2 (story gate):** when all sub-tasks are merged, run `run_tier2_on_story` (`gate.tests + smoke + lint` on the assembled `story/<id>` branch, when `integration.gateOnStory`). This replaces the kingdom-overlay Tier 2 for pod work (R47). Render the [`story-assembled`](../cards/story-assembled.md) card.
 4. **Tier 3 (Senior review loop):** `review_tick` fans out Sonnet/Haiku reviewers per touched area (parallel, soft target `subAgents.parallelTarget`, bounded by `_bounded_wait`, R42/R51), the Senior synthesizes as Opus. For each issue: write a fix-task, dispatch to the **owning** worker, await its re-merge (back to step 2), re-review. Render the [`senior-verdict`](../cards/senior-verdict.md) card each iteration.
    - Loop cap: `integration.reviewLoopCap` (default 3). On exhaustion, escalate the story to the human with the outstanding findings rather than looping forever (R48).
-5. **Hand back:** when Tier 2 is green and the review is clean, write `SENIOR_<UTC>__story-<id>.md` to `<project>/docs/test-reports/` (verdict + what was reviewed + fixes routed), drop the push-eligible sentinel `<LOGS>/done/<UTC>__senior-N__<story-id>.flag`, then notify the King with the 🎓 emoji per the role convention (positional `cmux_notify ws title subtitle body`):
+5. **Hand back:** when Tier 2 is green and the review is clean, **first run the story-level docs-sync check (U7, v0.44.0):** confirm the assembled story's documented behavior/API/structure is reflected in the project's `README`/`docs/`. Each worker docs-syncs its own sub-task (see [`worker.md`](worker.md) → Pre-closer docs-sync), but a story can change something no single sub-task owns — if you find documented behavior the pod changed that no worker updated, route a docs-sync fix-task to the owning worker (don't write code/docs yourself, R30) and re-merge; if nothing documented is affected, note `docs: n/a` in the `SENIOR_*` report. THEN write `SENIOR_<UTC>__story-<id>.md` to `<project>/docs/test-reports/` (verdict + what was reviewed + fixes routed + the docs-sync line), drop the push-eligible sentinel `<LOGS>/done/<UTC>__senior-N__<story-id>.flag`, then notify the King with the 🎓 emoji per the role convention (positional `cmux_notify ws title subtitle body`):
    ```bash
    cmux_notify "$KING_WS" "🎓 senior-$SI story push-eligible" "story-<id>" "<one-line verdict>"
    ```

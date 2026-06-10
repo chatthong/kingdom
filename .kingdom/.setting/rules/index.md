@@ -30,7 +30,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 
 **Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
 
-Tier 1 = 10. Tier 2 = 38. Tier 3 = 5. Total = 53 rules.
+Tier 1 = 10. Tier 2 = 40. Tier 3 = 5. Total = 55 rules.
 
 ---
 
@@ -96,6 +96,8 @@ Violating Tier 1 = kingdom is worse than running solo.
 | R51 | 2 | Every lane master + King fans heavy work out to parallel sub-agents (soft target ~10; sonnet/haiku/opus by work type) | [R51-lane-roles-fan-out-sub-agents.md](R51-lane-roles-fan-out-sub-agents.md) |
 | R52 | 2 | Role-grounding is pull-from-disk: King injects `/kingdom:self-<role>` first at spawn; any role re-runs it to re-ground | [R52-role-grounding-pull-from-disk.md](R52-role-grounding-pull-from-disk.md) |
 | R53 | 2 | Sub-agent fan-out runs through the Workflow tool when available (→ `/workflows` UI, one run per task); falls back to bounded `Agent()`/tabs | [R53-fan-out-via-workflow-tool.md](R53-fan-out-via-workflow-tool.md) |
+| R54 | 2 | Memory writes are King-only; lanes request via inbox `memory-request` (validated against R34) | [R54-memory-writes-are-king-only.md](R54-memory-writes-are-king-only.md) |
+| R55 | 2 | Two-way inbox protocol — lanes never stall silently; King triages every poll tick | [R55-two-way-inbox-protocol.md](R55-two-way-inbox-protocol.md) |
 
 ## Conflict resolution
 

@@ -40,6 +40,14 @@ One rule defines the watchman's place in the **story-pod three-way split** (it g
 
 ---
 
+## Conventions (inbox · cards · memory)
+
+- **Talking to the King (R55):** the watchman already routes alerts to the King via `cmux_notify` + the king-inbox fallback, but for a *question* or a structural flag that needs a King decision, use the durable inbox: `inbox_send king flag "<context>" yes "..."` (or `question`). It never blocks — the watchman is a `/loop`, it always continues. (See the new Inbox-triage-assist + stale-lane duties below, which are the watchman's own inbox-aware work.)
+- **Replying with cards:** urgent tick → [`watchman-tick`](../cards/watchman-tick.md); blocked lane detected → [`blocked-lane`](../cards/blocked-lane.md); individual event → [`watchman-alert`](../cards/watchman-alert.md); once-per-day digest → [`watchman-digest`](../cards/watchman-digest.md). One `render_card` call, no ANSI.
+- **Memory is King-only (R54):** if a scan surfaces something memory-worthy (a recurring drift pattern, a project fact), the watchman does NOT write memory — it sends `inbox_send king memory-request "<scan>" yes "<proposal>"`. (The watchman's existing write authority stays scoped to `WATCH_*`/`watchman_state.json`/low-risk doc fixes — memory was never in scope, R54 just makes the routing explicit.)
+
+---
+
 ## `/loop` body (the 8-step tick)
 
 Tick cycle: each iteration of the watchman's `/loop`, with a dashed return arrow showing the loop.
@@ -90,6 +98,10 @@ Each `/loop` tick does:
 WS=<workspace-root>
 PROJ=$WS/<project>
 LOGS=$WS/.kingdom/$(basename "$PROJ")/logs
+WORKTREES="$PROJ/.worktrees"           # C7 (v0.44.0): the lane worktree root. Used by every
+                                       # Duty-1/3/6/7/8 per-lane diff (git -C "$WORKTREES/$LANE" …).
+                                       # Without this, those `git -C` calls expanded to a bare
+                                       # "/$LANE" filesystem path and silently reviewed nothing.
 WI=1                                   # this watchman's index (1 for the default single watchman;
                                        # 2, 3, … in a multi-watchman setup — see § Multiple watchmen).
                                        # Used in every cmux_notify title (🕵️ watchman-$WI) + worktree path.
@@ -438,7 +450,7 @@ Pay special attention to:
 - Any 'decisions' / 'ADR' / 'rfc' files — locked-in architectural choices
 
 == Lane diff (the work to review) ==
-git -C $WORKTREES/$LANE diff $LAST_SHA..$NEW_SHA
+git -C "$WORKTREES/$LANE" diff "$LAST_SHA".."$NEW_SHA"
 
 == Output file ==
 $REVIEW_FILE
@@ -756,6 +768,73 @@ Agent(
 )
 fi   # end missing-tests change-gate
 ```
+
+---
+
+## Helper duties — what makes the watchman actually useful (v0.44.0)
+
+Beyond the eight Haiku surveillance duties, the watchman runs three lightweight per-tick helper duties that turn it from a passive smoke-runner into the King's active assistant. **None of them spawns a Haiku** — they read existing state (`watchman_state.json`, the king inbox, `git worktree list`) — so they cost nothing against the R40 cap and are exempt from change-gating (they're cheap reads, not recomputes).
+
+### Helper duty A — Inbox triage assist (every tick)
+
+The watchman is the King's eyes; the King's inbox is a place the King can fall behind on. Each tick, the watchman summarises the King's pending questions and nudges if anything is going stale:
+
+```bash
+PENDING=$(inbox_pending_count king 2>/dev/null || echo 0)
+if [ "$PENDING" -gt 0 ]; then
+  # One-line roll-up into THIS tick's log (King reads it in the tick summary).
+  echo "📨 King inbox: $PENDING pending" >> "$LOGS/watch/WATCH_TICK_${UTC}.md"
+  # Track per-question tick-age in watchman_state.json (inbox_ages map). For any
+  # needs-reply item that has now waited > 2 ticks unanswered, nudge the King —
+  # a question the King hasn't seen is exactly the silent-stall R55 fights.
+  while IFS= read -r MSG; do
+    [ -f "$MSG" ] || continue
+    KEY=$(basename "$MSG")
+    AGE=$(jq -r ".inbox_ages[\"$KEY\"] // 0" "$LOGS/watchman_state.json")
+    AGE=$((AGE + 1))
+    jq ".inbox_ages[\"$KEY\"] = $AGE" "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+    if [ "$AGE" -gt 2 ]; then
+      cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Inbox stale · $KEY" \
+        "A lane question has waited $AGE ticks unanswered — triage it."
+    fi
+  done < <(inbox_list king 2>/dev/null)
+fi
+```
+
+This is read-only on the inbox — the watchman never answers a question (only the King does, R55); it only *surfaces* and *escalates* staleness.
+
+### Helper duty B — Stale-lane detection (every tick · the user's #11 pain)
+
+After rebases, branch deletes, or a worktree prune, a cmux workspace can stay alive while the `worker-N` worktree/branch underneath it was deleted — the lane *looks* running but has no work surface, and a dispatch to it silently lands in a dead shell. The watchman runs the **detect-only** repair helper each tick and flags any disconnect to the King:
+
+```bash
+# kingdom_repair_stale_lanes runs detect-only here (it reports workspace↔worktree
+# mismatches without touching anything — repair is the King's call, R30).
+DISCONNECTS=$(kingdom_repair_stale_lanes --detect-only "$PROJ" 2>/dev/null)
+if [ -n "$DISCONNECTS" ]; then
+  inbox_send king flag "stale-lane" yes "Workspace↔worktree disconnect detected: $DISCONNECTS — a lane is alive but its worktree/branch is gone (likely a rebase/prune). Re-spawn or repair before dispatching to it."
+  cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Stale lane · disconnect" "$DISCONNECTS"
+fi
+```
+
+The watchman only **detects + flags** — it never removes/recreates a worktree (R11 read-only on git state; only the King repairs, R30). `kingdom_repair_stale_lanes` is the shared helper (in `functions/`).
+
+### Helper duty C — Daily digest (once per local day)
+
+Once per local day, the watchman renders a human-facing fleet-health digest — the day's lanes / PRs / develop trend / pending questions / doc-drift in one card. Gate it on a `last_digest_date` marker so it fires exactly once per day; it reads only already-computed state, so it adds no Haiku:
+
+```bash
+TODAY=$(date +%Y-%m-%d)                                  # local date
+LAST_DIGEST=$(jq -r '.gates.last_digest_date // empty' "$LOGS/watchman_state.json")
+if [ "$TODAY" != "$LAST_DIGEST" ]; then
+  # Render the watchman-digest card (variables pulled from watchman_state.json,
+  # the day's WATCH_* reports, and inbox_pending_count king). See cards/watchman-digest.md.
+  render_card "watchman-digest"
+  jq ".gates.last_digest_date = \"$TODAY\"" "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
+fi
+```
+
+All three helper duties respect the R40 Haiku cap (they spawn zero Haiku) and the change-gating discipline (Duty C is date-gated; A and B are cheap reads run every tick).
 
 ---
 
@@ -1384,7 +1463,10 @@ Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the sa
 - Maintain the cross-tick **findings ledger** (dedup, persistence-escalation, auto-resolve, notify-fallback to king-inbox) and attach a **suggested action** + a per-tick **"King's next action"** line so every finding is actionable, not just noise (v0.40.0).
 - Track the **develop-health trend** (sustained-RED vs one-off, flaky-test detection).
 - Backfill `(PR #pending) → (PR #N)` on TODO/CSV close-suffixes (R27).
-- Render the `watchman-alert` / `watchman-tick` / `blocked-lane` cards (from the `cards/` directory) on alert-worthy events.
+- **Triage assist (v0.44.0):** surface the King's pending-inbox count each tick + nudge the King when a `needs-reply` question waits > 2 ticks (Helper duty A) — read-only on the inbox; never answers.
+- **Stale-lane detection (v0.44.0):** run `kingdom_repair_stale_lanes --detect-only` each tick + `inbox_send king flag` any workspace↔worktree disconnect (Helper duty B) — detect-only, the King repairs.
+- **Daily digest (v0.44.0):** render the `watchman-digest` card once per local day (Helper duty C) — fleet health, PRs, pending questions, doc-drift in one card.
+- Render the `watchman-alert` / `watchman-tick` / `blocked-lane` / `watchman-digest` cards (from the `cards/` directory) on alert-worthy events.
 - Call `cmux_notify` to alert King / the user.
 - Update `cmux_set_state` for sidebar visibility.
 - Maintain `<LOGS>/watchman_state.json`.

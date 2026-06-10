@@ -26,8 +26,21 @@ kingdom_overlay_lane () {
     return 1
   fi
 
-  # Apply lane's diff as dirty working-tree changes
-  if ! git -C "$proj" diff "origin/$base..$lane" | git -C "$proj" apply --3way; then
+  # Apply lane's diff as dirty working-tree changes.
+  # C4: a `git diff … | git apply` PIPE takes apply's exit status — if the diff
+  # fails (lane branch missing) apply gets EMPTY input and returns 0, so the
+  # overlay "succeeds" with zero changes and Tier-2 gates run against an empty
+  # kingdom. Capture-then-apply, failing loudly on diff error OR empty patch.
+  local patch
+  if ! patch=$(git -C "$proj" diff "origin/$base..$lane" 2>/dev/null); then
+    echo "❌ overlay failed: git diff origin/$base..$lane errored (does $lane exist?)" >&2
+    return 1
+  fi
+  if [ -z "$patch" ]; then
+    echo "❌ overlay refused: $lane has zero diff vs origin/$base (branch missing or no work). Refusing to gate an empty overlay." >&2
+    return 1
+  fi
+  if ! printf '%s\n' "$patch" | git -C "$proj" apply --3way; then
     echo "❌ overlay failed: git apply --3way returned non-zero for $lane → kingdom" >&2
     return 1
   fi

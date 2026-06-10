@@ -14,6 +14,14 @@ random_task_done_line () {
   local count=${#lines[@]}
   [ "$count" -eq 0 ] && return 0
 
+  # H6: with a 1-line pool, `RANDOM % 1` is always 0; if last==0 the
+  # "pick something != last" loop never breaks → session hang. Short-circuit.
+  if [ "$count" -le 1 ]; then
+    echo "0" > "$last_file"
+    echo "${lines[0]}"
+    return 0
+  fi
+
   # Pick a random index that isn't last
   local idx
   while true; do

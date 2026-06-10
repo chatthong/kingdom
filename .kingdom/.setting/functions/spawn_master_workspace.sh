@@ -47,7 +47,16 @@ spawn_master_workspace () {
   # robust to the wrapped {workspaces:[…]} schema. Plus a LOUD post-launch
   # verify — read the screen and confirm Claude actually booted instead of
   # assuming a fixed sleep was enough.
-  local surface=$(cmux_first_surface "$ref")
+  # U12: a freshly-created workspace may report NO surfaces for a moment — poll
+  # cmux_first_surface in a bounded retry (up to 6 tries, ~1.5s apart) instead of
+  # giving up after one empty read (which left the REPL unlaunched → dispatch in shell).
+  local surface="" stries=0
+  while [ "$stries" -lt 6 ]; do
+    surface=$(cmux_first_surface "$ref")
+    [ -n "$surface" ] && break
+    sleep 1.5
+    stries=$((stries + 1))
+  done
   if [ -n "$surface" ]; then
     cmux_rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"claude\n\"}"
     local tries=0 booted=""

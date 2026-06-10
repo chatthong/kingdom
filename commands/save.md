@@ -14,6 +14,8 @@ From `$ARGUMENTS`, extract the first positional token as `<project>`. If absent,
 Verify the project is initialised:
 
 ```bash
+# C9: source the helper loader once so render_card / _bounded_wait / cmux_* resolve later in this command.
+[ -f "$PWD/.kingdom/.setting/functions/_load.sh" ] && source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
 ls "$PWD/.kingdom/${project}/" 2>/dev/null && echo "PROJECT_EXISTS" || echo "PROJECT_MISSING"
 ```
 
@@ -70,7 +72,9 @@ collect_lane_state () {
     if [ "$tf_lane" = "$lane" ]; then
       tid=$(echo "$base" | sed 's/.*__//')
       has_sentinel=0
-      ls "$LOGS/done"/*"__${lane}__${tid}.flag" >/dev/null 2>&1 && has_sentinel=1
+      # H2: real sentinels are <UTC>__<model>-<lane>__<id>.flag — the model prefix (opus-) sits
+      # between __ and the lane, so a plain *__<lane>__ glob misses every one. Match the prefix.
+      ls "$LOGS/done"/*"__"*"-${lane}__${tid}.flag" >/dev/null 2>&1 && has_sentinel=1
       if [ "$has_sentinel" = "0" ]; then
         task_file="$tf"
         task_id="$tid"
@@ -211,6 +215,8 @@ cat "$STATE_FILE"
 Per R28 (parallel-by-default), close all lane workspaces concurrently. King's workspace (`$KING_WS`) is NOT closed — your conversation persists.
 
 ```bash
+# C9: re-source the loader (bash state does NOT persist between markdown blocks) so cmux_* / _bounded_wait resolve.
+[ -f "$PWD/.kingdom/.setting/functions/_load.sh" ] && source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
 [ -n "${ZSH_VERSION:-}" ] && emulate -L sh 2>/dev/null  # zsh: word-split $LANE_WSes/$CLOSE_PIDS in the loops below (else 1 iteration over the whole blob); auto-reverts
 echo "Closing lane workspaces..."
 
@@ -259,6 +265,8 @@ echo "[$UTC] 👑 kingdom:save · session snapshotted · ${project} · ${DONE_CO
 Render the `session-saved` card:
 
 ```bash
+# C9: re-source the loader so render_card resolves in this block.
+[ -f "$PWD/.kingdom/.setting/functions/_load.sh" ] && source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
 export PROJECT="$project" SAVED_AT_UTC="$UTC" DONE_COUNT READY_FOR_FRESH_WORK
 export OPEN_PR_COUNT=$(echo "$OPEN_PRS" | jq length)
 render_card "session-saved"

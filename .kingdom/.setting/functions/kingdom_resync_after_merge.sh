@@ -5,6 +5,13 @@ kingdom_resync_after_merge () {
   local merged_pr="$1" merged_lane="$2"   # e.g. 246, worker-3
   local before after
 
+  # H5: this function runs `reset --hard`, `clean -fd`, `branch -f`, `rebase` —
+  # an empty $WORKTREE means `git -C ""` operates on CWD and could destroy
+  # whatever repo you happen to be in. Refuse to run unless $WORKTREE is a set,
+  # real git repo.
+  [ -n "$WORKTREE" ] || { echo "❌ kingdom_resync_after_merge: \$WORKTREE unset — refusing (would target cwd with destructive git ops)" >&2; return 1; }
+  git -C "$WORKTREE" rev-parse --git-dir >/dev/null 2>&1 || { echo "❌ kingdom_resync_after_merge: \$WORKTREE ($WORKTREE) is not a git repo — refusing" >&2; return 1; }
+
   before=$(git -C "$WORKTREE" rev-parse origin/"$BASE")
 
   # Step 1: clean overlay state on kingdom (drop any uncommitted overlay)
@@ -54,8 +61,10 @@ kingdom_resync_after_merge () {
   # out in a .worktrees/<lane> linked worktree — the normal kingdom layout — and
   # the unguarded switch would then leave the main worktree rebasing the WRONG
   # branch (silently corrupting kingdom). Operate on the lane's worktree directly.
+  # H5: rebase ALL local lane branches, not just worker-* — co-worker-*/watchman-*
+  # otherwise drift from base forever.
   local lanes_freed="$merged_lane" lane lane_wt
-  for lane in $(git -C "$WORKTREE" branch --list 'worker-*' | tr -d ' *'); do
+  for lane in $(git -C "$WORKTREE" branch --list 'worker-*' 'co-worker-*' 'watchman-*' | tr -d ' *'); do
     [ "$lane" = "$merged_lane" ] && continue
     [ -z "$(git -C "$WORKTREE" log "$BASE..$lane" 2>/dev/null)" ] && {
       git -C "$WORKTREE" branch -f "$lane" "$BASE"

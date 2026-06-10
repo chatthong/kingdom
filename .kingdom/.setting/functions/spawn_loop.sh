@@ -13,5 +13,8 @@ spawn_loop () {
   local ws_ref="$1" brief="$2"
   local surface=$(cmux_first_surface "$ws_ref")
   if [ -z "$surface" ]; then echo "❌ spawn_loop: no surface in $ws_ref" >&2; return 1; fi
-  cmux_rpc surface.send_text "{\"surface_id\":\"$surface\",\"text\":\"$brief\n\"}"
+  # H8: build the payload with jq so a brief containing " or \ can't malform the
+  # JSON (raw interpolation silently broke the RPC → lane sat idle at a prompt).
+  local payload=$(jq -cn --arg s "$surface" --arg t "$brief"$'\n' '{surface_id:$s,text:$t}')
+  cmux_rpc surface.send_text "$payload"
 }

@@ -32,6 +32,9 @@ Reusable display templates the kingdom prints to the user in chat. Commands and 
 | [`watchman-tick.md`](watchman-tick.md) | `[!NOTE]` / `[!CAUTION]` | Watchman /loop tick autonomous summary (v0.29.0+) |
 | [`update-report.md`](update-report.md) | `[!IMPORTANT]` | `/kingdom:update` Step 6 — workspace migration complete (v0.38.0+) |
 | [`role-grounded.md`](role-grounded.md) | `[!NOTE]` | `/kingdom:self-<role>` — role re-grounded from disk (v0.39.0, R52) |
+| [`lane-question.md`](lane-question.md) | `[!WARNING]` | A lane posts an inbox question to the King (v0.44.0, R55) |
+| [`watchman-digest.md`](watchman-digest.md) | varies (NOTE/CAUTION) | Watchman's once-per-day fleet-health digest to the user (v0.44.0) |
+| [`self-learn-summary.md`](self-learn-summary.md) | `[!NOTE]` | `/kingdom:self-learn` 3-layer doc grounding (1-3 cards) (v0.44.0) |
 
 ## Alert flavour → colour mapping
 

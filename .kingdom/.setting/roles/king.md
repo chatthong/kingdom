@@ -22,6 +22,8 @@ See [`index.md`](../index.md) for the entry-point overview, [`worker.md`](worker
 - Runs **FINAL conflict check** after the user's "push" OK (re-verifies the lane still merges cleanly into the latest `origin/develop`).
 - **SOLE PUSHER** (R1) — solo path: carves `feature/<topic>` byte-for-byte from the lane tip (R9); pod path: pushes the Senior's `story/<id>` branch as a `story/<id> -> develop` PR. Then `git push` + `gh pr create`. Lane masters, Seniors, co-workers, and the watchman never push.
 
+**Replying with cards (convention).** User-facing replies render the matching card, not raw prose: gate pass → [`task-complete`](../cards/task-complete.md); push ask → [`push-prompt`](../cards/push-prompt.md); gate fail → [`gate-fail`](../cards/gate-fail.md); conflict → [`conflict-detected`](../cards/conflict-detected.md); a lane's relayed question → [`lane-question`](../cards/lane-question.md). One `render_card` call; never ANSI (cards wrap box-drawing in a GitHub alert). A short free-form status answer is fine as prose.
+
 ---
 
 ## Live workspace description (PRIMARY mode)
@@ -686,11 +688,27 @@ Before reading watchman state, King reads every authoritative context source:
 ```bash
 WS="$PWD"   # workspace root (where the King was launched)
 
+# 0. Kingdom rules — the authoritative protocol (R14: rules FIRST, before everything).
+#    Read the registry + the 10 Tier-1 rules in full; skim Tier-2/3. The plugin
+#    rules override memory (R34), so they are read before MEMORY.md below.
+[ -f "$WS/.kingdom/.setting/rules/index.md" ] && Read "$WS/.kingdom/.setting/rules/index.md"
+
 # 1. Workspace-level CLAUDE.md — workspace rules, project map, cross-cutting conventions
 [ -f "$WS/CLAUDE.md" ] && Read "$WS/CLAUDE.md"
 
 # 2. Project-level CLAUDE.md — local stack, gate commands, project-specific rules
 [ -f "$WS/${PROJECT}/CLAUDE.md" ] && Read "$WS/${PROJECT}/CLAUDE.md"
+
+# 2a. Project README + docs index — the project's own documented entry point.
+#     R14 mandates reading the project's top-level docs, not just its CLAUDE.md;
+#     skipping them is how a King dispatches against undocumented-to-it conventions.
+#     (The deep project-docs digest is the R45 haiku_read_docs_orientation fan-out,
+#     listed in § Working WITH the Watchman → Mandatory reads; these two are the
+#     cheap top-level reads that always happen inline.)
+[ -f "$WS/${PROJECT}/README.md" ] && Read "$WS/${PROJECT}/README.md"
+for DOCIX in "$WS/${PROJECT}/docs/README.md" "$WS/${PROJECT}/docs/index.md"; do
+  [ -f "$DOCIX" ] && Read "$DOCIX"
+done
 
 # 3. Auto-memory index — durable user preferences, feedback rules, project facts
 WS_KEY=$(echo "$WS" | sed 's|/|-|g; s|^-|-|')   # encode path the way Claude Code does
@@ -716,8 +734,10 @@ The King synthesises this into a brief "context loaded" line in the kickoff outp
 
 ```
 👑 Context loaded:
+   • Kingdom rules         (rules/index.md — 55 rules, 10 Tier-1 read in full)
    • Workspace CLAUDE.md   (my-workspace — multi-project workspace, N projects)
    • Project CLAUDE.md     (my-app — <stack>, develop→main flow)
+   • Project README/docs   (my-app — README + docs/ index)
    • MEMORY.md             (42 entries — 18 feedback, 7 user, 14 project, 3 reference)
    • Personal notes        (NOTES.md — read but never quoted)
 ```
@@ -734,8 +754,10 @@ Then the watchman state read happens (per § "Mandatory reads" above). The combi
 👑 Good morning.
 
 Context loaded:
+   • Kingdom rules         (rules/index.md — 55 rules, 10 Tier-1 read in full)
    • Workspace CLAUDE.md   (my-workspace — multi-project workspace, N projects)
    • Project CLAUDE.md     (my-app — <stack>, develop→main flow)
+   • Project README/docs   (my-app — README + docs/ index)
    • MEMORY.md             (42 entries; will load specific ones JIT)
    • Personal notes        (NOTES.md — read but never quoted)
 
@@ -807,6 +829,42 @@ done < <(find "$INBOX" -maxdepth 1 \( -name 'WATCH_*' -o -name 'NOTIFY_*' \) 2>/
 # if a consume is ever skipped.
 find "$INBOX" -name 'NOTIFY_*' -mtime +3 -delete 2>/dev/null
 ```
+
+### Inbox triage — lane questions + flags (mandatory, every poll tick · R55)
+
+Separate from the watchman's notify-fallback (`king-inbox/`, above), the **two-way inbox** (R55) is how lanes ask the King things without stalling. Directory: `$WS/.kingdom/<project>/inbox/king/`. A lane that hits a question or blocker posts `inbox_send king question <task> yes "..."` (or `flag`), sets its state to `❓ waiting on King`, and **keeps working** — so the ball is in the King's court, and the King must triage every poll tick or the lane idles needlessly.
+
+```bash
+# Every poll tick (and at every decision point): drain the king inbox.
+PROJECT=$(basename "$PROJ")
+while IFS= read -r MSG; do
+  [ -f "$MSG" ] || continue
+  inbox_read "$MSG"                          # read the front matter + body
+  TYPE=$(awk -F': ' '/^type:/{print $2; exit}' "$MSG")
+  FROM=$(awk -F': ' '/^from:/{print $2; exit}' "$MSG")
+  TASK=$(awk -F': ' '/^task:/{print $2; exit}' "$MSG")
+  case "$TYPE" in
+    question|flag)
+      # Answer it (King's call) OR escalate a genuine user-decision to the user.
+      # Reply routes back to the asking lane's inbox + nudges its pane.
+      inbox_reply "$FROM" "$TASK" "<the answer / decision>"
+      guard_lane_workspace_exists "$FROM" && cmux_send "$FROM" "King replied in your inbox — inbox_list $FROM"
+      ;;
+    memory-request)
+      # The King is the SOLE memory writer (R54). Validate against R34 (rules
+      # override memory; no duplicates), then write it yourself or decline.
+      # Either way, reply so the lane knows the outcome.
+      inbox_reply "$FROM" "$TASK" "memory-request <accepted+written | declined: <reason>>"
+      ;;
+    docs-update|info)
+      : # fold into the current decision; no reply needed
+      ;;
+  esac
+  inbox_read "$MSG" --consume               # archive after handling — keep the queue live
+done < <(inbox_list king 2>/dev/null)
+```
+
+A `question`/`flag` the King can't decide alone (it's a real product/scope call) gets **escalated to the user**, not silently sat on. `memory-request` is King-only to write (R54). Consume each item after handling so the inbox stays a work queue. The watchman's Inbox-triage-assist duty (see [`watchman.md`](../roles/watchman.md)) nudges the King if any `needs-reply` item waits > 2 ticks — a second safety net so no lane stalls unseen.
 
 ### What changes when there's NO watchman (shape: `watchman: 0`)
 
@@ -918,6 +976,8 @@ Minimum brief contents:
 ```text
 worker-1, task <sub-task-id>:
 
+  📚 Read first:  <3-7 files — project CLAUDE.md (always) + matching docs/ + key
+                  source files; see § Composing the Read-first list> (REQUIRED, R45)
   Brief:        <2-4 lines — what to do + acceptance criteria>
   Source link:  <CSV row / GH issue URL / file path / anything pointing to the canonical task spec>
   Patterns to grep first (MANDATORY — Layer 1 Discovery):
@@ -928,6 +988,9 @@ worker-1, task <sub-task-id>:
   Default stance:  The project HAS a pattern. Find it before inventing.
                    Burden of proof: if "no pattern exists" — show me the grep
                    output that proves it.
+  Fan-out:      Long/multi-file work → Workflow tool (R53; self-detect, else
+                bounded Agent()/tabs). One Workflow run per task.
+  Questions:    inbox_send king question <id> yes "..." — don't stall (R55).
   Gate:         runs kingdom.json.gate.* after completion (standard)
   Closer:       4-step (raw + curated + log + sentinel flag) per worker.md
   Task file:    Step 0 — write <workspace>/.kingdom/<project>/tasks/<UTC>__worker-1__<id>.md before any sub-agent dispatch
@@ -939,6 +1002,16 @@ worker-1, task <sub-task-id>:
                 don't bother showing me" (set to "background"). See
                 worker.md → "Per-task override".
 ```
+
+### Composing the Read-first list (`${READ_FIRST_LIST}`, REQUIRED · U5/R45)
+
+Every brief carries a `📚 Read first` block — 3 to 7 files the lane MUST read before any code or plan (see [`cards/dispatch-brief.md`](../cards/dispatch-brief.md)). This is the per-task complement to the lane's own R45 doc orientation: it points the lane straight at the load-bearing files so it doesn't implement against a guess (the real "lanes don't read docs before implementing" failure). The King picks the list this way:
+
+1. **Project CLAUDE.md — ALWAYS the first entry.** Non-negotiable; it carries the project's conventions + gate commands.
+2. **`docs/` files matching the task domain.** Grep the docs index + filenames for the brief's domain nouns: `ls "$PROJ"/docs/**/*.md 2>/dev/null` then match topic words (auth, seo, billing, …). Add the 1-3 most relevant.
+3. **The task's key source files.** Grep the brief's nouns/symbols against the repo (`grep -rln "<symbol>" "$PROJ/src" 2>/dev/null | head`) to find the files the task extends + their immediate call sites. Add the 1-3 closest.
+
+Keep it to 3-7 — enough to ground, not a reading list that drowns the task. Each entry is `  • <path> — <why one-liner>`. Never leave it empty (the project CLAUDE.md floor guarantees at least one).
 
 **No path locks in the brief.** The worker reads the brief, plans (multi-layer task file), decides which files / notebooks / spreadsheets / docs to touch. King prevents cross-lane conflicts at TWO points:
 
@@ -990,7 +1063,9 @@ cd "$PROJ"
 git fetch origin
 git status                                   # must be clean
 git checkout kingdom 2>/dev/null || git checkout -b kingdom
-git merge --no-edit "origin/$BASE"
+# R4: kingdom NEVER takes a merge commit. The branch was just (re)created as a
+# clean overlay base — hard-reset it to the base tip, never `git merge`.
+git reset --hard "origin/$BASE"
 
 # ─── Phase 2: ensure dirs exist ─────────────────────────────────────────
 grep -q "^\.worktrees/" "$PROJ/.gitignore" || echo ".worktrees/" >> "$PROJ/.gitignore"

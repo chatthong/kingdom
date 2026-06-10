@@ -24,6 +24,13 @@ Read these in order — this IS the R14 read order, scoped to the role:
 
 Then render the [`role-grounded`](../cards/role-grounded.md) card with the role's identity, model, allowed verbs, banned verbs, gate tier, closer obligation, and its single most important "never."
 
+**Re-teach these four cross-cutting habits in EVERY lane re-grounding** (they are the week-of-driving fixes the self-`<role>` commands exist to reinforce):
+
+- **Fan out big work via the Workflow tool (R53).** Before implementing: if the task spans 3+ files or needs cross-codebase research, fan out via the Workflow tool per [`workflow-fanout.md`](workflow-fanout.md) — self-detect availability first; fall back to bounded `Agent()`/visible tabs (R42/R38). One Workflow run per task. (Watchman: its per-tick duty fan-out, still bounded by the R40 Haiku cap.)
+- **Read first (R45).** Ground in the docs before any code grep; the dispatch brief's `📚 Read first` list points you at the load-bearing files — read them, don't guess.
+- **Talking to the King without stalling (R55).** A question/blocker → `inbox_send king question <task> yes "..."` + set state `❓ waiting on King` + keep working on continuable parts; check your own inbox at task start, when blocked, and before the closer. Never freeze silently.
+- **Memory is King-only (R54).** Discovered something memory-worthy → `inbox_send king memory-request <task> yes "<proposal>"`; never write memory yourself.
+
 ## Per-role read map + grounding summary
 
 | `<ROLE>` | emoji · model | Role file (step 3) | Allowed (verbs) | Banned (the hard ones) | Owns gate / closer | The one "never" |

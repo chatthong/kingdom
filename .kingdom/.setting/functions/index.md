@@ -4,7 +4,7 @@
 
 > Layout: flat files = backend-agnostic mechanics, all in feature **core**; **`cmux/`** = the cmux.app PRIMARY backend (one wrapper per `cmux` subcommand + the `browser_*` wrappers); **`tmux/`** = the FALLBACK backend (v0.41.0; one wrapper per file, like `cmux/`; `kingdom_use_tmux_backend` routes `cmux_*` calls to tmux when `KINGDOM_BACKEND=tmux`). Function NAMES are action-based, not role-based — any role loads any helper. Features group by BACKEND/CAPABILITY only: **core** (always) deps **cmux** (always); **tmux** + **browser** load on demand.
 
-## core (51)
+## core (57)
 | function | purpose | file |
 |---|---|---|
 | `_bounded_wait` | — | [_bounded_wait.sh](_bounded_wait.sh) |
@@ -26,11 +26,17 @@
 | `guard_lane_workspace_exists` | — | [guard_lane_workspace_exists.sh](guard_lane_workspace_exists.sh) |
 | `guard_no_worktree_cd` | — | [guard_no_worktree_cd.sh](guard_no_worktree_cd.sh) |
 | `haiku_read_docs_orientation` | — | [haiku_read_docs_orientation.sh](haiku_read_docs_orientation.sh) |
+| `inbox_list` | List a recipient's pending inbox messages, oldest first (U4). | [inbox_list.sh](inbox_list.sh) |
+| `inbox_pending_count` | Integer count of a recipient's pending inbox messages (U4). | [inbox_pending_count.sh](inbox_pending_count.sh) |
+| `inbox_read` | Print an inbox message; `--consume` archives it (U4). | [inbox_read.sh](inbox_read.sh) |
+| `inbox_reply` | King-side sugar: post an `info` reply (needs-reply: no) to a lane (U4). | [inbox_reply.sh](inbox_reply.sh) |
+| `inbox_send` | Post a message to a recipient's inbox + best-effort workspace nudge (U4). | [inbox_send.sh](inbox_send.sh) |
 | `init_subagent_pool` | — | [init_subagent_pool.sh](init_subagent_pool.sh) |
 | `kingdom_backend_init` | Detect cmux.app vs other, export KINGDOM_BACKEND, activate the backend (v0.41.0). | [kingdom_backend_init.sh](kingdom_backend_init.sh) |
 | `kingdom_detect_backend` | Echo `cmux`/`tmux`/`standalone` from the host terminal (v0.41.0). | [kingdom_detect_backend.sh](kingdom_detect_backend.sh) |
 | `kingdom_discard_overlay` | — | [kingdom_discard_overlay.sh](kingdom_discard_overlay.sh) |
 | `kingdom_overlay_lane` | — | [kingdom_overlay_lane.sh](kingdom_overlay_lane.sh) |
+| `kingdom_repair_stale_lanes` | Detect/`--repair` the workspace↔worktree disconnect a rebase/merge leaves behind (U11). | [kingdom_repair_stale_lanes.sh](kingdom_repair_stale_lanes.sh) |
 | `kingdom_reset` | — | [kingdom_reset.sh](kingdom_reset.sh) |
 | `kingdom_resync_after_merge` | — | [kingdom_resync_after_merge.sh](kingdom_resync_after_merge.sh) |
 | `kingdom_review_surface` | — | [kingdom_review_surface.sh](kingdom_review_surface.sh) |

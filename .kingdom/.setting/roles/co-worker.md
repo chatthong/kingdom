@@ -18,6 +18,18 @@ Co-workers are **solo-path lanes** (never in a Senior's story pod — pods are w
 
 ---
 
+## Shared lane conventions (inherited from worker.md)
+
+A co-worker is a worker with an interactive dispatch flow, so it inherits the worker's task-start + close-out habits verbatim (see [`worker.md`](worker.md) → "Before implementing", "Talking to the King", "Conventions"):
+
+- **Fan out big work via the Workflow tool (R53).** Before implementing: if the task spans 3+ files or needs cross-codebase research, fan out via the Workflow tool per [`reference/workflow-fanout.md`](../reference/workflow-fanout.md) (self-detect; fall back to bounded `Agent()`/tabs). One Workflow run per task. The only co-worker twist: **the user drives the brief (R32)** — once the brief is set, the army runs identically.
+- **Talking to the King (R55):** when a decision needs the King (not the user at your side), post `inbox_send king question "$SUBTASK_ID" yes "..."`, set state `❓ waiting on King`, render the [`lane-question`](../cards/lane-question.md) card, and keep working. Check `inbox_list co-worker-N` at task start, when blocked, and before the closer. (Most co-worker questions go to the *user* directly since they're paired — use the inbox for King-only decisions like push ordering.)
+- **Replying with cards (R12 spirit):** completion → [`task-complete`](../cards/task-complete.md); blocked → [`blocked-lane`](../cards/blocked-lane.md); King question → [`lane-question`](../cards/lane-question.md); plain status → prose. One `render_card` call, no ANSI.
+- **Docs-sync on close (U7):** if the task changed documented behavior/API/structure, update the README/docs/ in the same task commit; else note `docs: n/a` in the Final summary.
+- **Memory is King-only (R54):** discovered something memory-worthy → `inbox_send king memory-request "$SUBTASK_ID" yes "<proposal>"`, never write memory yourself.
+
+---
+
 ## Lane setup (pre-spawned at kingdom startup)
 
 The co-worker's pane and worktree are created as part of the kingdom spawn checklist (see [`king.md`](king.md) → Spawning the kingdom). At session start:

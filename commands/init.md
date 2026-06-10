@@ -57,8 +57,14 @@ Wait for confirmation. On `no`, skip to Step 3 (do NOT re-copy).
 On `yes` OR if `SETTING_MISSING`, run:
 
 ```bash
+# H4: zsh aborts the whole block on an unmatched glob (the cp "$SRC/roles/"*.md lines below).
+# Disable nomatch so a missing/empty source dir fails the explicit guard, not the glob.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
 SRC="${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting"
 DST="$PWD/.kingdom/.setting"
+
+# Fail closed if the plugin source tree is absent — better an explicit error than a half-copied kit.
+[ -d "$SRC" ] || { echo "❌ plugin source $SRC missing — cannot scaffold (is CLAUDE_PLUGIN_ROOT set?)"; return 1 2>/dev/null || exit 1; }
 
 # K9 (v0.37.0): clean-replace, NOT overlay. An older flat layout (kings.md,
 # workers.md, cmux.md, …) left beside the new roles/ + reference/ dirs becomes a
@@ -70,23 +76,29 @@ if [ -d "$DST" ]; then
   mv "$DST" "$BAK"
   echo "Backed up existing .setting/ -> $(basename "$BAK") (clean-replace, no stale files carried over)"
 fi
-mkdir -p "$DST/roles" "$DST/reference" "$DST/rules" "$DST/functions" "$DST/cards"
-
-# top-level files (index + the two back-compat pointers + the feature manifest)
-cp "$SRC/index.md"        "$DST/index.md"
-cp "$SRC/manifest.json"   "$DST/manifest.json"     # v0.35.0: feature registry for load_feature
-cp "$SRC/rules.md"        "$DST/rules.md"           # pointer -> rules/index.md
-cp "$SRC/_primitives.md"  "$DST/_primitives.md"     # pointer -> functions/index.md
-
-# the one-file-each directories (copy whole dirs so every role/reference/rule .md + *.sh come along)
-cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior (one file per role, v0.40.0)
-cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing / role-bootstrap
-cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R52 + index.md
-cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ backend (cmux_* + browser_* wrappers). -R so the cmux/ subfolder comes along (plain cp skips directories).
-cp "$SRC/cards/"*.md      "$DST/cards/"
-
-# Stamp the kit version (v0.38.0+) so /kingdom:update can detect drift later.
-jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" > "$DST/.kingdom-version"
+# Copy as an all-or-nothing unit: if any cp fails (missing source dir, permissions), restore the
+# backup so the workspace is never stranded with a half-written .setting/. Mirrors update.md 5a.
+if ! (
+  set -e
+  mkdir -p "$DST/roles" "$DST/reference" "$DST/rules" "$DST/functions" "$DST/cards"
+  # top-level files (index + the two back-compat pointers + the feature manifest)
+  cp "$SRC/index.md"        "$DST/index.md"
+  cp "$SRC/manifest.json"   "$DST/manifest.json"     # v0.35.0: feature registry for load_feature
+  cp "$SRC/rules.md"        "$DST/rules.md"           # pointer -> rules/index.md
+  cp "$SRC/_primitives.md"  "$DST/_primitives.md"     # pointer -> functions/index.md
+  # the one-file-each directories (copy whole dirs so every role/reference/rule .md + *.sh come along)
+  cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior (one file per role, v0.40.0)
+  cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing / role-bootstrap
+  cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R53 + index.md
+  cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ + tmux/ backends. -R so subfolders come along (plain cp skips directories).
+  cp "$SRC/cards/"*.md      "$DST/cards/"
+  # Stamp the kit version (v0.38.0+) so /kingdom:update can detect drift later.
+  jq -r '.version' "${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json" > "$DST/.kingdom-version"
+); then
+  echo "❌ kit copy failed — restoring backup, workspace left unchanged" >&2
+  [ -d "$BAK" ] && { rm -rf "$DST"; mv "$BAK" "$DST"; }
+  return 1 2>/dev/null || exit 1
+fi
 
 echo "Scaffolded .setting/: $(find "$DST" -name '*.md' -o -name '*.sh' -o -name '*.json' | wc -l | tr -d ' ') files"
 ls -1 "$DST"
@@ -234,7 +246,17 @@ cat "$PWD/.kingdom/${project}/kingdom.json"
 Print the [`scaffold-success`](../.kingdom/.setting/cards/scaffold-success.md) card. Variant depends on whether `project` was passed:
 
 ```bash
-N_ROLE_DOCS=$(ls -1 "$PWD/.kingdom/.setting/"*.md 2>/dev/null | wc -l | tr -d ' ')
+# C9: source the helper loader so render_card resolves. Prefer the freshly-scaffolded workspace
+# copy; fall back to the plugin's own copy if the workspace one isn't present yet.
+if [ -f "$PWD/.kingdom/.setting/functions/_load.sh" ]; then
+  source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
+elif [ -f "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/functions/_load.sh" ]; then
+  source "${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting/functions/_load.sh" && load_feature core
+fi
+
+# init.md line ~237 / task-5: count ALL kit .md docs (the v0.40 modular split moved role docs into
+# roles/, rules/, reference/ subdirs — a top-level *.md glob counts only 3 pointer/index files).
+N_ROLE_DOCS=$(find "$PWD/.kingdom/.setting" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
 
 if [ -n "$project" ]; then
   # Project mode

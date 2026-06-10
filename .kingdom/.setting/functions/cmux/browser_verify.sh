@@ -5,21 +5,37 @@
 # tidy the pane. Returns 0 on PASS, 1 on FAIL.
 #   browser_verify "http://localhost:3000" "Sign in"
 #   browser_verify "http://localhost:3000/cart" "[data-testid=cart-total]"
+# U3: self-sufficient — wraps the sibling helpers (browser_open/_eval/_close) with inline
+# raw-cmux fallbacks so this file works even sourced alone.
 browser_verify () {
   local url="$1" expect="$2" surface
-  surface=$(browser_open "$url") || { echo "FAIL · could not open browser pane"; return 1; }
-  sleep 2   # let the app paint / hydrate
+  # inline browser_eval shim: use the wrapper if loaded, else raw cmux browser eval.
+  _bv_eval () {
+    if command -v browser_eval >/dev/null 2>&1; then browser_eval "$1" "$2"
+    else cmux browser "$2" eval "$1" 2>/dev/null; fi
+  }
+  if command -v browser_open >/dev/null 2>&1; then
+    surface=$(browser_open "$url") || { echo "FAIL · could not open browser pane"; unset -f _bv_eval; return 1; }
+  else
+    # Contract-verified 2026-06-10: one-call open + navigate (new-split has no --type flag).
+    surface=$(cmux browser open-split "$url" --workspace "${CMUX_WORKSPACE_ID}" --focus false 2>&1 | grep -oE 'surface:[0-9]+' | head -1)
+    [ -z "$surface" ] && { echo "FAIL · could not open browser pane"; unset -f _bv_eval; return 1; }
+  fi
+  # Wait for real load state (documented `browser wait`); fall back to a fixed pause.
+  cmux browser "$surface" wait --load-state complete --timeout 10 2>/dev/null || sleep 2
   local found console_errs esc
   esc=${expect//\"/\\\"}   # escape double-quotes for safe JS embedding (bash 3.2-safe; no ${x@Q})
   # selector if it looks like one, else text search
   case "$expect" in
     \[*\] | .* | \#* | *' > '*)
-      found=$(browser_eval "document.querySelector(\"$esc\") ? 'YES':'NO'" "$surface") ;;
+      found=$(_bv_eval "document.querySelector(\"$esc\") ? 'YES':'NO'" "$surface") ;;
     *)
-      found=$(browser_eval "document.body.innerText.includes(\"$esc\") ? 'YES':'NO'" "$surface") ;;
+      found=$(_bv_eval "document.body.innerText.includes(\"$esc\") ? 'YES':'NO'" "$surface") ;;
   esac
-  console_errs=$(browser_eval "(window.__kErrs||[]).length" "$surface")
-  browser_close "$surface"
+  console_errs=$(_bv_eval "(window.__kErrs||[]).length" "$surface")
+  if command -v browser_close >/dev/null 2>&1; then browser_close "$surface"
+  else cmux close-surface --surface "$surface" 2>/dev/null; fi
+  unset -f _bv_eval 2>/dev/null
   if [ "$found" = "YES" ]; then
     echo "PASS · found '${expect}'${console_errs:+ · console errors: $console_errs}"
     return 0

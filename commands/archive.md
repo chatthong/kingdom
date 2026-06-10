@@ -90,8 +90,9 @@ if [ -d "$TASKS_DIR" ]; then
     task_id=$(echo "$base" | sed 's/.*__//')
 
     closed=0
-    # Sentinel present?
-    ls "$DONE_DIR"/*"__${lane}__${task_id}.flag" >/dev/null 2>&1 && closed=1
+    # Sentinel present? H2: real sentinels are <UTC>__<model>-<lane>__<id>.flag — the model prefix
+    # (opus-) sits between __ and the lane, so a plain *__<lane>__ glob misses every one.
+    ls "$DONE_DIR"/*"__"*"-${lane}__${task_id}.flag" >/dev/null 2>&1 && closed=1
     # Or terminal status checked off in the file
     if [ "$closed" = "0" ]; then
       term_status=$(grep -E '^- \[x\] (done|cancelled)' "$tf" | tail -1 \

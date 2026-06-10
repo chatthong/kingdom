@@ -9,7 +9,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | File | Owns |
 |---|---|
 | **`index.md`** (this file) | Workspace layout, per-project file conventions, operating rules, bootstrap procedure, session-start mode detection, sub-agent priority chain, agent-roles summary, project registry |
-| [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R52`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
+| [`rules/`](rules/) | **Priority-tiered rules (v0.34.0: one rule per file)** — start at [`rules/index.md`](rules/index.md) (Tier-1 legend + registry of `R01`…`R55`), open only the rule files you need. King reads the index **FIRST** at session start per R14. (`rules.md` is now a pointer to this folder.) |
 | [`king.md`](roles/king.md) | King role: planning fan-out, dispatch (cmux_send / tmux / claude -p), pre-commit gate, push authority, FINAL conflict check, `kingdom` integration refresh, idle policy, reading the database |
 | [`worker.md`](roles/worker.md) | Worker role: 4-step closer (5-step for tab-spawned sub-agents), dispatch templates, spawn rights (no eco mode), task sequencing, slug convention, sub-agent lifecycle |
 | [`co-worker.md`](roles/co-worker.md) | Co-worker (user-paired) interactive protocol |
@@ -17,7 +17,7 @@ The kingdom is a workspace-level AI-agent orchestration model: a single **King**
 | [`senior.md`](roles/senior.md) | **Senior role (v0.32.0+)** — per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into the story branch, runs the review loop, marks push-eligible. Governed by R46-R50 + the R30 delegated-dispatch amendment. |
 | [`git.md`](reference/git.md) | Four branch tiers, reference figure (branch + worktree tree), commit flow, push approval gate, kingdom integration view, story integration branch, PR conventions |
 | [`cmux.md`](reference/cmux.md) | **Central cmux.app reference** — three-tier hierarchy (Workspace → Tab → Split), every cmux command the kingdom uses, env vars, common pitfalls. All roles point here for cmux details. |
-| [`functions/`](functions/) | **Shared bash helpers (one function per file)** — 99 helpers (51 core + 23 cmux + 8 browser + 17 tmux), one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. Function names are action-based (v0.40.0) — any role loads any helper. `core` loads BOTH the cmux + tmux backends; `kingdom_backend_init` picks the live one (v0.41.0). (`_primitives.md` is now a pointer to this folder.) |
+| [`functions/`](functions/) | **Shared bash helpers (one function per file)** — 105 helpers (57 core + 23 cmux + 8 browser + 17 tmux), one `.sh` each, with [`functions/index.md`](functions/index.md) as the registry and [`functions/_load.sh`](functions/_load.sh) the loader. Function names are action-based (v0.40.0) — any role loads any helper. `core` loads BOTH the cmux + tmux backends; `kingdom_backend_init` picks the live one (v0.41.0). (`_primitives.md` is now a pointer to this folder.) |
 | [`manifest.json`](manifest.json) | **Feature registry (v0.40.0)** — features group by BACKEND/CAPABILITY, not role: `core` (always; every backend-agnostic helper) deps `cmux` (always; the cmux.app wrappers); `browser` (on-demand). Function names are action-based, so **any role loads any helper** it needs (`source functions/_load.sh; load <names>`). `load_feature browser` adds the on-demand browser wrappers; core+cmux load by default. |
 | [`cards/`](cards/) | **Card display library** (v0.22.0+) — 26 reusable display templates the kingdom prints to the user. Each card wraps a box-drawn body in a GitHub alert for coloured rendering. See [`cards/README.md`](cards/README.md) for the index. |
 | [`skill-routing.md`](reference/skill-routing.md) | **Per-task skill routing** (v0.23.0+) — keyword → Claude Code skill mapping table King uses to pick 0-3 skills per dispatch-brief. Skills are per-task, not per-lane-lifetime. |
@@ -182,7 +182,7 @@ At session start, master decides mode first:
   ```bash
   load_feature tmux && export KINGDOM_BACKEND=tmux   # functions/tmux/
   ```
-  Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol (`cmux_notify` falls back to a durable `king-inbox/` file under tmux). The tmux wrappers mirror `cmux/` one-for-one — see [`functions/index.md`](functions/index.md) § tmux.
+  Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol (`cmux_notify` falls back to a durable `inbox/king/` message under tmux (v0.44.0 two-way inbox, R55)). The tmux wrappers mirror `cmux/` one-for-one — see [`functions/index.md`](functions/index.md) § tmux.
 
 - **Standalone mode:** default for everything else. No worktrees, no teammates. Master spawns parallel sub-agents via the `Agent` tool — multiple Agent calls in one message run concurrently.
 

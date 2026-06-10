@@ -215,7 +215,12 @@ Ask each field confirmation separately so the user can apply one and skip the ot
 For each project that has a `.kingdom/<project>/kingdom.json`, verify `tasks/` exists or can be created:
 
 ```bash
+# H4: zsh aborts the whole block if the glob matches nothing (no project yet). Disable nomatch so
+# the loop simply runs zero times instead of erroring.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+shopt -s nullglob 2>/dev/null  # bash: same effect — unmatched glob expands to nothing, not the literal
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
+  [ -f "$KJSON" ] || continue
   PROJ=$(basename "$(dirname "$KJSON")")
   mkdir -p "$PWD/.kingdom/$PROJ/tasks" 2>/dev/null && echo "OK $PROJ" || echo "FAIL $PROJ"
 done
@@ -237,7 +242,12 @@ No kingdom.json found — tasks/ check skipped (run /kingdom:init first).
 For each project with a `.kingdom/<project>/kingdom.json`, look for raw artifacts that have no corresponding curated digest (a sign that a lane closer was interrupted):
 
 ```bash
+# H4: disable nomatch so the empty *.md / *.txt globs (and the no-project case) run zero times,
+# not abort the whole Check-8 block. nullglob covers bash the same way.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+shopt -s nullglob 2>/dev/null
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
+  [ -f "$KJSON" ] || continue
   PROJ=$(basename "$(dirname "$KJSON")")
   RAW_DIR="$PWD/.kingdom/$PROJ/logs/raw"
   CURATED_DIR="$PWD/.kingdom/$PROJ/logs"
@@ -272,7 +282,7 @@ If no `.kingdom/*/kingdom.json` files exist yet, mark this check as not applicab
 
 ## Check 9 — Workspace `.kingdom/.setting/` is in sync with plugin source (v0.30.0+)
 
-`/kingdom:init` copies role docs, helpers, cards, and `skill-routing.md` from the plugin's `.kingdom/.setting/` into the workspace. Subsequent plugin upgrades add new files (cards/ in v0.22, skill-routing.md in v0.23, parallel_edit_fanout body in v0.30, …) that DO NOT propagate without re-running init. This check is the canary.
+`/kingdom:init` copies role docs, helpers, cards, and `reference/skill-routing.md` from the plugin's `.kingdom/.setting/` into the workspace. Subsequent plugin upgrades add new files (cards/ in v0.22, `reference/skill-routing.md` in v0.23, parallel_edit_fanout body in v0.30, …) that DO NOT propagate without re-running init. This check is the canary.
 
 ```bash
 SRC="${CLAUDE_PLUGIN_ROOT}/.kingdom/.setting"
@@ -337,6 +347,9 @@ On `N` → warning: stale files left in place. King may misbehave if it referenc
 If a project's `kingdom.json` predates v0.32.0 it will lack the `integration` block, `shape.seniors`, and the `seniors[]` array. Story pods stay off until those exist. This check is informational: report it and recommend `/kingdom:update` (the migration command — additively merges the new schema keys into every `kingdom.json`, preserving existing values + all runtime), or note the project keeps the classic per-worker flow.
 
 ```bash
+# H4: disable nomatch so the no-project case runs zero iterations instead of aborting the block.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+shopt -s nullglob 2>/dev/null
 for KJSON in "$PWD"/.kingdom/*/kingdom.json; do
   [ -f "$KJSON" ] || continue
   proj=$(basename "$(dirname "$KJSON")")
@@ -469,6 +482,9 @@ After all checks (including any patch outcomes for Check 6 + import outcomes for
 - `PATCHED` = auto-fixed after user confirmation (Check 6 settings.json or Check 9 file import)
 
 ```bash
+# C9: source the loader so render_card resolves in this final block.
+[ -f "$PWD/.kingdom/.setting/functions/_load.sh" ] && source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
+
 CHECK_RESULTS_LIST=$(printf '%s\n' \
   "${CMUX_RESULT}" "${TMUX_RESULT}" "${JQ_RESULT}" "${GH_RESULT}" "${GIT_RESULT}" \
   "${USER_SETTINGS_RESULT}" "${TASKS_WRITABLE_RESULT}" "${ORPHAN_AUDIT_RESULT}" \
@@ -476,6 +492,18 @@ CHECK_RESULTS_LIST=$(printf '%s\n' \
 
 N_FAILED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^FAIL')
 N_PATCHED=$(echo "$CHECK_RESULTS_LIST" | grep -c '^PATCHED')
+
+# task-4(a): bash state does NOT persist between markdown blocks, so the per-check version strings
+# the doctor-report card prints (OS / cmux / tmux / jq / gh / git / N_PROJECTS) must be (re)derived
+# HERE, in the same block that exports them — otherwise the card renders blank.
+[ -n "${ZSH_VERSION:-}" ] && setopt no_nomatch 2>/dev/null
+OS_VERSION=$(sw_vers -productVersion 2>/dev/null || uname -sr)
+CMUX_VERSION=$(cmux --version 2>/dev/null | head -1 || echo "not found")
+TMUX_VERSION=$(tmux -V 2>/dev/null || echo "not found")
+JQ_VERSION=$(jq --version 2>/dev/null || echo "not found")
+GH_VERSION=$(gh --version 2>/dev/null | head -1 || echo "not found")
+GIT_VERSION=$(git --version 2>/dev/null || echo "not found")
+N_PROJECTS=$(find "$PWD/.kingdom" -maxdepth 2 -name kingdom.json 2>/dev/null | wc -l | tr -d ' ')
 
 export OS_VERSION SHELL CMUX_VERSION TMUX_VERSION JQ_VERSION GH_VERSION GIT_VERSION \
   N_PROJECTS CHECK_RESULTS_LIST N_FAILED N_PATCHED PATCHED_LIST ACTION_LIST \

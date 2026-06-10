@@ -47,14 +47,14 @@ fi
 ## Step 1 — Preview the shape delta (the kit)
 
 ```bash
+# Capture the recursive diff ONCE — the display line and all three counts derive from it (was 4× diff).
+DIFF_OUT=$(diff -rq "$DST" "$SRC" 2>/dev/null | grep -v '/\.kingdom-version')
 echo "=== .setting/ changes (workspace → plugin v$NEW_VERSION) ==="
-diff -rq "$DST" "$SRC" 2>/dev/null \
-  | grep -v '/\.kingdom-version' \
-  | sed "s#$DST#workspace#g; s#$SRC#plugin#g"
+echo "$DIFF_OUT" | sed "s#$DST#workspace#g; s#$SRC#plugin#g"
 echo
-echo "changed:        $(diff -rq "$DST" "$SRC" 2>/dev/null | grep -c '^Files')"
-echo "new upstream:   $(diff -rq "$DST" "$SRC" 2>/dev/null | grep -c "Only in $SRC")"
-echo "only here:      $(diff -rq "$DST" "$SRC" 2>/dev/null | grep -c "Only in $DST")  (removed-upstream OR your local patches — preserved in the .bak)"
+echo "changed:        $(echo "$DIFF_OUT" | grep -c '^Files')"
+echo "new upstream:   $(echo "$DIFF_OUT" | grep -c "Only in $SRC")"
+echo "only here:      $(echo "$DIFF_OUT" | grep -c "Only in $DST")  (removed-upstream OR your local patches — preserved in the .bak)"
 ```
 
 Read this back to the user in plain English: how many kit files will be refreshed, how many are new in this version, and how many exist only in their workspace (either deleted upstream or local hand-edits — both are preserved in the backup, but the live tree will match the plugin after update). If any "only here" file looks like a deliberate local patch (e.g. a hand-edited `roles/*.md`), name it so the user knows it'll be replaced by the plugin's version (their copy stays in the `.bak`).
@@ -154,6 +154,10 @@ Run the identical `permissions.allow` merge from [`init.md`](init.md) Step 3 —
 ## Step 6 — Report (`cards/update-report.md`)
 
 ```bash
+# C9: source the freshly-synced loader so render_card resolves in this block (state doesn't persist
+# between markdown blocks, and 5a just replaced .setting/ — re-source the new copy).
+[ -f "$PWD/.kingdom/.setting/functions/_load.sh" ] && source "$PWD/.kingdom/.setting/functions/_load.sh" && load_feature core
+DST="${DST:-$PWD/.kingdom/.setting}"   # re-derive: cross-block state doesn't persist
 export CUR_VERSION NEW_VERSION
 export N_KIT_FILES=$(find "$DST" -type f | wc -l | tr -d ' ')
 export N_PROJECTS=$(echo "$SCOPE_PROJECTS" | grep -c kingdom.json)
