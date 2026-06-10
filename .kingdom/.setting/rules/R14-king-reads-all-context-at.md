@@ -2,7 +2,7 @@
 
 In order, BEFORE any action:
 
-0. **`rules.md`** (this file) — priority-tiered rules
+0. **[`rules/index.md`](index.md)** — the Tier-1 legend + full rule registry (R01–R55)
 1. **Workspace `CLAUDE.md`** at `$PWD/CLAUDE.md` — workspace rules + project map
 2. **Project `CLAUDE.md`** at `$PWD/<project>/CLAUDE.md` — local stack + gate commands + project-specific rules
 3. **Project `README.md`** at `$PWD/<project>/README.md` — public-facing overview, install, conventions

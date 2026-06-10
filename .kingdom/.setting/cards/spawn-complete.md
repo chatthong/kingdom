@@ -29,7 +29,7 @@
 | Var | Source | Example |
 |---|---|---|
 | `${PROJECT}` | project name | `my-app` |
-| `${WORKER_ROSTER}` | one-line `👷 worker-1 · worker-2 · worker-3 (violet)` | `👷 worker-1 · worker-2 · worker-3 (violet)` |
+| `${WORKER_ROSTER}` | one-line `👷 worker-1 · worker-2 · worker-3 (Purple)` | `👷 worker-1 · worker-2 · worker-3 (Purple)` |
 | `${COWORKER_ROSTER}` | one-line `🧑‍💼 co-worker-1 (blue)` (omit line if `co-workers=0`) | `🧑‍💼 co-worker-1 (blue)` |
 | `${WATCHMAN_ROSTER}` | one-line `🕵️ watchman-1 (rose, split layout)` (omit if `watchman=0`) | `🕵️ watchman-1 (rose, split layout)` |
 | `${TOTAL_LANES}` | King + all workers + co-workers + watchmen | `5` |

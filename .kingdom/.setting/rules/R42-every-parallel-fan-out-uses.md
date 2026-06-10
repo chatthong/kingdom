@@ -22,13 +22,13 @@ done
 _bounded_wait 60 $PIDS    # ← kills survivors after 60s; returns 124 on timeout
 ```
 
-**Budget guidance** is in [`_primitives.md`](../_primitives.md) § Bounded parallel wait. Rough defaults: 5s for cosmetic cmux fan-outs, 15s for cmux teardown, 45s for `parallel_edit_fanout`, 60s for full lane spawn.
+**Budget guidance** is in [`functions/_bounded_wait.sh`](../functions/_bounded_wait.sh). Rough defaults: 5s for cosmetic cmux fan-outs, 15s for cmux teardown, 45s for `parallel_edit_fanout`, 60s for full lane spawn.
 
 **Call sites that MUST use `_bounded_wait`:**
 
 - `commands/work.md` Step 0.4 — King workspace-rename fan-out (5s) AND all-lane spawn cycle (60s)
 - `commands/save.md` — teardown fan-out (15s)
-- `_primitives.md` `parallel_edit_fanout` — per-lane PR-flip fan-out (45s)
+- [`functions/parallel_edit_fanout.sh`](../functions/parallel_edit_fanout.sh) — per-lane PR-flip fan-out (45s)
 - `.kingdom/.setting/roles/watchman.md` — orphan-tab sweep (10s)
 - Any new parallel fan-out added in the future
 

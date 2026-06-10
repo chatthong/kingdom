@@ -8,14 +8,18 @@ pattern_grep_fanout () {
   # Fan out N Haiku scanners in parallel (capacity is unlimited per v0.15.0)
   # Each scanner reads a slice; aggregate findings.
 
-  # Mandatory checks:
-  grep -rln "$key_term" --include='*.{ts,tsx,js,py,sh,yml,yaml,json,md,env,env.example}' "$project_root"
+  # Mandatory checks. NOTE: BSD grep (macOS) does NOT expand braces in --include —
+  # the old single-pattern '*.{ts,tsx,…}' matched ZERO files. One --include per extension.
+  local _ext _inc=()
+  for _ext in ts tsx js py sh yml yaml json md env; do _inc+=(--include="*.$_ext"); done
+  grep -rln "$key_term" "${_inc[@]}" "$project_root" 2>/dev/null
 
   # Read every .env / .env.example in relevant subtree
-  find "$project_root" -name '.env*' -o -name '.env.example' | xargs cat
+  find "$project_root" -name '.env*' -o -name '.env.example' | xargs cat 2>/dev/null
 
-  # Read all scripts/ files matching the topic
-  ls "$project_root"/scripts/*"$key_term"* 2>/dev/null | xargs cat
+  # Read all scripts/ files matching the topic (find, not ls — a literal unmatched
+  # glob would make BSD ls open a nonexistent filename)
+  find "$project_root/scripts" -name "*${key_term}*" -type f 2>/dev/null | xargs cat 2>/dev/null
 
   # Read lib/*-defaults.* for HOW-TO comments
   find "$project_root" -name '*defaults*.ts' -o -name '*defaults*.py' | xargs head -30

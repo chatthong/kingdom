@@ -1,6 +1,6 @@
 ### R45. Haiku-army doc orientation before big-picture work — Tier 2 (v0.31.1+)
 
-**Every role** (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` (in [`_primitives.md`](../_primitives.md) § Orientation) when it needs the project's big picture — not piecemeal, not "just grep what I need." The fan-out is cheap (Haiku tokens, parallel) and the cost of acting on a stale mental model of the project is high (drift PRs, contradicted conventions, doc-mismatched commits).
+**Every role** (King, worker-N, co-worker-N, watchman-N) MUST call `haiku_read_docs_orientation` (in [`functions/index.md`](../functions/index.md) § Orientation) when it needs the project's big picture — not piecemeal, not "just grep what I need." The fan-out is cheap (Haiku tokens, parallel) and the cost of acting on a stale mental model of the project is high (drift PRs, contradicted conventions, doc-mismatched commits).
 
 **The unified protocol — 4 phases:**
 

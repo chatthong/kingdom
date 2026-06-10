@@ -81,7 +81,7 @@ King's auto-gate poll will pick it up and run Tier-1, then overlay onto kingdom 
 
 ## `${SUGGESTED_SKILLS}` rendering
 
-The helper `pick_skills_for_task` (in [`_primitives.md`](../_primitives.md)) returns 0-3 entries, each formatted as:
+The helper `pick_skills_for_task` (in [`functions/index.md`](../functions/index.md)) returns 0-3 entries, each formatted as:
 
 ```text
   → Skill nextjs-best-practices · matches keyword: "app router"

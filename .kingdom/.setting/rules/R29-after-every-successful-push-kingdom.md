@@ -22,8 +22,8 @@
 **Where this is already documented (but was being skipped):**
 
 - [`king.md`](../roles/king.md) § Push approval gate Step 8: `git restore .` OR `git reset --hard origin/develop`
-- [`_primitives.md`](../_primitives.md) § `carve_and_push_feature` calls `kingdom_discard_overlay` as its FINAL action
-- [`_primitives.md`](../_primitives.md) § `kingdom_discard_overlay` helper
+- [`functions/index.md`](../functions/index.md) § `carve_and_push_feature` calls `kingdom_discard_overlay` as its FINAL action
+- [`functions/index.md`](../functions/index.md) § `kingdom_discard_overlay` helper
 
 **Required sequence after the LAST PR in a push batch goes out:**
 

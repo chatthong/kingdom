@@ -4,6 +4,21 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.44.1] — 2026-06-10
+
+Closes the audit findings that fell between v0.44.0's agent ownership boundaries (nobody owned `kingdom.json.template`; two helpers weren't in the fix tracker). With this, every functional finding from the 2026-06-10 audit is fixed; the only remaining backlog is cosmetic (work.md step-number gap, `audit-summary` orphan card, faq `git.mergeStyle` mention, and pre-existing latent notes like the `_bounded_wait` rc nuance and pool TOCTOU — tracked in `docs/audits/2026-06-10-stability-audit.md`).
+
+### Fixed
+
+- **`pattern_grep_fanout` matched ZERO files on macOS** — BSD grep doesn't expand braces in `--include='*.{ts,tsx,…}'`; now one `--include` per extension (live-tested: finds files it previously missed). The `ls scripts/*$term*` line became `find` (BSD ls opens a literal unmatched glob as a filename).
+- **`kingdom.json.template` schema splits**: `subAgentPool.models` (array, never read) → `model` (string, what `spawn_pool_slot` actually reads); added the missing `welcome` block (`userName`, `weather`) that `fetch_weather_line` + the welcome card document.
+- **`init_subagent_pool`**: with `$KJSON` unset, `seq 1 ""` counted DOWN (`1 0`) and spawned two phantom slots — now fails closed + numeric-validates pool size.
+- **`cmux_read_screen`** standalone wrapper routed surface refs through `--workspace` (silently empty) — now branches `--surface`/`--workspace` like `cmux_send`'s inline check.
+- **Fail-closed git helpers**: `carve_and_push_feature` no longer pushes whatever HEAD is after a failed `checkout -b` (and reports push failures); `attach_or_create_worktree` surfaces worktree-add errors instead of `2>/dev/null`-swallowing them; `kingdom_review_surface` defaults `$BASE` to develop instead of diffing `origin/`.
+- **Doc-rot sweep**: 11 stale `_primitives.md` § links in 5 rule files + 3 cards + skill-routing.md repointed at the real `functions/` files; R14's wrong `rules.md (this file)` self-reference → `rules/index.md` (R01–R55); last `violet` color usages in `reference/cmux.md`, `docs/cmux-integration.md`, `cards/spawn-complete.md` → `Purple`.
+
+---
+
 ## [0.44.0] — 2026-06-10
 
 The big stability + communication release. A 5-agent Sonnet audit of the whole kit (~70 findings, saved to `docs/audits/2026-06-10-stability-audit.md`) followed by a 5-agent Opus fix army with strict per-directory file ownership, then a main-session verification pass against the **real cmux CLI contract** (`docs/cli-contract.md` from manaflow-ai/cmux, fetched 2026-06-10). All 9 critical audit findings fixed, plus 15 real-world consumer items from a week of fleet driving.

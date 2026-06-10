@@ -9,6 +9,12 @@
     "sanityCap": 10
   },
 
+  "welcome": {
+    "_comment": "Welcome card personalisation. userName appears in the greeting (empty = generic). weather=false disables the weather line (and its external curl).",
+    "userName": "",
+    "weather": true
+  },
+
   "subAgents": {
     "_comment": "Per-project soft ceiling for parallel sub-agent fan-out (R51). Model-by-work-type (sonnet=standard, haiku=bulk, opus=sensitive) is a fixed default defined in R51 — not a per-project knob.",
     "parallelTarget": 10
@@ -83,7 +89,8 @@
       "_comment": "Pre-warmed sub-agent process pool (v0.18.0+). Each master keeps N idle `claude -p` processes ready in hidden tabs; sub-agent spawn becomes `cmux send` to existing surface (~20ms) instead of new-terminal-right + full Claude boot (~10-20s). Refilled in background after each consumption. Disable by setting enabled=false. Only applies to tab-mode spawns; Agent() background spawns are already cheap.",
       "enabled": true,
       "perMasterPoolSize": 2,
-      "models": ["sonnet"]
+      "model": "sonnet",
+      "_modelComment": "Model for pre-warmed pool slots (read by spawn_pool_slot as .cmux.subAgentPool.model — a string, not an array)."
     },
     "watchmanLayout": {
       "_comment": "Dual-view watchman: top pane is the watchman Claude session (/loop), bottom pane is a live gh PR monitor. Set to null to disable the split and use a single-pane watchman workspace.",

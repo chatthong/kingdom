@@ -2,7 +2,7 @@
 
 When King dispatches a task to a lane, the dispatch-brief carries a `## Suggested skills` block listing 0-3 Claude Code skills the lane should invoke for this specific task. **Skills are per-task, not per-lane-lifetime.** Worker-2 doing a Supabase task today gets `supabase:supabase`; the same worker-2 doing a shadcn task tomorrow gets `shadcn:shadcn-ui`. Previous-task skills don't persist.
 
-This file is the canonical **keyword → skill** mapping table that `pick_skills_for_task` (helper in [`_primitives.md`](../_primitives.md)) reads on every dispatch.
+This file is the canonical **keyword → skill** mapping table that `pick_skills_for_task` (helper in [`functions/index.md`](../functions/index.md)) reads on every dispatch.
 
 ## How the matcher works
 

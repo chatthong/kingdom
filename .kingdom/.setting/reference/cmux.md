@@ -449,7 +449,7 @@ Colors are visible per-workspace in cmux.app's sidebar (left-edge color bar). Us
 
 ```bash
 # Color (named — case-insensitive)
-cmux workspace-action --action set-color --workspace "$WORKER_WS_1" --color violet
+cmux workspace-action --action set-color --workspace "$WORKER_WS_1" --color Purple
 cmux workspace-action --action set-color --workspace "$KING_WS"     --color amber
 
 # Description (the smaller text under the workspace name in the sidebar)
@@ -674,7 +674,7 @@ Description updates are nice-to-have, not load-bearing. If a role fails to updat
 | Workspace ref drifts after restart | Workspace refs are NOT stable across cmux.app restarts | Kingdom persists refs to `<LOGS>/workspace-refs.env` and re-reads on `/kingdom:work` resume — but if cmux.app was force-quit, refs may need rebuilding. Self-care Check 1 flags this. |
 | Sub-agent tab doesn't close | The sub-agent's process didn't run Step 5 (`cmux tab-action --action close --surface "$CMUX_SURFACE_ID"`) | Verify `$CMUX_SURFACE_ID` was set when the sub-agent launched — if not, the spawn went through `Agent(...)` not `cmux tab-action`, and there's no tab to close |
 | Brief sent but lane never starts (text shows, no submit) | Used `cmux send <ref> Enter` — that types the literal word "Enter"; `send` only emits text | Use `cmux_send` (text + real keypress) or `cmux_send_key <ref> Enter` (which calls `cmux send-key`) |
-| `new-workspace` ignores `--color` | `cmux new-workspace` does NOT support `--color` — only `--name`, `--description`, `--cwd`, `--command`, `--layout`, `--window`, `--focus` | Set color in a separate call: `cmux workspace-action --action set-color --workspace <ref> --color violet` |
+| `new-workspace` ignores `--color` | `cmux new-workspace` does NOT support `--color` — only `--name`, `--description`, `--cwd`, `--command`, `--layout`, `--window`, `--focus` | Set color in a separate call: `cmux workspace-action --action set-color --workspace <ref> --color Purple` |
 
 ---
 

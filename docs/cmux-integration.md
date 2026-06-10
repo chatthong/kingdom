@@ -23,8 +23,8 @@ graph TB
     end
 
     K -.->|amber, pinned| KS["push? prompt waiting"]
-    W1 -.->|violet| W1S["BE-AUTH-3 in flight"]
-    W2 -.->|violet, blue ring| W2S["task just finished"]
+    W1 -.->|Purple| W1S["BE-AUTH-3 in flight"]
+    W2 -.->|Purple, blue ring| W2S["task just finished"]
     CW -.->|blue| CWS["paired with you"]
     WM -.->|rose, badge| WMS["alerted: develop RED"]
 
@@ -102,7 +102,7 @@ All 6 workspaces (King + 5 lanes) are siblings in cmux.app's actual topology (un
 
 ## Other cmux features the kingdom uses
 
-- **Workspace colours**: applied per role from `kingdom.json.cmux.workspaceColors` (defaults: King=amber, Worker=violet, Co-worker=blue, Watchman=rose). Left-edge colour bars in the sidebar make roles distinguishable at 2 metres.
+- **Workspace colours**: applied per role from `kingdom.json.cmux.workspaceColors` (defaults: King=amber, Worker=Purple, Co-worker=blue, Watchman=rose). Left-edge colour bars in the sidebar make roles distinguishable at 2 metres.
 - **Workspace pinning**: `kingdom.json.cmux.pinKingWorkspace: true` keeps the King's workspace at the top of the sidebar even when you spawn more lanes.
 - **Workspace descriptions**: set per spawn (`Kingdom lane · <name> · <UTC>`); shows as smaller text under the workspace name. King's description gets updated each session: `Your conversation · pinned · <UTC>`.
 - **Layout JSON**: watchman workspaces ship a pre-defined vertical split (top: claude `/loop`, bottom: `gh pr list --watch --interval 30`). Set `kingdom.json.cmux.watchmanLayout` to `null` for a single-pane watchman.

@@ -26,7 +26,7 @@
 
 ## Random pool (20 lines)
 
-`random_task_done_line` helper in `_primitives.md` picks one of these on each fire. The helper avoids repeating the most-recent pick by keeping a small ring buffer in `<LOGS>/.last-task-done-line`.
+`random_task_done_line` helper ([`functions/random_task_done_line.sh`](../functions/random_task_done_line.sh)) picks one of these on each fire. The helper avoids repeating the most-recent pick by keeping a small ring buffer in `<LOGS>/.last-task-done-line`.
 
 1. Lane idle. Want me to dispatch the next one?
 2. That's ${N_DONE_TODAY} tasks closed today. ${REMAINING} more to hit target.

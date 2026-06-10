@@ -35,7 +35,7 @@
 
 ## Lock-step with R26
 
-This card prints AFTER `kingdom_resync_after_merge` helper (in [`_primitives.md`](../_primitives.md)) runs the 7-step resync. The 4 checkmarks reflect the helper's actual steps, in order:
+This card prints AFTER `kingdom_resync_after_merge` helper (in [`functions/index.md`](../functions/index.md)) runs the 7-step resync. The 4 checkmarks reflect the helper's actual steps, in order:
 
 1. ✓ overlay discarded — `git reset --hard HEAD` + `git clean -fd` on kingdom
 2. ✓ origin/develop fast-forwarded — `git fetch` + `git merge --ff-only origin/develop`
