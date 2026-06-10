@@ -1,13 +1,16 @@
 <!--
 kingdom: Multi-agent orchestration kit for Claude Code (a Claude Code plugin).
 Parallel AI coding with git worktrees, native cmux.app integration, audit-first
-design, and human-in-the-loop push gates.
+design, and human-in-the-loop push gates. Scale effective working context
+horizontally: one Claude session holds one context window; a kingdom holds
+10M-30M+ tokens of live context across its fleet.
 
 Keywords: claude code plugin, multi-agent orchestration, ai agent fleet,
 parallel ai coding, git worktree, claude sub-agents, claude code teammates,
 cmux integration, ai code review, autonomous coding agent, agent orchestrator,
 claude opus sonnet haiku, ai pair programming, claude code teams alternative,
-composio agent-orchestrator alternative, anthropic claude plugin.
+composio agent-orchestrator alternative, anthropic claude plugin, scale llm
+context window, 10M token context, multi-session context, claude max plan.
 -->
 
 <div align="center">
@@ -16,9 +19,12 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 
 ### Multi-agent orchestration for Claude Code — one King, N workers, real git worktrees.
 
-**🔥 Fire 50-100 PRs a working week, on a single Claude Max plan. 🚀**
+**🧠 One Claude session ends at one context window. A kingdom doesn't — 10M, 20M, 30M+ tokens of live working context, one fleet, one chat. 🚀**
+
+**🏆 Verified record: 606.7M tokens in a single day — 589.2M of it Claude Opus 4.8 — on one Claude Max plan.**
 
 ![Version](https://img.shields.io/badge/version-0.44.2-success)
+![Record](https://img.shields.io/badge/record-606M%20tokens%2Fday-ff6b35)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)
 ![macOS](https://img.shields.io/badge/macOS-primary-black)
@@ -26,7 +32,7 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 ![git worktrees](https://img.shields.io/badge/git%20worktrees-built--in-orange)
 ![Multi-Agent](https://img.shields.io/badge/multi--agent-orchestration-9333ea)
 
-[Quick start](#-quick-start) · [Why kingdom](#-why-kingdom) · [Roles](#-roles-at-a-glance) · [Commands](#-slash-commands) · [Cost](#-what-it-costs-to-run) · [Contract](#-the-contract-what-kingdom-wont-touch) · [Docs](#-docs)
+[The unlock](#-the-real-unlock-context-that-scales-horizontally) · [Quick start](#-quick-start) · [Why kingdom](#-why-kingdom) · [Roles](#-roles-at-a-glance) · [Commands](#-slash-commands) · [Cost](#-what-it-costs-to-run) · [Contract](#-the-contract-what-kingdom-wont-touch) · [Docs](#-docs)
 
 <br/>
 
@@ -43,6 +49,38 @@ composio agent-orchestrator alternative, anthropic claude plugin.
 **kingdom is a Claude Code plugin that turns one chat session into a coordinated team of AI agents.** You talk to one King (Opus); the King spawns N lanes — each a real Claude Code session in its own `git worktree`, on its own local branch — and dispatches, gates, and audits their work in parallel. Every commit waits behind your explicit push approval, and your main checkout is never touched.
 
 It's **shape-only**: role specs, slash commands, card templates, and helper bash. There's **no new runtime to install** — it runs on tooling you already have (Claude Code + git worktrees + `cmux`/`tmux` + `jq` + `gh`). And it's **domain-agnostic**: anything you version in git — code, research, finance models, manuscripts — since `gate.*` commands are arbitrary bash.
+
+---
+
+## 🧠 The real unlock: context that scales horizontally
+
+Everyone hits the same wall: one Claude session = one context window. Big repos, long sessions, multi-part features — the window fills, the model compacts, detail gets lost.
+
+A kingdom doesn't make the window bigger. **It makes the number of windows bigger** — and wires them together:
+
+| | One Claude session | A kingdom |
+|---|---|---|
+| Live context | 1 window | 1 window **per lane** — 12 lanes is 12 full windows held simultaneously |
+| Sub-agent fan-out | shares your window | each lane spawns its own army, every sub-agent on a **fresh** window |
+| Effective working context | caps at the window | **10M → 20M → 30M+ tokens**, scaling with `lane=N` |
+| When a window fills | compaction eats your detail | that lane's task file + logs persist; the lane re-grounds from disk and keeps going |
+| Coordination | you, manually | the King — dispatch briefs, a two-way inbox, three-tier gates, one chat |
+
+The trick is that lanes don't share memory through a context window at all. They share it through **git + files**: task files (R23), the 4-step closer audit trail (R22), the inbox (R55), and `/kingdom:self-learn` doc-grounding. Context held in files doesn't compact, doesn't drift, and survives every restart — so the fleet's *combined* working context keeps growing while any single window stays comfortable.
+
+> **🏆 What that looks like at full throttle — one real day, measured with [`ccusage`](https://github.com/ryoppippi/ccusage) (2026-06-08):**
+>
+> | | |
+> |---|---:|
+> | **Total tokens, one day** | **606,736,231** |
+> | └ **Claude Opus 4.8** (King + lanes) | **589.2M** |
+> | └ Sonnet 4.6 (watchman + subs) | 9.2M |
+> | └ Haiku 4.5 (doc/scan armies) | 4.8M |
+> | └ Opus 4.7 | 3.5M |
+> | Cache reads (the economics) | 593.0M — **97.7%** |
+> | Equivalent metered API value | ~$452 — flat-rate on a Claude Max plan |
+>
+> 606M tokens is roughly **3,000 full 200K context windows** flowing through one repo in one day — that's the fleet reading, cross-checking, and re-grounding constantly, which a single window simply cannot do.
 
 ---
 
@@ -202,7 +240,10 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 
 ## ✨ Why kingdom?
 
+- **🧠 Context that scales with the fleet** — every lane is a real Claude session holding its own full window, and every lane fans out sub-agents on fresh windows. Dial `lane=N` and the kingdom's combined working context climbs to 10M, 20M, 30M+ tokens — while shared state lives in files, where it can't be compacted away.
 - **🧵 Real parallelism** — 3-10 lanes editing different branches simultaneously, isolated by `git worktree`. Not in-process sub-agents pretending to be parallel.
+- **📨 Lanes talk back (v0.44.0)** — a two-way file-based inbox (R55): a blocked lane posts a question to the King and keeps working instead of stalling; the King answers every poll tick. No more silent dead lanes.
+- **📚 Grounded before they code (v0.44.0)** — dispatch briefs carry a mandatory "Read first" file list, and `/kingdom:self-learn` walks any role through the project docs in 3 layers before it touches code.
 - **📺 Visible sub-agent armies (v0.43.0)** — when the session exposes the Workflow tool, each task's parallel sub-agent fan-out runs through it, so you watch the whole army live in Claude Code's `/workflows` view (phases, per-agent tokens/time) — one run per task. Falls back to bounded `Agent()` where the tool isn't present (R53).
 - **🎓 Story pods** — several workers on one story, merged and reviewed as a unit by a Senior, shipped as one PR. King owns cross-story coordination; the Senior owns within-story review.
 - **💬 One conversation** — you talk to the King; the King talks to the lanes; you never juggle panes.
@@ -239,6 +280,7 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 | `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces (frees RAM). Keeps King's workspace by default. No commits or pushes. |
 | **`/kingdom:update [<project>]`** | **Migrate a live workspace after a plugin update (v0.38.0).** Re-syncs the kit (`.kingdom/.setting/`) and additively merges new schema keys into each `kingdom.json` (your values always win), leaving `tasks/`, `logs/`, `state.json`, and memory untouched. Previews the full delta and asks for an explicit `update` before any write; backs up everything first. |
 | **`/kingdom:archive [<project>] [--older-than=Nd] [--dry-run]`** | **Keep a long-running King fast (v0.42.0).** Moves aged/closed task files + logs to `tasks/archive/<YYYY-Qn>/`, sweeps old `WATCH_*` heartbeats, rotates `master_agent.log`. Never touches in-flight tasks, `state.json`, config, or memory; `--dry-run` previews. |
+| **`/kingdom:self-learn [<project>]`** | **Ground any role in the project docs (v0.44.0).** A 3-layer read — all README/index/CLAUDE.md first, then the must-read essentials, then a deep docs pass — fanned out in parallel and summarized into 1-3 cards (Big picture · Map · Deep notes). The King injects it as a lane's **second message** after `self-<role>`, so lanes understand the codebase before they touch it. Read-only. |
 | **`/kingdom:self-<role>`** — `self-king` · `self-worker` · `self-co-worker` · `self-watchman` · `self-senior` | **Re-ground a role from disk (v0.39.0, R52).** Re-reads the canonical rules + that role's spec from `.kingdom/.setting/` and prints a grounding card. The King injects the matching one as each lane's **first message at spawn**, so a lane never inherits the King's drift; run it yourself any time a role has wandered. Read-only. |
 
 ---
@@ -314,7 +356,17 @@ On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/d
 | Fri | **291.0M** | $203 |
 | **5-day work week** | **~1.27B** | **~$983** |
 
-**🔥 A Claude Max 5× plan (not even the 20× tier) fed nearly 300M Opus tokens in a single day.**
+And the fleet keeps growing into the plan. The current single-day record (measured 2026-06-08, `ccusage daily`):
+
+| Model | Tokens |
+|---|---:|
+| **Claude Opus 4.8** | **589.2M** |
+| Sonnet 4.6 | 9.2M |
+| Haiku 4.5 | 4.8M |
+| Opus 4.7 | 3.5M |
+| **Day total** | **606.7M** (97.7% cache reads · ~$452 equivalent API value) |
+
+**🔥 A Claude Max plan fed 606M tokens — 589M of them Claude Opus 4.8 — through one repo in a single day.**
 
 > The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates). On a Max subscription it's flat-rate, so this is value unlocked, not a bill.
 
@@ -322,6 +374,7 @@ On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/d
 
 | Mode | What it looks like |
 |---|---|
+| 🧠 **Context Max** | Big repo, gnarly feature: many lanes + sub-agent armies holding 10M-30M+ tokens of combined live context, re-grounding from docs and task files instead of compacting. Spend the tokens *knowing the codebase*. |
 | 🎯 **Quality Max** | Fewer lanes, deep work: exhaustive discovery, Opus design review on every sensitive change, watchman cross-checks. Spend the tokens going *deep*. |
 | 🔥 **Fire PRs like mad** | Many lanes, wide fan-out: a sustained **~50-100 PRs per working week**. Spend the tokens going *wide*. |
 
