@@ -17,11 +17,15 @@ context window, 10M token context, multi-session context, claude max plan.
 
 # 👑 kingdom
 
-### Multi-agent orchestration for Claude Code — one King, N workers, real git worktrees.
+### Turn one Claude Code chat into a coordinated AI fleet — one King, N lanes, real git worktrees.
 
-**🧠 One Claude session ends at one context window. A kingdom doesn't — 10M, 20M, 30M+ tokens of live working context, one fleet, one chat. 🚀**
+<br/>
 
-**🏆 Verified record: 606.7M tokens in a single day — 589.2M of it Claude Opus 4.8 — on one Claude Max plan.**
+**🧠 One Claude session ends at one context window. A kingdom doesn't —<br/>10M, 20M, 30M+ tokens of live working context, one fleet, one chat.**
+
+**🏆 Verified record: 606.7M tokens in a single day — 589.2M of it Claude Opus 4.8 — on one Claude Max 5× plan.**
+
+<br/>
 
 ![Version](https://img.shields.io/badge/version-0.44.2-success)
 ![Record](https://img.shields.io/badge/record-606M%20tokens%2Fday-ff6b35)
@@ -32,7 +36,11 @@ context window, 10M token context, multi-session context, claude max plan.
 ![git worktrees](https://img.shields.io/badge/git%20worktrees-built--in-orange)
 ![Multi-Agent](https://img.shields.io/badge/multi--agent-orchestration-9333ea)
 
-[The unlock](#-the-real-unlock-context-that-scales-horizontally) · [Quick start](#-quick-start) · [Why kingdom](#-why-kingdom) · [Roles](#-roles-at-a-glance) · [Commands](#-slash-commands) · [Cost](#-what-it-costs-to-run) · [Contract](#-the-contract-what-kingdom-wont-touch) · [Docs](#-docs)
+| 🧠 Context | 🔥 Throughput | 🛡 Control |
+|:---:|:---:|:---:|
+| 10-30M+ tokens of live context across the fleet | a sustained 50-100 PRs per working week | nothing reaches origin without your explicit `push` |
+
+[The unlock](#-the-unlock-context-that-scales-horizontally) · [Quick start](#-quick-start) · [How it runs](#-how-the-fleet-runs) · [Why kingdom](#-why-kingdom) · [Roles](#-roles-at-a-glance) · [Commands](#-slash-commands) · [Cost](#-what-it-costs-to-run) · [Contract](#-the-contract-what-kingdom-wont-touch) · [Docs](#-docs)
 
 <br/>
 
@@ -52,7 +60,7 @@ It's **shape-only**: role specs, slash commands, card templates, and helper bash
 
 ---
 
-## 🧠 The real unlock: context that scales horizontally
+## 🧠 The unlock: context that scales horizontally
 
 Everyone hits the same wall: one Claude session = one context window. Big repos, long sessions, multi-part features — the window fills, the model compacts, detail gets lost.
 
@@ -68,7 +76,7 @@ A kingdom doesn't make the window bigger. **It makes the number of windows bigge
 
 The trick is that lanes don't share memory through a context window at all. They share it through **git + files**: task files (R23), the 4-step closer audit trail (R22), the inbox (R55), and `/kingdom:self-learn` doc-grounding. Context held in files doesn't compact, doesn't drift, and survives every restart — so the fleet's *combined* working context keeps growing while any single window stays comfortable.
 
-> **🏆 What that looks like at full throttle — one real day, measured with [`ccusage`](https://github.com/ryoppippi/ccusage) (2026-06-08):**
+> **🏆 What that looks like at full throttle — one real day, measured with [`ccusage`](https://github.com/ryoppippi/ccusage) (2026-06-08, Claude Max 5× plan):**
 >
 > | | |
 > |---|---:|
@@ -78,34 +86,39 @@ The trick is that lanes don't share memory through a context window at all. They
 > | └ Haiku 4.5 (doc/scan armies) | 4.8M |
 > | └ Opus 4.7 | 3.5M |
 > | Cache reads (the economics) | 593.0M — **97.7%** |
-> | Equivalent metered API value | ~$452 — flat-rate on a Claude Max plan |
+> | Equivalent metered API value | ~$452 — flat-rate on the subscription |
 >
-> 606M tokens is roughly **3,000 full 200K context windows** flowing through one repo in one day — that's the fleet reading, cross-checking, and re-grounding constantly, which a single window simply cannot do.
+> 606M tokens is roughly **3,000 full 200K context windows** flowing through one repo in one day — the fleet reading, cross-checking, and re-grounding constantly, which a single window simply cannot do.
 
 ---
 
 ## ⚡ Quick start
 
+**1 — Install** (in any Claude Code session, two lines):
+
 ```bash
-# Install — in any Claude Code session (2 lines)
 /plugin marketplace add chatthong/kingdom
 /plugin install kingdom@kingdom
 ```
 
+**2 — Set up once:**
+
 ```bash
-/kingdom:self-care            # check prereqs once: cmux.app / tmux, jq, gh, git
-/kingdom:init my-app          # scaffold once: workspace + git worktrees (~90s)
+/kingdom:self-care            # check prereqs: cmux.app / tmux, jq, gh, git
+/kingdom:init my-app          # scaffold: workspace + git worktrees (~90s)
+```
 
-/kingdom:work my-app          # daily ritual: audit → spawn lanes → dispatch → gate-poll
-/kingdom:save my-app          # end of session: snapshot state, free RAM, close lanes
+**3 — Then every day is two commands:**
 
-/kingdom:update               # after a plugin update: migrate kit + configs (preview + confirm)
+```bash
+/kingdom:work my-app          # morning: audit → spawn lanes → dispatch → gate-poll
+/kingdom:save my-app          # night: snapshot state, free RAM, close lanes
 ```
 
 > [!TIP]
-> `/kingdom:work` is the one command you type every morning. It audits the project, spawns lanes, prints a kickoff brief (local date+time + a Suggested next task), then auto-dispatches and gates work until something needs your approval. You stay in **one** chat with the King. `/kingdom:save` at night so the next `/kingdom:work` resumes where you left off.
+> `/kingdom:work` is the one command you type every morning. It audits the project, spawns lanes, prints a kickoff brief, then asks how you want to work — **seek** (it proposes tasks for your approval), **assign** (you name them), or **resume-only** — and gates work until something needs your word. You stay in **one** chat with the King. After a plugin update, `/kingdom:update` migrates your workspace without touching tasks, logs, or state.
 
-**Want a different fleet shape?** Pass per-role counts or a total `lane=N` budget — the cheat sheet and full examples are folded in below.
+**Want a different fleet shape?** Pass per-role counts or a total `lane=N` budget:
 
 <details>
 <summary><b>📐 Pick a shape by situation — matrix + advanced <code>/kingdom:work</code> examples</b></summary>
@@ -159,7 +172,7 @@ The trick is that lanes don't share memory through a context window at all. They
 
 ## 🛰 How the fleet runs
 
-The King talks to lanes over whichever backend is live (cmux on macOS, tmux otherwise); each lane fans heavy work out to its own one-shot sub-agents — through the Workflow tool's live `/workflows` view when the session has it (R53), otherwise bounded `Agent()` — and leaves an audit trail in `tasks/` + `logs/`.
+The King talks to lanes over whichever backend is live (cmux on macOS, tmux otherwise); each lane fans heavy work out to its own one-shot sub-agents — through the Workflow tool's live `/workflows` view when the session has it (R53), otherwise bounded `Agent()` — and leaves an audit trail in `tasks/` + `logs/`. Lanes talk back through a two-way inbox (R55): a blocked lane posts a question to the King and keeps working; the King answers every poll tick.
 
 ```mermaid
 graph TB
@@ -244,12 +257,12 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 - **🧵 Real parallelism** — 3-10 lanes editing different branches simultaneously, isolated by `git worktree`. Not in-process sub-agents pretending to be parallel.
 - **📨 Lanes talk back (v0.44.0)** — a two-way file-based inbox (R55): a blocked lane posts a question to the King and keeps working instead of stalling; the King answers every poll tick. No more silent dead lanes.
 - **📚 Grounded before they code (v0.44.0)** — dispatch briefs carry a mandatory "Read first" file list, and `/kingdom:self-learn` walks any role through the project docs in 3 layers before it touches code.
-- **📺 Visible sub-agent armies (v0.43.0)** — when the session exposes the Workflow tool, each task's parallel sub-agent fan-out runs through it, so you watch the whole army live in Claude Code's `/workflows` view (phases, per-agent tokens/time) — one run per task. Falls back to bounded `Agent()` where the tool isn't present (R53).
+- **📺 Visible sub-agent armies (v0.43.0)** — when the session exposes the Workflow tool, each task's parallel fan-out runs through it, so you watch the whole army live in Claude Code's `/workflows` view (phases, per-agent tokens/time) — one run per task. Falls back to bounded `Agent()` where the tool isn't present (R53).
 - **🎓 Story pods** — several workers on one story, merged and reviewed as a unit by a Senior, shipped as one PR. King owns cross-story coordination; the Senior owns within-story review.
 - **💬 One conversation** — you talk to the King; the King talks to the lanes; you never juggle panes.
 - **🎨 Native cmux/tmux feel** — every role gets its own colour-coded workspace (cmux) or status-bar window (tmux); notifications fire as blue rings, badges, and bell-panel entries.
 - **🧾 Full audit trail** — every task leaves a 4-step closer artifact: raw log, curated digest, master log line, sentinel flag. Grep it next month.
-- **🕵️ Smart watchman (v0.42.0)** — more than a monitor: a Sonnet `/loop` running 8 surveillance duties (incl. migration/sequence-collision, config-drift, and missing-test detection) through a findings ledger that dedups, escalates unactioned issues, auto-resolves, and surfaces one actionable "King's next action" per tick. Change-gated duties + a `WATCH_*` retention sweep + a deep-quiet cadence tier keep it cheap on a still repo, so it runs unattended for weeks.
+- **🕵️ Smart watchman** — more than a monitor: a Sonnet `/loop` running surveillance duties (review · CVE · cross-lane conflict · config drift · missing tests · stale-lane detection), triaging the King's inbox, and rendering you a daily digest card. Change-gated + self-pruning, so it runs unattended for weeks.
 - **📦 Zero new runtime** — cmux + tmux + jq + gh are standard dev tooling; the protocol is plain text.
 - **🧠 Skill-aware** — King and lanes auto-pick from the Claude Code skill catalog (`nextjs-best-practices`, `prisma-cli`, `test-driven-development`, etc.) per-task. Domain-routed via [`skill-routing.md`](.kingdom/.setting/reference/skill-routing.md), with auto-discovery fallback.
 
@@ -259,12 +272,12 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 
 | Role | Model | What it does | Spec |
 |---|---|---|---|
-| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Owns cross-story coordination. Never edits files. | [`king.md`](.kingdom/.setting/roles/king.md) |
+| 👑 **King** | Opus | Orchestrator. Holds your conversation. Sole pusher. Owns cross-story coordination + memory writes. Never edits files. | [`king.md`](.kingdom/.setting/roles/king.md) |
 | 🎓 **Senior** | Opus | Per-story sub-orchestrator + sole within-story reviewer. Owns a worker pod, merges into a story branch, reviews in a loop, marks push-eligible. Never pushes, never edits. | [`senior.md`](.kingdom/.setting/roles/senior.md) |
-| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
+| 👷 **Worker** | Opus | Autonomous lane. Picks + executes sub-tasks (from King or its Senior). Spawns own sub-agents; asks the King questions via the inbox instead of stalling. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
 | 🧑‍💼 **Co-worker** | Opus | Paired with you. Dormant until you signal. | [`co-worker.md`](.kingdom/.setting/roles/co-worker.md) |
-| 🕵️ **Watchman** | Sonnet | Autonomous `/loop` safety net (5-15 min on churn, backing off to a 30-min deep-quiet tier when still): develop-health + PR babysitting + 8 Haiku surveillance duties (review · CVE · cross-lane conflict · cross-story drift · sequence-collision · config/secret parity · missing-tests · git hygiene) feeding a findings ledger. Change-gated + self-pruning. Read-only; never edits, never pushes. | [`watchman.md`](.kingdom/.setting/roles/watchman.md) |
-| 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot via `Agent(model=…)`. Spawned by King or a lane. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
+| 🕵️ **Watchman** | Sonnet | Autonomous `/loop` safety net (5-15 min on churn, backing off when still): develop-health + PR babysitting + Haiku surveillance duties feeding a findings ledger, plus inbox triage, stale-lane detection, and a daily digest. Read-only; never edits, never pushes. | [`watchman.md`](.kingdom/.setting/roles/watchman.md) |
+| 🐱 **Sub-agent** | Sonnet/Haiku/Opus | One-shot, on a fresh context window. Spawned by King or a lane via the Workflow tool or `Agent(model=…)`. | [`worker.md`](.kingdom/.setting/roles/worker.md) |
 
 Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
@@ -272,45 +285,34 @@ Full role write-ups: [`docs/roles.md`](docs/roles.md).
 
 ## 🔧 Slash commands
 
+**Daily:**
+
 | Command | What it does |
 |---|---|
-| **`/kingdom:work [<project>] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief (local date+time + Suggested next task) + auto-gate-poll loop. **Shape:** either per-role (`worker=` / `co-worker=` / `watchman=` / `senior=`, plural also accepted) or `lane=N` for a total budget the King auto-composes. **Limits:** `pr-limit=N` and `pod-limit=N` count things that become a PR, not sub-tasks. |
-| `/kingdom:init [<project>]` | **Scaffold a NEW workspace, no flags.** Creates the workspace + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later at `/kingdom:work` or by editing `kingdom.json`. To upgrade an existing workspace, use `/kingdom:update`. See [`docs/configuration.md`](docs/configuration.md). |
+| **`/kingdom:work [<project>] [lane=N] [worker=N] [co-worker=N] [watchman=N] [senior=N] [pr-limit=N] [pod-limit=N]`** | **THE daily ritual.** Audit + spawn + kickoff brief, then asks **seek / assign / resume-only** before dispatching, and gate-polls until something needs your approval. **Shape:** per-role counts or `lane=N` for a total budget the King auto-composes. **Limits:** `pr-limit=N` / `pod-limit=N` count things that become a PR, not sub-tasks. |
+| `/kingdom:save [<project>]` | State snapshot. Writes lane + task state to `state.json`; closes lane workspaces (frees RAM). No commits or pushes. |
+
+**Setup & care:**
+
+| Command | What it does |
+|---|---|
+| `/kingdom:init [<project>]` | Scaffold a NEW workspace: role docs + project `kingdom.json` (defaults) + `tasks/` + `logs/`. Tune the shape later. See [`docs/configuration.md`](docs/configuration.md). |
 | `/kingdom:self-care` | Check prerequisites: cmux.app, tmux, jq, gh, git ≥ 2.5, settings.json keys — plus kit version-drift (Check 12) and project-memory drift (Check 13, read-only). Re-run anytime. |
-| `/kingdom:save [<project>]` | State snapshot. Writes current lane + task state to `state.json`; closes lane workspaces (frees RAM). Keeps King's workspace by default. No commits or pushes. |
-| **`/kingdom:update [<project>]`** | **Migrate a live workspace after a plugin update (v0.38.0).** Re-syncs the kit (`.kingdom/.setting/`) and additively merges new schema keys into each `kingdom.json` (your values always win), leaving `tasks/`, `logs/`, `state.json`, and memory untouched. Previews the full delta and asks for an explicit `update` before any write; backs up everything first. |
-| **`/kingdom:archive [<project>] [--older-than=Nd] [--dry-run]`** | **Keep a long-running King fast (v0.42.0).** Moves aged/closed task files + logs to `tasks/archive/<YYYY-Qn>/`, sweeps old `WATCH_*` heartbeats, rotates `master_agent.log`. Never touches in-flight tasks, `state.json`, config, or memory; `--dry-run` previews. |
-| **`/kingdom:self-learn [<project>]`** | **Ground any role in the project docs (v0.44.0).** A 3-layer read — all README/index/CLAUDE.md first, then the must-read essentials, then a deep docs pass — fanned out in parallel and summarized into 1-3 cards (Big picture · Map · Deep notes). The King injects it as a lane's **second message** after `self-<role>`, so lanes understand the codebase before they touch it. Read-only. |
-| **`/kingdom:self-<role>`** — `self-king` · `self-worker` · `self-co-worker` · `self-watchman` · `self-senior` | **Re-ground a role from disk (v0.39.0, R52).** Re-reads the canonical rules + that role's spec from `.kingdom/.setting/` and prints a grounding card. The King injects the matching one as each lane's **first message at spawn**, so a lane never inherits the King's drift; run it yourself any time a role has wandered. Read-only. |
+| **`/kingdom:update [<project>]`** | **Migrate a live workspace after a plugin update.** Re-syncs the kit and additively merges new schema keys into each `kingdom.json` (your values always win); `tasks/`, `logs/`, `state.json`, and memory are never touched. Previews the delta, requires an explicit `update`, backs everything up. |
+| `/kingdom:archive [<project>] [--older-than=Nd] [--dry-run]` | Keep a long-running King fast: moves aged/closed task files + logs to `tasks/archive/<YYYY-Qn>/`, rotates `master_agent.log`. Never touches in-flight tasks, config, or memory. |
 
----
+**Grounding (read-only):**
 
-## 🛡 The contract (what kingdom won't touch)
-
-- ❌ Your project files outside `.worktrees/<lane>/`: main checkout untouched until you say "push"
-- ❌ `develop` and `main`: read-only; only `feature/<topic>` reaches origin
-- ❌ Pushes: never without your explicit "push?" approval (single-shot + PR-specific)
-- ❌ Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks: zero modifications
-- ❌ Your `.gitignore`: kingdom adds ONE line (`.worktrees/`) and stops there
-- ❌ Your `tasks/`, `logs/`, `state.json`, tuned `kingdom.json` values, or memory: `/kingdom:update` never touches them
-- ✅ `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, branches survive intact
-
----
-
-## 🖥 Requirements & terminal
-
-kingdom drives one terminal workspace per lane. The backend is **auto-detected at runtime** — cmux.app when you're inside it, tmux otherwise — so you never flip a switch.
-
-- **macOS (primary): [cmux.app](https://github.com/manaflow-ai/cmux).** Native, colour-coded workspaces, desktop notifications, and the live sidebar — the richest experience (the screenshot above is cmux.app). Full walkthrough: [`CMUX-Guide.md`](CMUX-Guide.md).
-- **Linux & non-cmux macOS (fallback): tmux + [Ghostty](https://github.com/ghostty-org/ghostty).** Lanes run as tmux windows; the status-bar window list stands in for the sidebar, and the full work cycle runs the same. Setup + the full cmux→tmux mapping: [`TMUX-Guide.md`](TMUX-Guide.md).
-
-`/kingdom:self-care` detects which you have and tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys), then offers to fix it.
+| Command | What it does |
+|---|---|
+| **`/kingdom:self-learn [<project>]`** | **Ground any role in the project docs (v0.44.0).** A 3-layer read — all README/index/CLAUDE.md, then the must-read essentials, then a deep docs pass — fanned out in parallel and summarized into 1-3 cards (Big picture · Map · Deep notes). The King injects it as a lane's **second message** after `self-<role>`. |
+| **`/kingdom:self-<role>`** — `self-king` · `self-worker` · `self-co-worker` · `self-watchman` · `self-senior` | **Re-ground a role from disk (R52).** Re-reads the canonical rules + that role's spec from `.kingdom/.setting/` and prints a grounding card. The King injects the matching one as each lane's **first message at spawn**, so a lane never inherits the King's drift. |
 
 ---
 
 ## 💸 What it costs to run
 
-The kingdom is a fleet of **real Claude Code sessions**, one per lane. That's what buys real parallelism, and it spends two real budgets: your Mac's **RAM** and your Claude plan's **tokens**. Numbers below are measured on a live run (2026-05-23 · macOS · Claude Code v2.1.150 · Opus 4.7).
+The kingdom is a fleet of **real Claude Code sessions**, one per lane. That's what buys real parallelism and fleet-scale context, and it spends two real budgets: your Mac's **RAM** and your Claude plan's **tokens**. Numbers below are measured on live runs.
 
 <details>
 <summary><b>🧠 RAM — one live session per lane (table + the <code>/kingdom:save</code> reclaim box)</b></summary>
@@ -341,11 +343,11 @@ Rule of thumb: **budget ~0.5 GB per booted lane**. A 16-lane kingdom is comforta
 </details>
 
 <details>
-<summary><b>🔥 Tokens — what a Max plan feeds it (~1.27B/week) + Quality-Max vs Fire-PRs</b></summary>
+<summary><b>🔥 Tokens — what a Max plan feeds it (~1.27B/week, record 606M/day) + how to spend it</b></summary>
 
 <br/>
 
-On a **Claude Max (5×)** subscription, an Opus-only kingdom running ~12 hours/day sustains **~250-290M tokens/day**, almost all Opus, almost all cache reads (90%+) — which is exactly why a billion-token week stays economical. One real 7-day window (full [`ccusage`](https://github.com/ryoppippi/ccusage) report in [`token-2026-05-23.md`](token-2026-05-23.md)):
+On a **Claude Max 5×** subscription, an Opus-only kingdom running ~12 hours/day sustains **~250-290M tokens/day**, almost all Opus, almost all cache reads (90%+) — which is exactly why a billion-token week stays economical. One real 7-day window (full [`ccusage`](https://github.com/ryoppippi/ccusage) report in [`token-2026-05-23.md`](token-2026-05-23.md)):
 
 | Day | Total tokens | Equivalent API value |
 |---|---:|---:|
@@ -366,7 +368,7 @@ And the fleet keeps growing into the plan. The current single-day record (measur
 | Opus 4.7 | 3.5M |
 | **Day total** | **606.7M** (97.7% cache reads · ~$452 equivalent API value) |
 
-**🔥 A Claude Max plan fed 606M tokens — 589M of them Claude Opus 4.8 — through one repo in a single day.**
+**🔥 A Claude Max 5× plan fed 606M tokens — 589M of them Claude Opus 4.8 — through one repo in a single day.**
 
 > The dollar figures are the *equivalent metered API cost* (what these tokens would bill at API rates). On a Max subscription it's flat-rate, so this is value unlocked, not a bill.
 
@@ -381,6 +383,31 @@ And the fleet keeps growing into the plan. The current single-day record (measur
 Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere on that spectrum.
 
 </details>
+
+---
+
+## 🛡 The contract (what kingdom won't touch)
+
+| | Boundary |
+|---|---|
+| ❌ | Your project files outside `.worktrees/<lane>/` — main checkout untouched until you say `push` |
+| ❌ | `develop` and `main` — read-only; only `feature/<topic>` (or `story/<id>`) reaches origin |
+| ❌ | Pushes — never without your explicit approval, single-shot + PR-specific |
+| ❌ | Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks — zero modifications |
+| ❌ | Your `.gitignore` — kingdom adds ONE line (`.worktrees/`) and stops there |
+| ❌ | Your `tasks/`, `logs/`, `state.json`, tuned `kingdom.json` values, memory — `/kingdom:update` never touches them |
+| ✅ | `rm -rf .kingdom/ .worktrees/` removes the kingdom; your project, git history, and branches survive intact |
+
+---
+
+## 🖥 Requirements & terminal
+
+kingdom drives one terminal workspace per lane. The backend is **auto-detected at runtime** — cmux.app when you're inside it, tmux otherwise — so you never flip a switch.
+
+- **macOS (primary): [cmux.app](https://github.com/manaflow-ai/cmux).** Native, colour-coded workspaces, desktop notifications, and the live sidebar — the richest experience (the screenshot above is cmux.app). Full walkthrough: [`CMUX-Guide.md`](CMUX-Guide.md).
+- **Linux & non-cmux macOS (fallback): tmux + [Ghostty](https://github.com/ghostty-org/ghostty).** Lanes run as tmux windows; the status-bar window list stands in for the sidebar, and the full work cycle runs the same. Setup + the full cmux→tmux mapping: [`TMUX-Guide.md`](TMUX-Guide.md).
+
+`/kingdom:self-care` detects which you have and tells you what's missing (cmux.app, tmux, jq, gh, settings.json keys), then offers to fix it.
 
 ---
 
@@ -399,7 +426,7 @@ Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere
 | How it works: King's role, lane mechanics, 4-step closer | [`docs/how-it-works.md`](docs/how-it-works.md) |
 | Why: the problem kingdom solves | [`docs/why.md`](docs/why.md) |
 | FAQ | [`docs/faq.md`](docs/faq.md) |
-| Rules: priority-tiered enforceable rules | [`.kingdom/.setting/rules.md`](.kingdom/.setting/rules.md) |
+| Rules: priority-tiered enforceable rules (R01-R55) | [`.kingdom/.setting/rules.md`](.kingdom/.setting/rules.md) |
 | Internal role specs (King reads these at session start) | [`.kingdom/.setting/`](.kingdom/.setting/) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 
