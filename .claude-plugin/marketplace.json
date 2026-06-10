@@ -11,7 +11,7 @@
         "url": "https://github.com/chatthong/kingdom.git"
       },
       "description": "Multi-agent orchestration kit for Claude Code — parallel AI coding with Git worktrees and native cmux.app. 👑 King + 🎓 seniors + 👷 workers + 🧑‍💼 co-workers + 🕵️ watchmen + 🐱 sub-agents. Story pods: parallel workers per story, reviewed as a unit, one PR. Audit-first, human-gated, domain-agnostic.",
-      "version": "0.44.1"
+      "version": "0.44.2"
     }
   ]
 }

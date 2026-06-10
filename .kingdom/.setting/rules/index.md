@@ -28,7 +28,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 | **R36** | Visible workspace progress within ~10s of `/kingdom:work` | User trust contract — prevents "stuck on fan-out" failure mode |
 | **R42** | Every parallel fan-out uses `_bounded_wait`, never bare `wait` | Prevents kingdom-frozen failure mode |
 
-**Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Their per-rule headings still carry their old `— Tier 1` suffix from prior versions; **this legend is authoritative** until those headings are swept in a future release.
+**Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Each demoted rule's per-rule heading now carries `— Tier 2` to match this legend (swept in v0.44.1).
 
 Tier 1 = 10. Tier 2 = 40. Tier 3 = 5. Total = 55 rules.
 

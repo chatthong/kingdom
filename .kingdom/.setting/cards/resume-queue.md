@@ -1,6 +1,6 @@
 # resume-queue
 
-**Fires when:** `/kingdom:work` Step 0.6 scan finds in-flight task files (per [rules.md R33](../rules/R33-king-must-read-existing-task.md)).
+**Fires when:** `/kingdom:work` Step 0.6 scan finds in-flight task files (per [R33](../rules/R33-king-must-read-existing-task.md)).
 **Used by:** [`commands/work.md`](../../../commands/work.md) Step 0.6 — renders BEFORE `suggested-task`.
 
 ## Template

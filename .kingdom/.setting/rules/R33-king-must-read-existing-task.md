@@ -1,4 +1,4 @@
-### R33. King MUST read existing task state BEFORE dispatching new tasks — Tier 1 (v0.25.0+)
+### R33. King MUST read existing task state BEFORE dispatching new tasks — Tier 2 (v0.25.0+)
 
 At session start (per R14) and at every `/kingdom:work` Step 4 dispatch round, King MUST scan existing task state and **resume in-flight work before opening any new task file**.
 
@@ -31,7 +31,7 @@ Then proceed with the disk scan:
 
 **Anti-pattern (2 — v0.31.0):** King reads the on-disk task file, sees "executing — smoke test pending" on worker-1, builds a resume queue from disk alone, offers the user "resume worker-1 + run smoke test." Meanwhile `origin/develop` already shipped the work via `recovery/pr-262-consent-banner` 8 hours earlier. Re-running smoke + opening a new PR would create a duplicate of the merged commit → conflict → recovery-PR cycle #3. Skipping the 0.a/0.b/0.c pre-scan = repeating the same incident every morning until the user manually pulls.
 
-**Why Tier 1:** ignoring in-flight task files = orphaning real work + duplicating effort + confusing the audit trail. Re-shipping already-merged work = conflict storm + recovery-PR cycle. This is correctness, not cosmetic.
+**Why Tier 2:** ignoring in-flight task files = orphaning real work + duplicating effort + confusing the audit trail. Re-shipping already-merged work = conflict storm + recovery-PR cycle. This is correctness, not cosmetic — strong-default, but recoverable, so demoted from the original Tier-1 draft per the v0.31.0 Tier-1-cap legend.
 
 **Incident #1 that motivated this rule (2026-05-19):** King session greeted user with "Suggested next tasks:" candidates pulled from the project ledger, while `.kingdom/bfg-swt/tasks/` had a worker-1 task file from the morning with Status=discovery-complete waiting on 2 user-decision blockers. The right behaviour: open with "Resume worker-1 FE-P0-FOUND.5? Two blockers need your call: A=<X> B=<Y>" — that's both decision-queue item + resume candidate in one prompt. King missed it entirely because R14 read-order didn't enforce reading task state, only meta-state (memory, watchman state, README).
 

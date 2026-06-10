@@ -1,7 +1,7 @@
 # audit-summary
 
-**Fires when:** `/kingdom:work` finishes the audit pass.
-**Used by:** [`commands/work.md`](../../../commands/work.md) final step. Also fired by `/kingdom:work` Step 1 as a confirmation that the audit ran.
+**Fires when:** `/kingdom:work` Step 1 finishes the audit pass (after `poll_for_sentinels "audit-*"` returns).
+**Used by:** [`commands/work.md`](../../../commands/work.md) Step 1 — confirms the audit specialists ran and summarises what they reconciled vs. what's flagged for King review.
 
 ## Template
 
@@ -31,8 +31,8 @@
 | Var | Source | Example |
 |---|---|---|
 | `${PROJECT}` | project being audited | `my-app` |
-| `${N_SPECIALISTS}` | parallel-spawn count | `4` |
-| `${DURATION}` | wall-clock | `2m 14s` |
+| `${N_SPECIALISTS}` | parallel-spawn count (`${#SPECIALISTS[@]}`) | `5` |
+| `${DURATION}` | wall-clock (`Nm Ns`) | `2m 14s` |
 | `${N_CHECKBOXES_FLIPPED}` | low-risk auto-fixes | `7` |
 | `${N_ORPHANS_BACKFILLED}` | raw artifacts that got curated digest | `2` |
 | `${N_LOG_LINES_REPAIRED}` | `master_agent.log` entries added | `3` |

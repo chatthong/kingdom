@@ -1,4 +1,4 @@
-### R35. King never copies uncommitted changes between worktrees — Tier 1 (v0.26.0+)
+### R35. King never copies uncommitted changes between worktrees — Tier 2 (v0.26.0+)
 
 Each lane's `.worktrees/<lane>/` is **its own work surface**. King's allowed cross-worktree operations are:
 
@@ -18,7 +18,7 @@ Each lane's `.worktrees/<lane>/` is **its own work surface**. King's allowed cro
 
 **Anti-pattern caught 2026-05-19:** King authored Dockerfile changes (3 ENV lines + 4-line comment for `@workspace/db` build-env placeholders) on worker-1's worktree, then `cp`'d the modified Dockerfile to `.worktrees/worker-2/` and included it in worker-2's commit as "part of the @workspace/db enabling slice." King defended: "the modification was already in your worker-1 worktree when I scanned" — but that's not exculpatory; King STILL did the cross-worktree copy + commit on the wrong lane. The proper move would have been: leave the Dockerfile change on worker-1 OR dispatch worker-2 to make the change in its own worktree.
 
-**Why Tier 1:** breaks the per-lane authorship invariant that the entire audit trail (master_agent.log, sentinel-to-commit mapping, blame) depends on. Once King is a hidden author on lane branches, "who did this" stops being a clean question.
+**Why Tier 2:** breaks the per-lane authorship invariant that the entire audit trail (master_agent.log, sentinel-to-commit mapping, blame) depends on. Once King is a hidden author on lane branches, "who did this" stops being a clean question. Recoverable (the wrong-author commit can be reverted + re-authored), so demoted from the original Tier-1 draft per the v0.31.0 Tier-1-cap legend.
 
 ### Self-detect: when King catches its own violation
 

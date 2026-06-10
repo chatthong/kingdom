@@ -62,6 +62,6 @@ This split is load-bearing: putting co-workers in the same table as workers hist
 
 ## Notes
 
-- The counting-unit line is hardcoded (not a variable) because rules.md R23 + R25 fix the unit definition. Per kingdom contract: 1 sentinel = 1 task.
+- The counting-unit line is hardcoded (not a variable) because [R23](../rules/R23-task-file-step-0-must.md) + [R25](../rules/R25-update-both-kingdom-task-file.md) fix the unit definition. Per kingdom contract: 1 sentinel = 1 task.
 - `pr-limit` and `pod-limit` are independent hard ceilings; the line shows both (`none` when unset). Dispatch stops when either is reached.
 - **v0.31.0 split:** worker / watchman lanes go in the dispatch table; co-workers go in the paired-sessions block. Visual separation enforces R32 + the new R43 — co-workers are NEVER dispatch candidates.

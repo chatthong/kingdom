@@ -252,7 +252,7 @@ cmux_send "$HANDLE" "$LANE_WATCHMAN_PROMPT"
 
 ---
 
-## Per-tick autonomous duties (Haiku fan-out, v0.29.0+, per rules.md R39 + R40)
+## Per-tick autonomous duties (Haiku fan-out, v0.29.0+, per [R39](../rules/R39-watchman-runs-fully-autonomously.md) + [R40](../rules/R40-watchman-haiku-fan-out-cap.md))
 
 Starting in v0.29.0, Watchman becomes fully autonomous within its tick: it no longer only runs smoke commands and PR checks — each `/loop` tick fans out up to `kingdom.json.watchman.haikuCapPerTick` Haiku sub-agents in parallel across its surveillance duties:
 
@@ -887,11 +887,11 @@ At the END of each `/loop` tick (after all fan-out duties complete and their Hai
 
 ---
 
-## PR-number backfill duty (every tick · v0.19.0+ · per [rules.md R27](../rules/R27-watchman-owns-pr-number-backfill.md))
+## PR-number backfill duty (every tick · v0.19.0+ · per [R27](../rules/R27-watchman-owns-pr-number-backfill.md))
 
 The worker commits TODO/CSV close-suffix as `(PR #pending)` because the PR number doesn't exist at commit time. **Watchman backfills `(PR #pending) → (PR #<N>)` on every `/loop` tick** — King never does this work. Two side duties ride along: stale `.lane` claim sweep, and a kingdom-task-file `verifying`-checkbox audit (flag-only). Tier 2 — failure is cosmetic, not load-bearing.
 
-**Scan logic (parallel by default, per [rules.md R28](../rules/R28-parallel-by-default-for-scan.md)) — calls the `parallel_edit_fanout` helper from [`../functions/index.md`](../functions/index.md):**
+**Scan logic (parallel by default, per [R28](../rules/R28-parallel-by-default-for-scan.md)) — calls the `parallel_edit_fanout` helper from [`../functions/index.md`](../functions/index.md):**
 
 ```bash
 # Build feature/<topic> → PR #N map from King's master_agent.log.

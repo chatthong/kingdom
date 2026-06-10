@@ -82,13 +82,17 @@ That's the entire customisation surface. **Workers are generic capacity**, no pr
 
 ```json
 {
-  "shape": { "workers": 3, "co-workers": 1, "watchman": 1, "sanityCap": 10 },
-  "git":   { "base": "develop", "integrationBranch": "kingdom", "pushPolicy": "always-ask" },
+  "shape": { "workers": 3, "co-workers": 1, "watchman": 1, "seniors": 1, "sanityCap": 10 },
+  "welcome": { "userName": "", "weather": true },
+  "subAgents": { "parallelTarget": 10 },
+  "git":   { "base": "develop", "integrationBranch": "kingdom", "pushPolicy": "always-ask", "branchNamingPattern": "feature/<topic>" },
+  "integration": { "enabled": true, "unit": "pod", "branchPattern": "story/<id>", "gateOnStory": true, "reviewLoopCap": 3 },
   "workers":   [ { "slug": "worker-1", "model": "opus" },
                  { "slug": "worker-2", "model": "opus" },
                  { "slug": "worker-3", "model": "opus" } ],
   "coworkers": [ { "slug": "co-worker-1", "model": "opus" } ],
-  "watchmen":  [ { "slug": "watchman-1", "model": "sonnet", "docsAudit": true } ],
+  "watchmen":  [ { "slug": "watchman-1", "model": "sonnet", "cadence": "dynamic", "docsAudit": true } ],
+  "seniors":   [ { "slug": "senior-1", "model": "opus" } ],
   "gate": {
     "typecheck": ["pnpm -r typecheck"],
     "tests":     ["pnpm -r test", "pytest -q"],
@@ -97,6 +101,8 @@ That's the entire customisation surface. **Workers are generic capacity**, no pr
   }
 }
 ```
+
+The full template also carries a `cmux` block (sidebar colours, watchman split, and the pre-warmed sub-agent pool — `cmux.subAgentPool.model` is a single model string, e.g. `"sonnet"`, read by `spawn_pool_slot`) and a `watchman` block (shown below). See [`.kingdom/templates/kingdom.json.template`](../.kingdom/templates/kingdom.json.template) for every key with inline comments.
 
 The King reads this at spawn-time (invoked by `/kingdom:work`) to:
 

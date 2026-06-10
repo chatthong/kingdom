@@ -45,9 +45,9 @@ Yes. Set `kingdom.json` → `shape.workers = 7`. Soft cap is 10 lanes total (`sa
 </details>
 
 <details>
-<summary><strong>Does it work with squash merge?</strong></summary>
+<summary><strong>How is the git workflow configured?</strong></summary>
 
-Yes. `kingdom.json` → `git.mergeStyle` can be `merge-commit` (default) or `squash`. The King carves clean feature branches either way.
+Via `kingdom.json` → `git`: `base` (the branch lanes fork from / PRs target, default `develop`), `integrationBranch` (the local working-tree overlay, default `kingdom`), `branchNamingPattern` (default `feature/<topic>`), and `pushPolicy` (default `always-ask` — the King never pushes without your explicit `push`, per R1). The King carves clean, byte-for-byte feature branches from each lane tip (R9); how a PR is finally merged (merge-commit vs squash) is your repo's / GitHub's setting, not the kingdom's.
 
 </details>
 

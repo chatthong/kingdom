@@ -4,6 +4,29 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.44.2] — 2026-06-10
+
+Zero-backlog pass: every remaining flag from the 2026-06-10 audit AND the long-standing CLAUDE.md open-thread bugs are now closed. Built by a 3-agent Opus cleanup army (core latents / backend latents / docs-rules-commands), all changes `zsh -n`-verified, the concurrency-sensitive ones live-tested.
+
+### Fixed — latent correctness
+
+- **`_bounded_wait` rc collection (open thread since v0.37.0)**: per-PID exit codes are now collected during polling (worst non-zero rc returned on normal completion) and killed survivors are reaped — no zombies. The 124-on-timeout contract is unchanged. Live-tested: rc 0 / rc 3 / rc 124 + actual kill + no-zombie.
+- **`spawn_subagent_from_pool` TOCTOU race**: pool consumption now serialized via an atomic `mkdir` lock (macOS has no flock) with bounded wait + tab-spawn fallback; two concurrent dispatchers can no longer claim the same surface. Live-tested with concurrent claims.
+- **`browser_verify` JS injection fully closed**: the expect value is now JSON-encoded via `jq -Rn --arg` (escapes `"`, `\`, backticks, `$(…)`) instead of quote-only escaping; tested against injection payloads with zero shell expansion.
+- **`cmux_new_workspace` word-split anti-pattern**: takes proper passthrough args (`shift 3; "$@"`), with a guarded back-compat branch for the legacy single-string `"--window <uuid>"` caller — verified both forms produce separate argv entries under bash AND zsh.
+- **Temp-resource leaks**: `parallel_edit_fanout` + `save_session_state` register EXIT/INT/TERM traps for their mktemp artifacts; `save_session_state` also drops its O(lanes × tasks) per-task `ls` storm for a build-once done-flag list.
+- **`cross_story_scan` false-clean on git < 2.38**: capability probe prints `drift: UNKNOWN` instead of silently reporting no conflicts when `merge-tree --write-tree` is unavailable.
+- **Small guards**: `fetch_weather_line` no longer calls jq on a missing `$KJSON`; `compute_task_duration` GNU-stat fallback silenced; `tmux_workspace_action`/`cmux_workspace_action` shift guarded (`[ $# -ge 2 ] && shift 2`).
+
+### Fixed — docs/rules/commands (the last flags)
+
+- **Tier-heading sweep (open thread since v0.31.0)**: all demoted rules now read `— Tier 2`, the 5 unmarked canonical rules gained `— Tier 1`; exactly 10 files carry the Tier-1 marker (grep-verified: R1,R2,R4,R5,R14,R22,R30,R31,R36,R42); the "legend is authoritative" disclaimer removed from `rules/index.md`.
+- **`guard_no_worktree_cd` wired (open thread since v0.31.0)**: guard inserted before the King-session worktree `cd` in `king.md`; the headless dispatch site documented as not-applicable.
+- **`audit-summary` card un-orphaned**: rendered after the Step-1 audit completes in `work.md`, all variables derived (no unset `${VARS}`); card metadata corrected.
+- **R40 artifact names** match the live writers (`WATCH_REVIEW_`/`WATCH_CONFLICTS_`); `docs/faq.md` fictional `git.mergeStyle` removed (real keys documented); `docs/configuration.md` example mirrors the actual template (welcome/subAgents/integration/seniors/subAgentPool.model); `work.md` step-gap note added (Step 2 folded into Step 1, numbering kept stable); `senior.md` upward doc link annotated; last `rules.md R##` display texts → direct rule links; `R01..R53` stragglers → R55.
+
+---
+
 ## [0.44.1] — 2026-06-10
 
 Closes the audit findings that fell between v0.44.0's agent ownership boundaries (nobody owned `kingdom.json.template`; two helpers weren't in the fix tracker). With this, every functional finding from the 2026-06-10 audit is fixed; the only remaining backlog is cosmetic (work.md step-number gap, `audit-summary` orphan card, faq `git.mergeStyle` mention, and pre-existing latent notes like the `_bounded_wait` rc nuance and pool TOCTOU — tracked in `docs/audits/2026-06-10-stability-audit.md`).

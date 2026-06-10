@@ -7,6 +7,6 @@
 #   cmux_workspace_action "$ws" pin            # also: unpin, mark-read, mark-unread, clear-color, clear-description
 # Silent on failure (sidebar cosmetics never block work). See reference/cmux.md § Rename / Pin / Set color.
 cmux_workspace_action () {
-  local ws="$1" action="$2"; shift 2
+  local ws="$1" action="$2"; [ "$#" -ge 2 ] && shift 2
   cmux workspace-action --action "$action" --workspace "$ws" "$@" 2>/dev/null
 }

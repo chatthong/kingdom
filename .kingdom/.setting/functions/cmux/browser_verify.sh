@@ -24,13 +24,17 @@ browser_verify () {
   # Wait for real load state (documented `browser wait`); fall back to a fixed pause.
   cmux browser "$surface" wait --load-state complete --timeout 10 2>/dev/null || sleep 2
   local found console_errs esc
-  esc=${expect//\"/\\\"}   # escape double-quotes for safe JS embedding (bash 3.2-safe; no ${x@Q})
+  # Finding 12: fully JSON-encode the expect value into a JS string literal — `jq -Rn --arg`
+  # emits a complete, quoted JS-safe literal (its own surrounding quotes included) that escapes
+  # ", \, backtick, newlines, and any $(…)/`…` so nothing shell- or JS-injects. Embed $esc bare
+  # (no surrounding quotes) inside the JS template.
+  esc=$(jq -Rn --arg s "$expect" '$s')
   # selector if it looks like one, else text search
   case "$expect" in
     \[*\] | .* | \#* | *' > '*)
-      found=$(_bv_eval "document.querySelector(\"$esc\") ? 'YES':'NO'" "$surface") ;;
+      found=$(_bv_eval "document.querySelector($esc) ? 'YES':'NO'" "$surface") ;;
     *)
-      found=$(_bv_eval "document.body.innerText.includes(\"$esc\") ? 'YES':'NO'" "$surface") ;;
+      found=$(_bv_eval "document.body.innerText.includes($esc) ? 'YES':'NO'" "$surface") ;;
   esac
   console_errs=$(_bv_eval "(window.__kErrs||[]).length" "$surface")
   if command -v browser_close >/dev/null 2>&1; then browser_close "$surface"

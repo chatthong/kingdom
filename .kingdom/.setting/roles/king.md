@@ -136,6 +136,11 @@ Pre-commit gates run in **two tiers** (v0.16.0+). This matches the v0.15.1 rule 
 Runs in the lane's worktree (`.worktrees/worker-N`) right after the lane writes its sentinel:
 
 ```bash
+# Defence-in-depth (R30/R37): refuse to cd into a lane worktree from the King's
+# own session. The gate should run via `git -C "$PROJ/.worktrees/worker-N"` (no
+# cwd change) or be dispatched into the lane. The guard returns non-zero + prints
+# the violation if this is a King session entering a lane worktree.
+guard_no_worktree_cd "$PROJ/.worktrees/worker-N" || return 1
 cd "$PROJ/.worktrees/worker-N"
 
 # Fast feedback — typecheck only (lane's changes in isolation)

@@ -1,4 +1,4 @@
-### R38. Sub-agent spawns are TABS or LANE DISPATCH — never in-process Agent() — Tier 1 (v0.28.0+)
+### R38. Sub-agent spawns are TABS or LANE DISPATCH — never in-process Agent() — Tier 2 (v0.28.0+)
 
 The cmux native "1 local agent · ctrl+t to hide tasks" indicator (the compressed bottom-of-pane in-process Agent display) is **banned** for kingdom work. Reason: it's invisible to the user, can't be observed without keystroke, can't be paused, and bypasses the kingdom's audit-trail discipline (sub-agents that spawn this way often skip the 4-step closer because their lifecycle is the parent session's lifecycle).
 

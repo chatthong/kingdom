@@ -437,6 +437,8 @@ fi
 
 ## Step 1 — Audit (always — runs IN LANE WORKSPACES per R37)
 
+*(Step 2 was folded into Step 1's audit pass when the day/start/update commands merged in v0.29.0 — numbering kept stable for cross-references.)*
+
 The audit's specialists dispatch to lane workspaces via `cmux send`, not to in-process Agent() calls. Per R37, parallelisable work runs in lanes that the user can see.
 
 ```bash
@@ -446,6 +448,8 @@ cmux_set_state "$KING_WS" "▶" "Audit in flight · 5 specialists across lanes"
 
 SPECIALISTS=("audit-lead" "audit-a-project-scan" "audit-b-checkbox-reconcile" \
              "audit-c-digest-quality" "audit-d-log-repair")
+N_SPECIALISTS=${#SPECIALISTS[@]}; export N_SPECIALISTS
+AUDIT_START=$(date +%s)
 i=0
 for spec in "${SPECIALISTS[@]}"; do
   i=$((i + 1))
@@ -465,6 +469,33 @@ done
 poll_for_sentinels "audit-*" 180   # 3-min timeout total
 ```
 
+Once the audit sentinels are in, render the `audit-summary` card so the user sees the pass landed (counts derive from the specialists' findings files; each defaults to 0 when a marker is absent, so the card never shows empty `${VARS}`):
+
+```bash
+[ -n "${ZSH_VERSION:-}" ] && setopt local_options no_nomatch 2>/dev/null  # zsh: unmatched glob passes literally instead of aborting
+
+AUDIT_DIR=".kingdom/${project}/logs"
+# Wall-clock for the audit phase (whole seconds → "Nm Ns")
+AUDIT_SECS=$(( $(date +%s) - ${AUDIT_START:-$(date +%s)} ))
+DURATION="$(( AUDIT_SECS / 60 ))m $(( AUDIT_SECS % 60 ))s"
+
+# Count findings-file marker lines; missing files / no matches → 0 (grep -c with || echo 0)
+_cnt () { grep -c "$1" $AUDIT_DIR/audit-*.md 2>/dev/null | awk -F: '{s+=$NF} END{print s+0}'; }
+N_CHECKBOXES_FLIPPED=$(_cnt 'CHECKBOX_FLIPPED')
+N_ORPHANS_BACKFILLED=$(_cnt 'ORPHAN_BACKFILLED')
+N_LOG_LINES_REPAIRED=$(_cnt 'LOG_REPAIRED')
+N_DIGESTS_STALE=$(_cnt 'DIGEST_STALE')
+N_TASK_MERGES=$(_cnt 'TASK_MERGE_CANDIDATE')
+N_SUSPECT=$(_cnt 'SUSPECT_NO_COMMIT')
+REPORT_PATH="${AUDIT_DIR}/audit-lead.md"
+PROJECT="${project}"
+
+export PROJECT DURATION N_SPECIALISTS \
+  N_CHECKBOXES_FLIPPED N_ORPHANS_BACKFILLED N_LOG_LINES_REPAIRED \
+  N_DIGESTS_STALE N_TASK_MERGES N_SUSPECT REPORT_PATH
+render_card "audit-summary"
+```
+
 **Banned (R38 violation):** no in-process `Agent()` audit specialists inside King — always dispatch to a lane or spawn a visible tab. Rationale + the other cycle anti-patterns: [`docs/work-cycle.md` § Anti-patterns](../docs/work-cycle.md#anti-patterns-workmd-steps-1-and-4).
 
 ## Step 3 — Daily kickoff (4-card brief)
@@ -473,7 +504,7 @@ King reads in the order R14 mandates (rules.md → workspace + project CLAUDE.md
 
 ```bash
 LOCAL_DATETIME=$(date '+%A, %B %-d, %Y · %H:%M %Z')
-WX_LINE=$(fetch_weather_line)   # _primitives.md helper; 3s timeout; silent on failure
+WX_LINE=$(fetch_weather_line)   # functions/fetch_weather_line.sh; 3s timeout; silent on failure
 
 HOUR=$(date '+%-H')
 if   [ "$HOUR" -ge 5 ]  && [ "$HOUR" -lt 12 ]; then VARIANT=morning
@@ -818,7 +849,7 @@ while true; do
       # v0.31.1: was a stale-name no-op call (overlay_lane_onto_kingdom is not
       # defined anywhere — bash silently skipped, then Tier-2 ran against the
       # empty kingdom branch). The real helper is kingdom_overlay_lane and it
-      # takes ($PROJ, $LANE, $BASE). See _primitives.md § Hard gates.
+      # takes ($PROJ, $LANE, $BASE). See functions/kingdom_overlay_lane.sh (the hard-gate helpers).
       kingdom_overlay_lane "$PROJ" "${LANE}" "${BASE}" || {
         echo "⚠️ Overlay failed for ${LANE} — see helper output above. Skipping Tier-2 for this lane this tick."
         continue

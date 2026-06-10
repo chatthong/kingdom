@@ -1,4 +1,4 @@
-### R14. King reads ALL context at session start (v0.14.8+ · expanded v0.19.0)
+### R14. King reads ALL context at session start — Tier 1 (v0.14.8+ · expanded v0.19.0)
 
 In order, BEFORE any action:
 

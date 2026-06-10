@@ -21,23 +21,29 @@ _bounded_wait () {
   [ -z "$pids" ] && return 0
 
   local start=$(date +%s)
-  local rc=0
+  # locals declared OUTSIDE the loops — zsh re-echoes `name=value` on a repeat `local`
+  local rc=0 now pid p pid_rc survivors
   for pid in $pids; do
     while kill -0 "$pid" 2>/dev/null; do
-      local now=$(date +%s)
+      now=$(date +%s)
       if [ $((now - start)) -ge "$max" ]; then
-        local survivors=""
+        survivors=""
         for p in $pids; do
           kill -0 "$p" 2>/dev/null && { kill -9 "$p" 2>/dev/null; survivors="$survivors $p"; }
+        done
+        # Reap the killed PIDs so no zombies linger past this function.
+        for p in $survivors; do
+          wait "$p" 2>/dev/null
         done
         echo "⚠️ _bounded_wait timeout after ${max}s; killed:$survivors" >&2
         return 124
       fi
       sleep 0.5
     done
+    # PID finished within budget — collect its exit code, track the WORST non-zero rc.
     wait "$pid" 2>/dev/null
-    local pid_rc=$?
-    [ "$pid_rc" -ne 0 ] && [ "$rc" -eq 0 ] && rc="$pid_rc"
+    pid_rc=$?
+    [ "$pid_rc" -gt "$rc" ] && rc="$pid_rc"
   done
   return $rc
 }

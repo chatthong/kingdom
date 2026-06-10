@@ -7,7 +7,7 @@
 #   set-description --description <d> → @statetext
 #   rename / pin / unpin / mark-* / clear-* → no-op
 tmux_workspace_action () {
-  local ws="$1" action="$2"; shift 2 2>/dev/null
+  local ws="$1" action="$2"; [ "$#" -ge 2 ] && shift 2
   local t; t="$(tmux_target "$ws")"
   case "$action" in
     set-color)

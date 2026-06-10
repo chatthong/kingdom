@@ -1,4 +1,4 @@
-### R23. Task file (Step 0) MUST exist BEFORE any sub-agent dispatch or code edit — Tier 1
+### R23. Task file (Step 0) MUST exist BEFORE any sub-agent dispatch or code edit — Tier 2
 
 Path: `<workspace>/.kingdom/<project>/tasks/<UTC>__<lane>__<id>.md`
 

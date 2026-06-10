@@ -1,4 +1,4 @@
-### R1. Push approval is single-shot + PR-specific
+### R1. Push approval is single-shot + PR-specific — Tier 1
 
 Every `git push` and every `gh pr create` requires a **FRESH, EXPLICIT, PR-specific** approval from the user for the SPECIFIC PR shown in the immediately preceding King prompt. Approval from prior turns NEVER carries over.
 

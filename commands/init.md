@@ -89,7 +89,7 @@ if ! (
   # the one-file-each directories (copy whole dirs so every role/reference/rule .md + *.sh come along)
   cp "$SRC/roles/"*.md      "$DST/roles/"             # king/worker/co-worker/watchman/senior (one file per role, v0.40.0)
   cp "$SRC/reference/"*.md  "$DST/reference/"         # cmux / git / skill-routing / role-bootstrap
-  cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R53 + index.md
+  cp "$SRC/rules/"*.md      "$DST/rules/"             # R01..R55 + index.md
   cp -R "$SRC/functions/."  "$DST/functions/"         # flat *.sh + index.md + _load.sh + cmux/ + tmux/ backends. -R so subfolders come along (plain cp skips directories).
   cp "$SRC/cards/"*.md      "$DST/cards/"
   # Stamp the kit version (v0.38.0+) so /kingdom:update can detect drift later.

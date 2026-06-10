@@ -17,6 +17,8 @@ parallel_edit_fanout () {
   local search="$1" replace="$2" spec="$3" glob="${4:-}"
   local rc=0 lane pr lane_wt pids=""
   local tmpdir=$(mktemp -d)
+  # Clean the tmpdir on any exit path / signal so an early return never leaks it.
+  trap 'rm -rf "$tmpdir"' EXIT INT TERM
 
   for unit in $spec; do
     lane="${unit%=*}"
@@ -98,6 +100,8 @@ parallel_edit_fanout () {
     "$(date -u +%FT%TZ)" "$search" "$replace" \
     "$([ $rc -eq 0 ] && echo ok || echo partial)" \
     >> "$LOGS/master_agent.log"
+  # Normal path: clear the trap (so it never fires later on the host shell's exit) then clean up.
+  trap - EXIT INT TERM
   rm -rf "$tmpdir"
   return $rc
 }

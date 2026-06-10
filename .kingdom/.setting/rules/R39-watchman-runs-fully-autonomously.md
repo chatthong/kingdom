@@ -1,4 +1,4 @@
-### R39. Watchman runs fully autonomously — Tier 1 (v0.29.0+)
+### R39. Watchman runs fully autonomously — Tier 2 (v0.29.0+)
 
 Watchman is a self-scheduling agent. King NEVER blocks waiting on watchman, never dispatches work to watchman, and never sends watchman briefs via `cmux send`.
 

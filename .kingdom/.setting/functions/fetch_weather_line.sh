@@ -2,8 +2,12 @@
 # kingdom function: fetch_weather_line
 
 fetch_weather_line () {
-  # Opt-out via kingdom.json.welcome.weather = false
-  local enabled=$(jq -r '.welcome.weather // true' "$KJSON" 2>/dev/null)
+  # Opt-out via kingdom.json.welcome.weather = false. Fail-open: only consult jq when
+  # $KJSON is set AND the file exists — missing config still shows weather (no jq error),
+  # but an explicit `false` is always honored. Empty jq result is treated as "true".
+  local enabled="true"
+  [ -n "${KJSON:-}" ] && [ -f "$KJSON" ] && enabled=$(jq -r '.welcome.weather // true' "$KJSON" 2>/dev/null)
+  [ -z "$enabled" ] && enabled="true"
   [ "$enabled" = "false" ] && return 0
 
   # Geolocation

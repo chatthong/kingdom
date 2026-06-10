@@ -12,6 +12,11 @@ save_session_state () {
   lanes_json=$(jq -r '.shape | keys[]' "$KJSON" 2>/dev/null)
   [ -z "$lanes_json" ] && { echo "⚠️ save_session_state: no lanes in $KJSON" >&2; return 1; }
 
+  # Build the done-flag list ONCE (was an O(lanes × tasks) `ls` storm: one ls per task
+  # file per lane). One find, then in-memory membership tests below.
+  local done_flags
+  done_flags=$(find "$WS/.kingdom/$PROJECT/logs/done" -maxdepth 1 -name '*.flag' 2>/dev/null)
+
   local lanes_obj='{}'
   while IFS= read -r lane; do
     local worktree_path="$WS/.worktrees/$lane"
@@ -34,8 +39,9 @@ save_session_state () {
       | while read -r f; do
           base=$(basename "$f" .md)
           subtask_id=$(echo "$base" | sed 's/.*__//')
-          # skip if a done flag exists (task already closed)
-          ls "$WS/.kingdom/$PROJECT/logs/done/"*"__${lane}__${subtask_id}.flag" >/dev/null 2>&1 \
+          # skip if a done flag exists (task already closed) — membership test against
+          # the in-memory done_flags list (built once above) instead of an ls per task.
+          printf '%s\n' "$done_flags" | grep -qF "__${lane}__${subtask_id}.flag" \
             && continue
           echo "$f"
           break
@@ -98,6 +104,9 @@ save_session_state () {
   # Atomic write: tmp → mv (avoids partial reads if concurrent)
   local tmp
   tmp=$(mktemp "${state_file}.XXXXXX")
+  # Clean the temp file on any signal/early-exit so a failed write never leaves a .XXXXXX turd.
+  trap 'rm -f "$tmp"' EXIT INT TERM
   printf '%s\n' "$state_json" > "$tmp" && mv "$tmp" "$state_file"
+  trap - EXIT INT TERM
   echo "✅ state saved → $state_file"
 }

@@ -1,4 +1,4 @@
-### R41. Auto-discover and use the right skill BEFORE any work — Tier 1 (v0.29.3+)
+### R41. Auto-discover and use the right skill BEFORE any work — Tier 2 (v0.29.3+)
 
 At the START of any task — King's daily ritual kickoff AND every lane's task receipt — the actor MUST resolve a skill set before writing code, designing, or dispatching:
 
@@ -46,4 +46,4 @@ At the START of any task — King's daily ritual kickoff AND every lane's task r
 
 **For lanes:** dispatch-brief's `${SUGGESTED_SKILLS}` block (rendered by `pick_skills_for_task` per R23) covers the domain skills. Lane may invoke ADDITIONAL skills mid-task if relevant (log the additional invocation to the task file's `## Progress notes`).
 
-**Why Tier 1:** skills exist to encode best practice; ignoring them means re-deriving patterns the community already solved. Cost of one extra `Skill` invocation (~1-2k tokens) is negligible vs cost of a wrong-pattern implementation that gets reviewed-then-rewritten.
+**Why Tier 2:** skills exist to encode best practice; ignoring them means re-deriving patterns the community already solved. Cost of one extra `Skill` invocation (~1-2k tokens) is negligible vs cost of a wrong-pattern implementation that gets reviewed-then-rewritten — a strong default, but skipping it produces worse output, not corrupted state, so it's Tier 2 per the v0.31.0 Tier-1-cap legend.

@@ -154,4 +154,4 @@ The Senior runs the closer on story completion — push-eligible OR blocked — 
 - [`functions/index.md`](../functions/index.md): `create_story_branch`, `spawn_master_workspace`, `spawn_loop`, `merge_into_story`, `run_tier2_on_story`, `review_tick`, `guard_dispatch_scope`, `_bounded_wait`.
 - [`king.md`](king.md): how the King assigns stories, partitions scopes, sequences, and resolves cross-story drift (R50).
 - [`worker.md`](worker.md): how a pod worker receives sub-tasks + fix-tasks from a Senior.
-- [`docs/story-pods.md`](../../../docs/story-pods.md): the full pod model + when to use a pod vs the solo path.
+- [`docs/story-pods.md`](../../../docs/story-pods.md): the full pod model + when to use a pod vs the solo path (project-relative — resolves from the standard workspace layout; copy lives in the plugin repo's docs/).
