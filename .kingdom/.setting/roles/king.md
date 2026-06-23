@@ -394,6 +394,8 @@ Then — per [§ Kingdom as review staging](#kingdom-as-review-staging-working-t
 
 Push only happens after the user explicitly approves the kingdom review. King NEVER skips the overlay-onto-kingdom step, and NEVER commits/merges on the `kingdom` branch (R4). When ≥2 lanes are gated, overlay ALL of them so the user reviews the full set at once (R15); the overlay stays dirty until push (R29).
 
+> **Explicit-instruction carve-out (R04 + R15).** The overlay is the King's **self-initiated default**. If the user explicitly instructs "merge X to kingdom" / "merge this lane to kingdom" / "commit to kingdom", the King obeys the literal instruction — it does NOT silently substitute the overlay. The King states the tradeoff EXACTLY ONCE ("a real merge commit on kingdom breaks the byte-for-byte feature-branch carve until kingdom is reset") and then proceeds. It NEVER reframes its own overlay choice as something the user asked for. R04 (no commits on kingdom) stays Tier 1 for self-initiated behaviour; this carve-out applies only to a direct human order.
+
 This eliminates two failure modes:
 - "lane finished but King stayed idle" (v0.14.10 fix)
 - "King jumped from gate-pass to push without showing the user the integrated review surface" (v0.15.1 fix — real test caught this)
@@ -514,7 +516,9 @@ This guarantees `kingdom` = source of truth for what's about to ship. After the 
 # Correct carve (single fast-forward; no new commits)
 git checkout -b "feature/<topic>" "worker-N"
 git push -u origin "feature/<topic>"
-gh pr create --base develop --head "feature/<topic>" --title "..." --body "..."
+# R56: PRs ALWAYS open as a DRAFT; check the exit code so a failed create never goes silent.
+# The PR is promoted to ready only on the user's literal `open` word → `gh pr ready <N>`.
+gh pr create --draft --base develop --head "feature/<topic>" --title "..." --body "..." || return 1
 
 # WRONG — adds a commit AFTER carving:
 git checkout -b "feature/<topic>" "worker-N"
@@ -629,6 +633,7 @@ git diff "origin/$BASE" --stat
 - ❌ King auto-resolves a genuine source-file collision instead of surfacing it
 - ❌ King treats kingdom as a target for push (it's local-only; never `git push origin kingdom`)
 - ❌ **King adds commits to `feature/<topic>` after carving from worker-N tip.** The feature branch must be byte-for-byte identical to worker-N. If you want extra content in the PR, put it on worker-N first (Option A) or open a separate PR (Option B). See § "STRICT: `feature/<topic>` = `worker-N` tip" above.
+- ❌ **King silently substitutes the overlay when the user explicitly ordered a real merge/commit.** When the user says "merge X to kingdom", the King obeys verbatim, states the tradeoff once, and proceeds. It NEVER reframes its own overlay preference as something the user requested (R04 carve-out).
 
 ---
 
@@ -641,7 +646,7 @@ The Watchman is NOT background decoration. It writes `WATCH_*.md` reports for ev
 | King action | Files to read first | Why |
 |---|---|---|
 | **First message after `/kingdom:work`** (daily kickoff) | **Workspace CLAUDE.md + Project CLAUDE.md + `~/.claude/projects/<ws>/memory/MEMORY.md` + the user's personal notes + Newest 5 `WATCH_*.md` + `WATCH_DOCS_AUDIT.md` + `watchman_state.json`** + **`haiku_read_docs_orientation "king" "$PROJ" "$LOGS"`** (R45, v0.31.1+ — fans out up to 10 Haiku in parallel across the WHOLE project: Phase 1 scans every directory for `readme.md` / `index.md` / `todo*.md` wayfinding files (cap 30); Phase 2 reads the 20 newest `*.md` everywhere else, minus test-reports. Consolidated digest lands at `<LOGS>/.king_<UTC>_doc_context.md`) | Full context: workspace rules, project conventions, the user's preferences, watchman state, AND a fresh project-docs digest. Skipping any of these breaks trust within minutes. |
-| **Any decision point** (kickoff, dispatch, push prompt, "what's the state?") | `<LOGS>/king-inbox/` (`WATCH_*` + `NOTIFY_*`) — read, fold into the decision, then **delete** each consumed item (see [§ King-inbox — consume-and-delete](#king-inbox--consume-and-delete-mandatory)) | The watchman's notify-fallback queues alerts here when cmux can't deliver; consuming-and-deleting keeps the inbox a live work queue instead of an unbounded pile |
+| **Any decision point** (kickoff, dispatch, push prompt, "what's the state?") | Shared broker inbox: `$WS/.kingdom/<project>/inbox/` — drain messages addressed `to==king` or `to==all`, archive each after handling (see [§ Shared broker inbox — drain at EVERY turn](#shared-broker-inbox--drain-at-every-turn-mandatory--r55)). Also sweep legacy `king-inbox/` stores and archive them. | R55: the King-as-model only sees inbox content when it runs `inbox_list`. Consume-and-archive keeps the feed a live work queue; legacy-store sweep retires the old scattered stores. |
 | **Dispatch a new task to a lane** | `watchman_state.json.blocked_lanes` | Don't dispatch to a lane already blocked on a permission prompt or stuck Claude session |
 | **Run pre-commit gate** | Latest `WATCH_*develop_green.md` OR `WATCH_*develop_RED_*.md` | If develop just broke, abort the gate; tell the user to wait until watchman reports green |
 | **Ask the user "push?"** | Latest `WATCH_*pr-<N>_*.md` + `watchman_state.json.pr_states[N]` | Flag if the same PR has unaddressed review comments, CI mid-flight, or other watchman concerns |
@@ -812,39 +817,30 @@ jq '.blocked_lanes' "$LOGS/watchman_state.json"
 jq -r '.last_smoke_ts' "$LOGS/watchman_state.json"
 ```
 
-### King-inbox — consume-and-delete (mandatory)
+### Shared broker inbox — drain at EVERY turn (mandatory · R55)
 
-The watchman's notify-fallback (v0.40.0) appends every alert it fires to `<LOGS>/king-inbox/` as a file — `WATCH_<UTC>__<key>.md` for audit findings, `NOTIFY_<UTC>__<key>.md` for lane-done / state pings — so a finding is never *only* a sidebar badge the King might miss. The inbox is a **work queue, not an archive**: when King reads + acts on an item, it deletes that file (same discipline as the `WATCH_DOCS_AUDIT.md` consume below). Nothing else clears these, so leaving them grows the inbox unbounded over a long-running King.
+The canonical inter-role message store is a **single flat directory** (v0.44.x+, R55):
 
-King drains the inbox at every decision point (kickoff, pre-dispatch, "what's the state?"):
-
-```bash
-INBOX="$LOGS/king-inbox"
-# `find | while read` (NOT `for ITEM in "$INBOX"/WATCH_* …`): a plain glob aborts the whole
-# for-statement under zsh's NOMATCH when the inbox is empty — the common case.
-while IFS= read -r ITEM; do
-  [ -f "$ITEM" ] || continue
-  # Read + fold the finding into the current decision (dispatch, gate, push prompt).
-  # Then consume it — the action it triggered is now the record, not the inbox file.
-  rm -f "$ITEM"
-done < <(find "$INBOX" -maxdepth 1 \( -name 'WATCH_*' -o -name 'NOTIFY_*' \) 2>/dev/null)
-
-# Safety sweep — drop anything stale that never got consumed (e.g. inbox read
-# while King was mid-gate and the item didn't apply). Bounds the directory even
-# if a consume is ever skipped.
-find "$INBOX" -name 'NOTIFY_*' -mtime +3 -delete 2>/dev/null
+```
+$WS/.kingdom/<project>/inbox/
 ```
 
-### Inbox triage — lane questions + flags (mandatory, every poll tick · R55)
+Filename: `<UTC>__<from>__<to>__<type>.md`; front matter: `from`, `to`, `type`, `task`, `needs-reply`. Consumed messages move to `inbox/.archive/`. **Everyone may read the whole feed; the addressed actor owns the action + consume.** The King is addressed when `to == king` or `to == all`.
 
-Separate from the watchman's notify-fallback (`king-inbox/`, above), the **two-way inbox** (R55) is how lanes ask the King things without stalling. Directory: `$WS/.kingdom/<project>/inbox/king/`. A lane that hits a question or blocker posts `inbox_send king question <task> yes "..."` (or `flag`), sets its state to `❓ waiting on King`, and **keeps working** — so the ball is in the King's court, and the King must triage every poll tick or the lane idles needlessly.
+> **The King-as-model only sees inbox content when it actively calls `inbox_list`.** A cmux_notify badge is human-facing; the King cannot "see" it. Therefore the King MUST drain and consume (to==king or to==all) at **every turn** it acts or replies to the user — session kickoff, every dispatch decision, every push/gate decision, and whenever it returns to the user. This is NOT limited to the Step-5 poll loop. Consume-and-archive is MANDATORY to prevent the feed growing into an unread pile.
+
+**Legacy-store migration sweep.** The King's drain also sweeps the legacy stores: `$WS/.kingdom/<project>/king-inbox/`, `.../logs/king-inbox/`, and `.../king-inbox.md`. King reads + acts on items found there, then archives/deletes them. Going forward everyone writes only to `inbox/`. Document any migration in the kickoff synthesis.
 
 ```bash
-# Every poll tick (and at every decision point): drain the king inbox.
+# ── Every-turn inbox drain (King) ──────────────────────────────────────────
+# Run this block at: session kickoff, every dispatch decision, every push/gate
+# decision, and before returning to the user with any status reply.
 PROJECT=$(basename "$PROJ")
+
+# 1. Drain the canonical shared broker feed (to==king or to==all)
 while IFS= read -r MSG; do
   [ -f "$MSG" ] || continue
-  inbox_read "$MSG"                          # read the front matter + body
+  inbox_read "$MSG"
   TYPE=$(awk -F': ' '/^type:/{print $2; exit}' "$MSG")
   FROM=$(awk -F': ' '/^from:/{print $2; exit}' "$MSG")
   TASK=$(awk -F': ' '/^task:/{print $2; exit}' "$MSG")
@@ -853,23 +849,41 @@ while IFS= read -r MSG; do
       # Answer it (King's call) OR escalate a genuine user-decision to the user.
       # Reply routes back to the asking lane's inbox + nudges its pane.
       inbox_reply "$FROM" "$TASK" "<the answer / decision>"
-      guard_lane_workspace_exists "$FROM" && cmux_send "$FROM" "King replied in your inbox — inbox_list $FROM"
+      guard_lane_workspace_exists "$FROM" && \
+        cmux_send "$FROM" "King replied in your inbox — inbox_list --to $FROM"
       ;;
     memory-request)
       # The King is the SOLE memory writer (R54). Validate against R34 (rules
       # override memory; no duplicates), then write it yourself or decline.
-      # Either way, reply so the lane knows the outcome.
       inbox_reply "$FROM" "$TASK" "memory-request <accepted+written | declined: <reason>>"
       ;;
     docs-update|info)
       : # fold into the current decision; no reply needed
       ;;
   esac
-  inbox_read "$MSG" --consume               # archive after handling — keep the queue live
-done < <(inbox_list king 2>/dev/null)
+  inbox_read "$MSG" --consume    # move to .archive/ — keep the queue live
+done < <(inbox_list --to king 2>/dev/null)
+
+# 2. Legacy-store sweep — read + archive legacy king-inbox/ directories
+for LEGACY_INBOX in \
+    "$WS/.kingdom/$PROJECT/king-inbox" \
+    "$WS/.kingdom/$PROJECT/logs/king-inbox"; do
+  [ -d "$LEGACY_INBOX" ] || continue
+  while IFS= read -r ITEM; do
+    [ -f "$ITEM" ] || continue
+    cat "$ITEM"    # read + fold into current decision
+    rm -f "$ITEM"  # consume — the action is now the record
+  done < <(find "$LEGACY_INBOX" -maxdepth 1 -type f 2>/dev/null)
+done
+# Legacy flat file (if present):
+LEGACY_FILE="$WS/.kingdom/$PROJECT/king-inbox.md"
+if [ -f "$LEGACY_FILE" ]; then
+  cat "$LEGACY_FILE"
+  rm -f "$LEGACY_FILE"
+fi
 ```
 
-A `question`/`flag` the King can't decide alone (it's a real product/scope call) gets **escalated to the user**, not silently sat on. `memory-request` is King-only to write (R54). Consume each item after handling so the inbox stays a work queue. The watchman's Inbox-triage-assist duty (see [`watchman.md`](../roles/watchman.md)) nudges the King if any `needs-reply` item waits > 2 ticks — a second safety net so no lane stalls unseen.
+A `question`/`flag` the King can't decide alone (it's a real product/scope call) gets **escalated to the user**, not silently sat on. `memory-request` is King-only to write (R54). The watchman's Inbox-triage-assist duty (see [`watchman.md`](../roles/watchman.md)) nudges the King if any `needs-reply` item has been pending > 2 ticks — a second safety net so no lane stalls unseen.
 
 ### What changes when there's NO watchman (shape: `watchman: 0`)
 
@@ -1271,7 +1285,7 @@ King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = pr
 
 1. **Pre-commit gate passes** → King has green test report. The lane's task file (`<LOGS>/../tasks/<UTC>__<lane>__<id>.md`) should already have its status set to `verifying` or `done` at this point; King reads it to understand the layered execution before approving the push.
 2. **King reports to chat:** "Lane <name> ready. Test report at <path>. Proposed PR title: `feat(scope): ...`. Proposed PR branch name: `feature/<topic>`. Push?"
-3. **The user says push** (or holds with reasoning).
+3. **The user says push** (or holds with reasoning). `push` is single-shot + PR-specific (R1). A generic "yes" / approval intended for another PR does NOT count.
 4. **FINAL conflict check** (King-only, after the user's approval). `<branch>` = the lane tip `<role>-<n>` (solo path) or the Senior's `story/<id>` (pod path):
    ```bash
    cd "$PROJ"
@@ -1285,15 +1299,18 @@ King NEVER pushes without the user's explicit OK. Full sequence (King's cwd = pr
    fi
    ```
 5. **King carves the PR branch + pushes (from primary checkout)** — canonical helper [`carve_and_push_feature.sh`](../functions/carve_and_push_feature.sh) (auto-fills the body from the task file, see § Auto-generated PR body):
-   - **Solo path** — carve `feature/<topic>` byte-for-byte from the lane tip `<role>-<n>` (R9), push, open the PR against `$BASE`:
+   - **Solo path** — carve `feature/<topic>` byte-for-byte from the lane tip `<role>-<n>` (R9), push, open a **DRAFT** PR against `$BASE` (R56 — all PRs open as draft; the `open` word marks one ready):
    ```bash
    cd "$PROJ"
    git branch "feature/<topic>" "<role>-<n>"     # ref-only; no checkout, lane worktree unaffected
    git push -u origin "feature/<topic>"
-   gh pr create --base "$BASE" --head "feature/<topic>" \
-       --title "feat(scope): ..." --body "..." --reviewer <lead>
+   gh pr create --draft --base "$BASE" --head "feature/<topic>" \
+       --title "feat(scope): ..." --body "..." --reviewer <lead> || return 1
+   # PR is now DRAFT. King reports the draft PR number in chat.
+   # The user says the literal word "open" (single-shot, per-PR, R56) to mark it ready:
+   #   gh pr ready <N>
    ```
-   - **Pod path** — the branch to push is the Senior's already-assembled `story/<id>` (NOT a per-lane `feature/<topic>`; lane branches stay local per R6). The King carves the `story/<id> -> $BASE` PR after reading the `SENIOR_*` verdict + running the cross-story check (R50); it never re-overlays or re-gates the story (R48). See [§ Story-pod delegation + cross-story](#story-pod-delegation--cross-story-v0320-r30r46-r50).
+   - **Pod path** — the branch to push is the Senior's already-assembled `story/<id>` (NOT a per-lane `feature/<topic>`; lane branches stay local per R6). The King carves the `story/<id> -> $BASE` PR after reading the `SENIOR_*` verdict + running the cross-story check (R50); it never re-overlays or re-gates the story (R48). Same draft-first / `open`-to-ready gate applies (R56). See [§ Story-pod delegation + cross-story](#story-pod-delegation--cross-story-v0320-r30r46-r50).
 6. **King logs push** — appends one line to `master_agent.log` with timestamp + PR number.
 7. **After PR merge** (lead clicks Merge or manually closes): King resyncs kingdom and frees the merged lane via the canonical helper (R26):
    ```bash

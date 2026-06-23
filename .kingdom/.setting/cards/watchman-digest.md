@@ -40,5 +40,5 @@
 ## Notes
 
 - Fires **once per local day** — gate on a `last_digest_date` marker in `watchman_state.json` (write today's date after rendering; skip if it already matches). This respects the R40 Haiku cap + change-gating: the digest is a roll-up of already-computed tick state, it spawns no extra Haiku.
-- The digest reads from existing state (`watchman_state.json`, the day's `WATCH_*` reports, `inbox_pending_count king`) — it does NOT re-run any duty.
+- The digest reads from existing state (`watchman_state.json`, the day's `WATCH_*` reports, `inbox_pending_count --to king`) — it does NOT re-run any duty.
 - All values are integers / short phrases; never paste raw diffs. Keep it one screen. No ANSI.

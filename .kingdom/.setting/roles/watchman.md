@@ -42,7 +42,7 @@ One rule defines the watchman's place in the **story-pod three-way split** (it g
 
 ## Conventions (inbox · cards · memory)
 
-- **Talking to the King (R55):** the watchman already routes alerts to the King via `cmux_notify` + the king-inbox fallback, but for a *question* or a structural flag that needs a King decision, use the durable inbox: `inbox_send king flag "<context>" yes "..."` (or `question`). It never blocks — the watchman is a `/loop`, it always continues. (See the new Inbox-triage-assist + stale-lane duties below, which are the watchman's own inbox-aware work.)
+- **Talking to the King (R55):** the watchman already routes alerts to the King via `cmux_notify`, but for a *question* or a structural flag that needs a King decision, write to the shared broker inbox: `inbox_send king flag "<context>" yes "..."` (or `question`). The watchman can also address any lane directly using its slug as the `<to>` field. It never blocks — the watchman is a `/loop`, it always continues. (See Helper duty A below, which scans the whole broker feed and nudges any stale `needs-reply` message regardless of recipient.)
 - **Replying with cards:** urgent tick → [`watchman-tick`](../cards/watchman-tick.md); blocked lane detected → [`blocked-lane`](../cards/blocked-lane.md); individual event → [`watchman-alert`](../cards/watchman-alert.md); once-per-day digest → [`watchman-digest`](../cards/watchman-digest.md). One `render_card` call, no ANSI.
 - **Memory is King-only (R54):** if a scan surfaces something memory-worthy (a recurring drift pattern, a project fact), the watchman does NOT write memory — it sends `inbox_send king memory-request "<scan>" yes "<proposal>"`. (The watchman's existing write authority stays scoped to `WATCH_*`/`watchman_state.json`/low-risk doc fixes — memory was never in scope, R54 just makes the routing explicit.)
 
@@ -777,31 +777,38 @@ Beyond the eight Haiku surveillance duties, the watchman runs three lightweight 
 
 ### Helper duty A — Inbox triage assist (every tick)
 
-The watchman is the King's eyes; the King's inbox is a place the King can fall behind on. Each tick, the watchman summarises the King's pending questions and nudges if anything is going stale:
+The watchman is the kingdom's eyes on the shared broker inbox. The feed is visible to everyone, and the watchman scans the **whole pending feed** each tick — not just messages addressed to the King — looking for `needs-reply: yes` items that have waited more than 2 ticks without a reply, regardless of who the message is addressed to. A stale unanswered question is exactly the silent-stall R55 fights:
 
 ```bash
-PENDING=$(inbox_pending_count king 2>/dev/null || echo 0)
+# Whole-feed pending count (broker model: everyone reads everything).
+PENDING=$(inbox_pending_count 2>/dev/null || echo 0)
 if [ "$PENDING" -gt 0 ]; then
-  # One-line roll-up into THIS tick's log (King reads it in the tick summary).
-  echo "📨 King inbox: $PENDING pending" >> "$LOGS/watch/WATCH_TICK_${UTC}.md"
-  # Track per-question tick-age in watchman_state.json (inbox_ages map). For any
-  # needs-reply item that has now waited > 2 ticks unanswered, nudge the King —
-  # a question the King hasn't seen is exactly the silent-stall R55 fights.
-  while IFS= read -r MSG; do
-    [ -f "$MSG" ] || continue
-    KEY=$(basename "$MSG")
+  # One-line roll-up into THIS tick's log.
+  echo "📨 Shared inbox: $PENDING pending" >> "$LOGS/watch/WATCH_TICK_${UTC}.md"
+  # Track per-message tick-age in watchman_state.json (inbox_ages map).
+  # For any needs-reply item waiting > 2 ticks (regardless of recipient), nudge
+  # the addressed actor: bell the King when to==king, or bell the specific lane.
+  while IFS= read -r MSGFILE; do
+    [ -f "$MSGFILE" ] || continue
+    KEY=$(basename "$MSGFILE")
+    NEEDS_REPLY=$(grep -m1 '^needs-reply:' "$MSGFILE" 2>/dev/null | awk '{print $2}')
+    [ "$NEEDS_REPLY" = "yes" ] || continue
     AGE=$(jq -r ".inbox_ages[\"$KEY\"] // 0" "$LOGS/watchman_state.json")
     AGE=$((AGE + 1))
     jq ".inbox_ages[\"$KEY\"] = $AGE" "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
     if [ "$AGE" -gt 2 ]; then
-      cmux_notify "$KING_WS" "🕵️ watchman-$WI" "Inbox stale · $KEY" \
-        "A lane question has waited $AGE ticks unanswered — triage it."
+      TO=$(grep -m1 '^to:' "$MSGFILE" 2>/dev/null | awk '{print $2}')
+      # Resolve the addressed actor's workspace ref from workspace-refs.env.
+      TO_WS_VAR=$(printf '%s' "${TO:-king}" | tr 'a-z-' 'A-Z_')_WS
+      TO_WS=$(eval echo "\${${TO_WS_VAR}:-$KING_WS}")
+      cmux_notify "$TO_WS" "🕵️ watchman-$WI" "Inbox stale · ${TO:-?}" \
+        "A needs-reply message has waited $AGE ticks unanswered — triage it: $KEY"
     fi
-  done < <(inbox_list king 2>/dev/null)
+  done < <(inbox_list 2>/dev/null)
 fi
 ```
 
-This is read-only on the inbox — the watchman never answers a question (only the King does, R55); it only *surfaces* and *escalates* staleness.
+This is read-only on the inbox — the watchman never answers a question (only the addressed actor does, R55); it only *surfaces* and *escalates* staleness.
 
 ### Helper duty B — Stale-lane detection (every tick · the user's #11 pain)
 
@@ -828,7 +835,7 @@ TODAY=$(date +%Y-%m-%d)                                  # local date
 LAST_DIGEST=$(jq -r '.gates.last_digest_date // empty' "$LOGS/watchman_state.json")
 if [ "$TODAY" != "$LAST_DIGEST" ]; then
   # Render the watchman-digest card (variables pulled from watchman_state.json,
-  # the day's WATCH_* reports, and inbox_pending_count king). See cards/watchman-digest.md.
+  # the day's WATCH_* reports, and inbox_pending_count --to king). See cards/watchman-digest.md.
   render_card "watchman-digest"
   jq ".gates.last_digest_date = \"$TODAY\"" "$LOGS/watchman_state.json" > /tmp/ws-state && mv /tmp/ws-state "$LOGS/watchman_state.json"
 fi
@@ -1463,7 +1470,7 @@ Each watchman gets its own worktree (`watchman-1`, `watchman-2`) tracking the sa
 - Maintain the cross-tick **findings ledger** (dedup, persistence-escalation, auto-resolve, notify-fallback to king-inbox) and attach a **suggested action** + a per-tick **"King's next action"** line so every finding is actionable, not just noise (v0.40.0).
 - Track the **develop-health trend** (sustained-RED vs one-off, flaky-test detection).
 - Backfill `(PR #pending) → (PR #N)` on TODO/CSV close-suffixes (R27).
-- **Triage assist (v0.44.0):** surface the King's pending-inbox count each tick + nudge the King when a `needs-reply` question waits > 2 ticks (Helper duty A) — read-only on the inbox; never answers.
+- **Triage assist (v0.44.0):** scan the whole shared broker inbox feed each tick + nudge the addressed actor when any `needs-reply` message waits > 2 ticks regardless of recipient (Helper duty A) — read-only on the inbox; never answers.
 - **Stale-lane detection (v0.44.0):** run `kingdom_repair_stale_lanes --detect-only` each tick + `inbox_send king flag` any workspace↔worktree disconnect (Helper duty B) — detect-only, the King repairs.
 - **Daily digest (v0.44.0):** render the `watchman-digest` card once per local day (Helper duty C) — fleet health, PRs, pending questions, doc-drift in one card.
 - Render the `watchman-alert` / `watchman-tick` / `blocked-lane` / `watchman-digest` cards (from the `cards/` directory) on alert-worthy events.

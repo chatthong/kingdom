@@ -164,7 +164,8 @@ graph TB
    cd <project>
    git branch feature/<topic> <role>-<n>
    git push -u origin feature/<topic>
-   gh pr create --base develop --head feature/<topic> --title "..." --body "..."
+   # R56: PRs open as a DRAFT; promoted to ready on the user's literal `open` word → `gh pr ready <N>`.
+   gh pr create --draft --base develop --head feature/<topic> --title "..." --body "..."
    ```
 10. King logs the push to `master_agent.log`.
 11. After PR merge (lead clicks Merge or manually closes): King cleans up:

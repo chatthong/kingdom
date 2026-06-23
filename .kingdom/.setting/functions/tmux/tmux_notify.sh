@@ -5,10 +5,11 @@
 # an alert is never only a transient flash (the cmux dead-notify lesson).
 #   tmux_notify <ws-ref> <title> <subtitle> <body>
 #
-# U4: the durable fallback now writes to the two-way inbox (Shared spec 1) at
-#   <workspace>/.kingdom/<project>/inbox/king/<UTC>__<from>__flag.md
-# instead of the legacy logs/king-inbox/. The project dir is derived the same way the old
-# king-inbox code did: $PROJECT if exported, else the dir component just above logs/ in $LOGS.
+# R55: the durable fallback writes to the SHARED BROKER feed (one flat dir) at
+#   <workspace>/.kingdom/<project>/inbox/<UTC>__<from>__king__flag.md
+# (NOT a per-recipient inbox/king/ subdir — inbox_list/inbox_pending_count glob only inbox/*.md,
+# so a subdir write would be invisible to the King's drain). The project dir is derived the same
+# way the old king-inbox code did: $PROJECT if exported, else the dir just above logs/ in $LOGS.
 tmux_notify () {
   local ws="$1" title="$2" sub="$3" body="$4"
   tmux display-message "${title}: ${sub} — ${body}" 2>/dev/null
@@ -19,13 +20,13 @@ tmux_notify () {
     case "${ws##*:}" in king|King) : ;; *) tmux_set_state "$ws" "⚠" 2>/dev/null ;; esac
   fi
 
-  # Durable inbox write (Shared spec 1). Resolve the inbox dir.
+  # Durable inbox write (R55 shared broker feed). Resolve the flat inbox dir.
   local inbox=""
   if [ -n "${PROJECT:-}" ]; then
-    inbox="${PWD}/.kingdom/${PROJECT}/inbox/king"
+    inbox="${PWD}/.kingdom/${PROJECT}/inbox"
   elif [ -n "${LOGS:-}" ]; then
     # $LOGS is .../.kingdom/<project>/logs → its parent is .../.kingdom/<project>.
-    inbox="${LOGS%/logs}/inbox/king"
+    inbox="${LOGS%/logs}/inbox"
   fi
   [ -z "$inbox" ] && return 0   # no resolvable project dir; the transient flash already fired
 
@@ -40,12 +41,13 @@ tmux_notify () {
     ""|king|King) from="system" ;;
     *)            from="$slug" ;;
   esac
-  file="$inbox/${utc}__${from}__flag.md"
+  file="$inbox/${utc}__${from}__king__flag.md"
   {
     printf -- '---\n'
     printf 'from: %s\n' "$from"
     printf 'to: king\n'
     printf 'type: flag\n'
+    printf 'task: -\n'
     printf 'needs-reply: no\n'
     printf -- '---\n'
     printf '# %s\n- %s\n- %s\n' "$title" "$sub" "$body"

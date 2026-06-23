@@ -182,7 +182,7 @@ At session start, master decides mode first:
   ```bash
   load_feature tmux && export KINGDOM_BACKEND=tmux   # functions/tmux/
   ```
-  Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol (`cmux_notify` falls back to a durable `inbox/king/` message under tmux (v0.44.0 two-way inbox, R55)). The tmux wrappers mirror `cmux/` one-for-one — see [`functions/index.md`](functions/index.md) § tmux.
+  Per-lane worktrees via `git worktree add`. Same `<LOGS>/` artifact protocol (`cmux_notify` falls back to a durable message in the flat `inbox/` feed under tmux (shared broker inbox, R55)). The tmux wrappers mirror `cmux/` one-for-one — see [`functions/index.md`](functions/index.md) § tmux.
 
 - **Standalone mode:** default for everything else. No worktrees, no teammates. Master spawns parallel sub-agents via the `Agent` tool — multiple Agent calls in one message run concurrently.
 

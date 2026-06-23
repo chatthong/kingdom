@@ -17,12 +17,14 @@ carve_and_push_feature () {
   git push -u origin "feature/$topic" \
     || { echo "❌ carve_and_push_feature: push failed for feature/$topic" >&2; return 1; }
   gh pr create \
+    --draft \
     --base develop \
     --head "feature/$topic" \
     --title "$pr_title" \
-    --body "$pr_body"
+    --body "$pr_body" \
+    || { echo "❌ carve_and_push_feature: gh pr create failed for feature/$topic" >&2; return 1; }
 
-  # After push (R29), discard the kingdom overlay — ONLY now, never before push.
+  # After successful push + draft PR (R29), discard the kingdom overlay — ONLY now, never before.
   # Pass the project root explicitly (this helper runs with cwd = project root).
   kingdom_discard_overlay "$PWD"
 }

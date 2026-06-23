@@ -46,5 +46,6 @@ If any step fails, the helper aborts and this card is NOT printed (a failure car
 
 ## Notes
 
+- PRs follow the two-stage gate (R56): `push` → DRAFT PR; `open` → `gh pr ready <N>` marks it ready for review; only then can a lead approve and the PR reach MERGED. This card fires after that full journey — it never implies a draft was merged directly.
 - Watchman can also fire this card if it's polling PRs and detects MERGED before King's next tick. In that case, watchman sends `cmux notify` to King's workspace + writes a one-liner to `master_agent.log`; King re-prints the card on next tick + runs the resync.
 - The "Lane freed" line reflects R26 Step 5: the merged-lane's `worker-N` branch resets to develop tip + is now eligible for new dispatch.

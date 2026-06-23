@@ -4,6 +4,26 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.45.0] — 2026-06-24
+
+PR-clarity + inbox-reliability release driven by two real consumer bugs (the King imposing an overlay when the user said *merge*; the King never seeing its inbox). Built by a 10-agent Sonnet implementer fleet (one per non-overlapping file set, against one locked contract) + a 3-agent Opus audit (consistency / bash-safety / completeness). All 9 audit findings fixed; helpers `bash -n`-clean and the inbox helpers live-tested under `zsh`.
+
+### Added
+
+- **R56 (Tier 2) — PRs open as draft; the literal `open` marks ready.** Every `gh pr create` now uses `--draft` (with a `|| return 1` exit-code check so a failed create never goes silent). A PR is promoted to ready only on the user's literal `open` word → `gh pr ready <N>`, single-shot per-PR exactly like R1's `push`. Wired through `carve_and_push_feature.sh`, `commands/work.md`, `roles/king.md`, `reference/git.md`, and the `push-prompt` / `pr-merged` cards.
+
+### Changed
+
+- **R04 carve-out — explicit instruction wins.** The kingdom overlay (reset → `git apply` → review → restore; no commits on kingdom) is now documented as the King's *self-initiated default* for carving PRs. A direct human `merge` / `commit to kingdom` instruction **overrides** it: the King performs the real git operation verbatim, states the byte-for-byte-carve tradeoff exactly once, and never silently substitutes the overlay nor reframes its own choice as the user's. R04 stays Tier 1 (the no-commit default is unchanged); R15 + `king.md` cross-reference the carve-out so the overlay is never read as a ban on a human merge order.
+- **R55 rewritten: per-recipient mailboxes → one SHARED BROKER feed.** A single flat `.kingdom/<project>/inbox/` directory, filenames `<UTC>__<from>__<to>__<type>.md`, front matter `from/to/type/task/needs-reply`. Everyone reads the whole feed (visibility/audit); the addressed actor (`to == me` or `to == all`) owns the action + reply + consume; anyone can bell anyone, including the king. The five `inbox_*` helpers updated accordingly (`inbox_list [--to|--from]`, `inbox_pending_count [--to]`, `inbox_send <to> …` encoding `<to>` in the filename, `inbox_reply <to> …`). Role docs (worker/co-worker/senior/watchman/king) + the `lane-question` card moved onto the broker verbs.
+
+### Fixed
+
+- **The King was structurally blind to its own inbox** (live: 100+ unconsumed messages over a month across 4 scattered stores). Three fixes: (1) **doorbell** — `commands/work.md` now persists `KING_WS=` into `workspace-refs.env` (idempotently), so a bell to `king` actually resolves a workspace ref; (2) **every-turn drain** — the King drains *and consumes* its inbox at every turn it acts/replies, not only inside the Step-5 poll loop; (3) **store convergence** — the legacy `king-inbox/`, `logs/king-inbox/`, and `king-inbox.md` stores are swept into the single `inbox/` feed.
+- **zsh `local`-in-loop stdout leak** in `inbox_list.sh` and `inbox_pending_count.sh` — re-declaring `local base`/`fto` inside the loop made zsh echo the assignment to stdout, corrupting the path list and the integer count (would have silently re-broken the King's drain). Locals hoisted out of the loop; verified live under `zsh` (`inbox_pending_count --to king` now prints a clean integer).
+- **`tmux_notify` durable fallback** was writing to the retired per-recipient `inbox/king/` subdir (invisible to the broker glob) with a malformed filename — rerouted to the flat `inbox/` feed with the correct `<UTC>__<from>__king__flag.md` name + `task:` front matter.
+- Stale `gh pr create` examples without `--draft` in `king.md` and `reference/git.md`, and stale `inbox_pending_count king` (bare-arg) invocations in `watchman.md` / `watchman-digest` corrected to `--to king`; `index.md` tmux-fallback note updated to the broker model.
+
 ## [0.44.2] — 2026-06-10
 
 Zero-backlog pass: every remaining flag from the 2026-06-10 audit AND the long-standing CLAUDE.md open-thread bugs are now closed. Built by a 3-agent Opus cleanup army (core latents / backend latents / docs-rules-commands), all changes `zsh -n`-verified, the concurrency-sensitive ones live-tested.

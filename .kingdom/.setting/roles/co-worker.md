@@ -20,10 +20,16 @@ Co-workers are **solo-path lanes** (never in a Senior's story pod — pods are w
 
 ## Shared lane conventions (inherited from worker.md)
 
-A co-worker is a worker with an interactive dispatch flow, so it inherits the worker's task-start + close-out habits verbatim (see [`worker.md`](worker.md) → "Before implementing", "Talking to the King", "Conventions"):
+A co-worker is a worker with an interactive dispatch flow, so it inherits the worker's task-start + close-out habits verbatim (see [`worker.md`](worker.md) → "Before implementing", "Talking to other actors", "Conventions"):
 
 - **Fan out big work via the Workflow tool (R53).** Before implementing: if the task spans 3+ files or needs cross-codebase research, fan out via the Workflow tool per [`reference/workflow-fanout.md`](../reference/workflow-fanout.md) (self-detect; fall back to bounded `Agent()`/tabs). One Workflow run per task. The only co-worker twist: **the user drives the brief (R32)** — once the brief is set, the army runs identically.
-- **Talking to the King (R55):** when a decision needs the King (not the user at your side), post `inbox_send king question "$SUBTASK_ID" yes "..."`, set state `❓ waiting on King`, render the [`lane-question`](../cards/lane-question.md) card, and keep working. Check `inbox_list co-worker-N` at task start, when blocked, and before the closer. (Most co-worker questions go to the *user* directly since they're paired — use the inbox for King-only decisions like push ordering.)
+- **Talking to other actors (R55):** when a decision needs the King or another lane (not the user at your side), use the shared broker inbox. Post `inbox_send king question "$SUBTASK_ID" yes "..."` (or `inbox_send senior-N ...`, `inbox_send all info ...`), set state `❓ waiting on King`, render the [`lane-question`](../cards/lane-question.md) card, and keep working. Check the inbox at three points — task start, when blocked, before the closer:
+  ```bash
+  inbox_list                          # visibility: scan the whole feed
+  inbox_list --to co-worker-N         # action: messages addressed to this lane or 'all'
+  inbox_read "<path>" --consume       # read + archive each message you action
+  ```
+  The key semantics: everyone may read the whole feed; only the addressed actor consumes. Never consume a message addressed to someone else. (Most co-worker questions go to the *user* directly since they're paired — use the inbox for King/Senior/cross-lane decisions like push ordering or merge conflicts.)
 - **Replying with cards (R12 spirit):** completion → [`task-complete`](../cards/task-complete.md); blocked → [`blocked-lane`](../cards/blocked-lane.md); King question → [`lane-question`](../cards/lane-question.md); plain status → prose. One `render_card` call, no ANSI.
 - **Docs-sync on close (U7):** if the task changed documented behavior/API/structure, update the README/docs/ in the same task commit; else note `docs: n/a` in the Final summary.
 - **Memory is King-only (R54):** discovered something memory-worthy → `inbox_send king memory-request "$SUBTASK_ID" yes "<proposal>"`, never write memory yourself.

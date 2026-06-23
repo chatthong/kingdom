@@ -144,32 +144,47 @@ Three habits the worker runs at task start, before writing any code. They are th
 
 1. **Ground in the docs FIRST (R45).** Run the Layer-1 doc orientation (`haiku_read_docs_orientation`, see Task-file template Layer 1) before any code grep. Docs override code patterns when they conflict. Don't implement against a guess.
 2. **Fan out via the Workflow tool when the work is big (R53).** **Before implementing: if the task spans 3+ files or needs research across the codebase, fan the work out via the Workflow tool per [`reference/workflow-fanout.md`](../reference/workflow-fanout.md)** — self-detect availability first; if the Workflow tool is NOT in this session's toolset, fall back to bounded `Agent()` (R42) / visible cmux tabs (R38). **One Workflow run per task.** A trivial 1-2 file edit needs no fan-out; don't force it.
-3. **Ask the King instead of guessing (R55).** If you hit a question or a blocker, post it — never stall silently. See § Talking to the King below.
+3. **Post to the inbox instead of guessing (R55).** If you hit a question or a blocker, send it via `inbox_send` — never stall silently. See § Talking to other actors below.
 
-## Talking to the King (two-way inbox · R55)
+## Talking to other actors (shared broker inbox · R55)
 
-The lane is NOT alone. When you need a decision the King must make, or you hit a blocker, use the inbox — and **keep working on anything still continuable** while you wait. You never freeze.
+The lane is NOT alone. When you need a decision — from the King, from a Senior, or from another lane — post to the shared inbox and **keep working on anything still continuable** while you wait. You never freeze.
 
 ```bash
-# Ask a question (needs a reply) — then set state + keep going on unblocked parts:
+# Ask the King a question (needs a reply) — set state + keep going on unblocked parts:
 inbox_send king question "$SUBTASK_ID" yes "Two auth patterns exist (cookie vs header). Which is canonical?"
 cmux_set_state "$CMUX_WORKSPACE_ID" "❓" "$SUBTASK_ID · waiting on King"
-# Flag a problem the King should know about (non-blocking):
-inbox_send king flag "$SUBTASK_ID" yes "develop smoke references a module this task removes — possible cross-lane break."
+
+# Flag a cross-lane concern to the King (non-blocking info):
+inbox_send king flag "$SUBTASK_ID" no "develop smoke references a module this task removes — possible cross-lane break."
+
+# Ask a Senior directly (e.g. pod worker asking its Senior for clarification):
+inbox_send senior-1 question "$SUBTASK_ID" yes "Story branch has a merge conflict on src/auth.ts — which side wins?"
+
+# Broadcast an informational note to all actors:
+inbox_send all info "$SUBTASK_ID" no "Migrating auth module — other lanes touching src/auth.ts should rebase after PR merges."
 ```
 
-Render the [`lane-question`](../cards/lane-question.md) card in your reply so the user sees what you asked. Then **check your own inbox** for the King's reply at three points: **task start**, **when blocked**, and **before the closer**:
+Render the [`lane-question`](../cards/lane-question.md) card in your reply so the user sees what you asked.
+
+**Inbox hygiene — three mandatory check points** (task start, when blocked, before the closer):
 
 ```bash
-inbox_list worker-1                       # any replies waiting? (use your own slug)
-inbox_read "<path>" --consume             # read + archive each handled reply
+# Visibility: scan the whole feed (read-only, no action required on messages not addressed to you)
+inbox_list
+
+# Action: read and consume messages addressed to this lane or 'all'
+inbox_list --to worker-N                  # replace worker-N with your own slug
+inbox_read "<path>" --consume             # read + archive each message you action
 ```
 
-The King triages `king` inbox every poll tick (see [`king.md`](king.md) → Inbox triage). The sentinel flag (R22) is still the only completion signal — the inbox is for questions, never task hand-off.
+The key semantics: **everyone may read the whole feed** for situational awareness; **only the addressed actor (to == you, or to == all) owns the action + consume**. Never consume a message addressed to someone else.
+
+The King drains its own inbox at every turn (see [`king.md`](king.md) → Inbox triage). The sentinel flag (R22) is still the only task-completion signal — the inbox is for questions and flags, never for task hand-off.
 
 ## Conventions
 
-- **Replying with cards (R12 spirit — render, don't dump):** when you reply to the King/user, render the matching card, not raw prose: task completion → [`task-complete`](../cards/task-complete.md); blocked → [`blocked-lane`](../cards/blocked-lane.md); a question to the King → [`lane-question`](../cards/lane-question.md). A plain status answer ("still on L3, 60%") is fine as prose. One `render_card` call; never ANSI.
+- **Replying with cards (R12 spirit — render, don't dump):** when you reply to the King/user, render the matching card, not raw prose: task completion → [`task-complete`](../cards/task-complete.md); blocked → [`blocked-lane`](../cards/blocked-lane.md); a question to any actor → [`lane-question`](../cards/lane-question.md). A plain status answer ("still on L3, 60%") is fine as prose. One `render_card` call; never ANSI.
 - **Memory is King-only (R54):** if you discover something memory-worthy (a durable convention, a recurring user preference), do NOT write memory. Send `inbox_send king memory-request "$SUBTASK_ID" yes "<proposed memory line>"` and keep working — the King validates against R34 and writes it.
 
 ---

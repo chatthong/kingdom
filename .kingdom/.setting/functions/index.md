@@ -9,7 +9,7 @@
 |---|---|---|
 | `_bounded_wait` | — | [_bounded_wait.sh](_bounded_wait.sh) |
 | `attach_or_create_worktree` | — | [attach_or_create_worktree.sh](attach_or_create_worktree.sh) |
-| `carve_and_push_feature` | — | [carve_and_push_feature.sh](carve_and_push_feature.sh) |
+| `carve_and_push_feature` | Carve `feature/<topic>` from a lane tip, push, open a **draft** PR (`gh pr create --draft`), and discard the overlay (R29). `gh pr create` exit code is checked — a failed create surfaces as rc=1 and the overlay is NOT discarded. | [carve_and_push_feature.sh](carve_and_push_feature.sh) |
 | `compute_gate_duration` | — | [compute_gate_duration.sh](compute_gate_duration.sh) |
 | `compute_ready_for_fresh_work` | — | [compute_ready_for_fresh_work.sh](compute_ready_for_fresh_work.sh) |
 | `compute_task_duration` | — | [compute_task_duration.sh](compute_task_duration.sh) |
@@ -26,11 +26,11 @@
 | `guard_lane_workspace_exists` | — | [guard_lane_workspace_exists.sh](guard_lane_workspace_exists.sh) |
 | `guard_no_worktree_cd` | — | [guard_no_worktree_cd.sh](guard_no_worktree_cd.sh) |
 | `haiku_read_docs_orientation` | — | [haiku_read_docs_orientation.sh](haiku_read_docs_orientation.sh) |
-| `inbox_list` | List a recipient's pending inbox messages, oldest first (U4). | [inbox_list.sh](inbox_list.sh) |
-| `inbox_pending_count` | Integer count of a recipient's pending inbox messages (U4). | [inbox_pending_count.sh](inbox_pending_count.sh) |
-| `inbox_read` | Print an inbox message; `--consume` archives it (U4). | [inbox_read.sh](inbox_read.sh) |
-| `inbox_reply` | King-side sugar: post an `info` reply (needs-reply: no) to a lane (U4). | [inbox_reply.sh](inbox_reply.sh) |
-| `inbox_send` | Post a message to a recipient's inbox + best-effort workspace nudge (U4). | [inbox_send.sh](inbox_send.sh) |
+| `inbox_list` | List the shared broker inbox, oldest-first. No args = whole pending feed. `--to <me>` = only messages where `to==me` or `to==all`. `--from <who>` = filter by sender. Prints one path per line; rc=0 with empty output when none (R55). | [inbox_list.sh](inbox_list.sh) |
+| `inbox_pending_count` | Echo integer count of pending messages (whole feed, or `--to <me>` for addressed+broadcast). Never errors — echoes 0 on any failure (R55). | [inbox_pending_count.sh](inbox_pending_count.sh) |
+| `inbox_read` | Print an inbox message. `--consume` moves it to `inbox/.archive/` so the feed cannot regrow into a pile (R55). | [inbox_read.sh](inbox_read.sh) |
+| `inbox_reply` | Sugar for `inbox_send <to> info <task_id> no <message...>` — post a no-reply-needed `info` response to the sender (R55). | [inbox_reply.sh](inbox_reply.sh) |
+| `inbox_send` | Write one file `<UTC>__<from>__<to>__<type>.md` into the single `inbox/` feed with YAML front matter (`from/to/type/task/needs-reply`), then best-effort `cmux_notify` the addressed workspace. File is source of truth; notify failure is non-fatal. `from` = `${LANE:-${KINGDOM_ROLE:-king}}` (R55). | [inbox_send.sh](inbox_send.sh) |
 | `init_subagent_pool` | — | [init_subagent_pool.sh](init_subagent_pool.sh) |
 | `kingdom_backend_init` | Detect cmux.app vs other, export KINGDOM_BACKEND, activate the backend (v0.41.0). | [kingdom_backend_init.sh](kingdom_backend_init.sh) |
 | `kingdom_detect_backend` | Echo `cmux`/`tmux`/`standalone` from the host terminal (v0.41.0). | [kingdom_detect_backend.sh](kingdom_detect_backend.sh) |

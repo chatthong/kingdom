@@ -193,6 +193,16 @@ KING_WIN=$(echo "$KING_ID" | jq -r .caller.window_ref)
 # (state does not persist across blocks) still has the config path.
 KJSON="$PWD/.kingdom/${project}/kingdom.json"
 export KJSON KING_WS KING_WIN
+# DOORBELL (R55): persist KING_WS to workspace-refs.env so inbox_send to 'king'
+# can resolve the doorbell ref even in a fresh bash invocation that hasn't yet
+# called cmux_identify. Idempotent: strip any existing KING_WS line, then append.
+_REFS_FILE_EARLY="$PWD/.kingdom/${project}/logs/workspace-refs.env"
+mkdir -p "$(dirname "$_REFS_FILE_EARLY")"
+if [ -n "$KING_WS" ]; then
+  # Remove stale KING_WS entry (if any) and append the current ref
+  { grep -v '^KING_WS=' "$_REFS_FILE_EARLY" 2>/dev/null; printf 'KING_WS=%s\n' "$KING_WS"; } \
+    > "${_REFS_FILE_EARLY}.tmp" && mv "${_REFS_FILE_EARLY}.tmp" "$_REFS_FILE_EARLY"
+fi
 KING_COLOR=$(jq -r '.cmux.workspaceColors.king // "amber"' "$KJSON")
 
 # Rename + describe in parallel (cosmetic, fire-and-forget; R42: bounded wait)
@@ -775,29 +785,55 @@ REFS_FILE="${REFS_FILE:-$LOGS/workspace-refs.env}"
 export LOGS PROJ KJSON REFS_FILE BASE KING_WS
 
 while true; do
-  # 5a-inbox (U4). Each tick, triage the King's inbox BEFORE gating sentinels.
-  # List pending messages (new inbox/ format + legacy king-inbox/ for back-compat),
-  # then the King handles each per the protocol prose below (answer / write memory /
-  # escalate) and consumes it. Scaffolding only — the ANSWER is King judgment.
-  for MSG in $(inbox_list king 2>/dev/null); do
+  # 5a-inbox (R55 — broker model). Drain EVERY turn, not only this loop tick: the King
+  # MUST also drain at session kickoff, every dispatch decision, every push/gate decision,
+  # and whenever it returns to the user in chat. Consume-and-archive is MANDATORY so the
+  # feed cannot regrow into a pile.
+  #
+  # Broker semantics: the single flat inbox/ feed is the canonical store.
+  # inbox_list --to king returns messages whose to==king OR to==all (the King's owned set).
+  # The King reads the WHOLE feed for visibility, but ONLY acts on (and consumes) its own.
+  # Non-king messages in the feed are left for their addressed actor.
+  #
+  # EVERY TURN the King acts or replies, run this drain block — paste it inline or call a
+  # helper. Do not defer to "the next poll tick."
+  for MSG in $(inbox_list --to king 2>/dev/null); do
     [ -f "$MSG" ] || continue
-    inbox_read "$MSG"          # King reads the front matter (from/type/task/needs-reply) + body
+    inbox_read "$MSG"          # King reads front matter (from/to/type/task/needs-reply) + body
     # King decides, per the type:
-    #   question/flag + needs-reply:yes → answer the lane:  inbox_reply <from> <task> "<answer>"
-    #                                     then nudge it:     cmux_send <lane_ws> "📬 King replied in your inbox re <task>"
-    #                                     OR escalate to the user if only they can decide (don't guess).
-    #   memory-request                  → King writes the memory itself (U8), then inbox_reply confirms.
-    #   info/docs-update                → note it; no reply needed.
-    inbox_read "$MSG" --consume   # archive after handling
+    #   question/flag + needs-reply:yes → answer the sender:
+    #       inbox_reply <from> <task_id> "<answer>"
+    #       then nudge them: resolve <from>_WS from workspace-refs.env
+    #         LANE_WS=$(grep "^$(printf '%s' "$_from" | tr 'a-z-' 'A-Z_')_WS=" "$REFS_FILE" | cut -d= -f2)
+    #         [ -n "$LANE_WS" ] && cmux_send "$LANE_WS" "📬 King replied in your inbox re ${_task}"
+    #       OR escalate to the user if only they can decide (don't guess).
+    #   memory-request → memory writes are King-only (R54/U8): King writes the memory
+    #                     itself, then inbox_reply <from> <task_id> "done" confirms.
+    #   info/docs-update → noted; no reply needed.
+    inbox_read "$MSG" --consume  # archive after handling (move to inbox/.archive/)
   done
-  # Legacy fallback: pre-inbox king-inbox/ drops (durable tmux_notify writes, older lanes).
-  LEGACY_INBOX="$PWD/.kingdom/${project}/king-inbox"
-  if [ -d "$LEGACY_INBOX" ]; then
-    for MSG in "$LEGACY_INBOX"/*; do
+  # Legacy migration drain (R55 store-convergence): sweep the old per-directory stores
+  # that pre-broker lanes may still write to; read+archive them, then going forward
+  # everyone writes ONLY to the single inbox/ feed.
+  for _legacy_dir in \
+      "$PWD/.kingdom/${project}/king-inbox" \
+      "$PWD/.kingdom/${project}/logs/king-inbox"; do
+    [ -d "$_legacy_dir" ] || continue
+    for MSG in "$_legacy_dir"/*; do
       [ -f "$MSG" ] || continue
-      cat "$MSG"          # King reads + handles as above, then consumes
-      rm -f "$MSG"
+      cat "$MSG"           # King reads + handles per type as above
+      # Archive alongside the canonical inbox store
+      mkdir -p "$PWD/.kingdom/${project}/inbox/.archive"
+      mv "$MSG" "$PWD/.kingdom/${project}/inbox/.archive/" 2>/dev/null || rm -f "$MSG"
     done
+  done
+  # legacy king-inbox.md flat file (tmux_notify durable fallback, older sessions)
+  _legacy_md="$PWD/.kingdom/${project}/king-inbox.md"
+  if [ -f "$_legacy_md" ]; then
+    cat "$_legacy_md"
+    mkdir -p "$PWD/.kingdom/${project}/inbox/.archive"
+    mv "$_legacy_md" "$PWD/.kingdom/${project}/inbox/.archive/$(date -u +%Y-%m-%dT%H%MZ)__legacy__king-inbox.md" \
+      2>/dev/null || rm -f "$_legacy_md"
   fi
 
   # 5a. Detect un-gated sentinels
@@ -899,18 +935,23 @@ while true; do
 done
 ```
 
-### Inbox (U4 · two-way lane↔King, non-blocking)
+### Inbox (R55 — shared broker feed, non-blocking)
 
-Lanes never stall silently waiting on the King. When a lane hits a question or a blocker it posts a message and keeps any continuable work moving; the King's poll loop (5a-inbox above) drains the inbox every tick. The shared protocol (tracker Shared spec 1):
+Lanes never stall silently waiting on the King. When a lane hits a question or a blocker it posts to the **single shared inbox feed** and keeps any continuable work moving.
 
-- **Location/format:** `$WS/.kingdom/<project>/inbox/king/<UTC>__<from>__<type>.md`, with YAML front matter (`from`/`to`/`type`/`task`/`needs-reply`) + a free-text body. Types: `question | flag | info | memory-request | docs-update`. Handled messages move to `inbox/king/.archive/`.
-- **Lane side:** `inbox_send king question <task> yes "<text>"` (sets its own cmux state to `❓ waiting on King`, does NOT block). Lanes check their own inbox (`inbox_list <self>`) at task start, when blocked, and before the closer.
-- **King side (each tick):** `inbox_list king` → for each pending message:
-  - `question` / `flag` with `needs-reply: yes` → King answers with `inbox_reply <from> <task> "<answer>"` + a `cmux_send` nudge to that lane; OR, if only the user can decide (scope/priority/risk call), the King escalates it to the user in chat instead of guessing.
-  - `memory-request` → memory writes are King-only (U8): the King writes the memory itself, then `inbox_reply` confirms.
-  - `info` / `docs-update` → noted, no reply.
-  - Consume with `inbox_read <file> --consume` after handling.
-- **Back-compat:** the loop also drains the legacy `king-inbox/` directory (older lanes + the durable `tmux_notify` fallback write here).
+**Canonical store:** `$WS/.kingdom/<project>/inbox/` — one flat directory, one file per message. Filename: `<UTC>__<from>__<to>__<type>.md`. Front matter (YAML `---` fenced): `from`, `to`, `type`, `task`, `needs-reply (yes|no)`, then free-text body. Actors: `king | worker-N | co-worker-N | senior-N | watchman-N | all`. Consumed messages MOVE to `inbox/.archive/`.
+
+**Broker semantics:** everyone may read the WHOLE feed (visibility/audit). The ADDRESSED actor (`to == me` or `to == all`) OWNS the action + reply + consume. A non-addressed reader NEVER consumes someone else's message. Anyone may bell anyone — including the King — via the `to:` field.
+
+**King's drain frequency (MANDATORY):** the King drains and consumes its inbox (`to==king` or `to==all`) at EVERY turn it acts or replies — session kickoff, every dispatch decision, every push/gate decision, and whenever it returns to the user in chat. NOT only inside the Step-5 poll loop. Consume-and-archive is required so the feed cannot regrow.
+
+- **Lane side:** `inbox_send king question <task_id> yes "<text>"` — sets own cmux state to `❓ waiting on King`, does NOT block. Lanes check their own inbox (`inbox_list --to <self>`) at task start, when blocked, and before the closer.
+- **King side (each drain):** `inbox_list --to king` → for each pending message:
+  - `question` / `flag` with `needs-reply: yes` → answer: `inbox_reply <from> <task_id> "<answer>"` + `cmux_send` nudge to the sender's workspace (resolved from `workspace-refs.env`); OR escalate to the user if only they can decide.
+  - `memory-request` → King writes the memory itself (R54/U8), then `inbox_reply <from> <task_id> "done"` confirms.
+  - `info` / `docs-update` → noted; no reply.
+  - Consume with `inbox_read <file> --consume` (moves to `inbox/.archive/`).
+- **Legacy migration drain (R55 store-convergence):** the poll loop above also sweeps `king-inbox/`, `logs/king-inbox/`, and `king-inbox.md` — reads + archives them. Going forward, all actors write ONLY to `inbox/`.
 
 **Post-push overlay discard per R29:**
 
@@ -947,9 +988,14 @@ fi
 git checkout -b "feature/${TOPIC}" "${LANE}"
 PR_BODY=$(generate_pr_body_from_task_file "${LANE}" "${SUBTASK_ID}")
 git push -u origin "feature/${TOPIC}"
-gh pr create --base "${BASE}" --head "feature/${TOPIC}" \
+# R56: PRs ALWAYS open as DRAFT. Never a ready PR on first creation.
+gh pr create --draft --base "${BASE}" --head "feature/${TOPIC}" \
   --title "<from task file Brief>" \
-  --body "$PR_BODY"
+  --body "$PR_BODY" || { echo "❌ gh pr create failed — aborting Step 6." >&2; return 1 2>/dev/null || exit 1; }
+# Capture the PR number so the user can later run 'open <N>' to mark it ready.
+PR_NUMBER=$(gh pr view "feature/${TOPIC}" --json number --jq .number 2>/dev/null)
+export PR_NUMBER
+echo "📋 DRAFT PR #${PR_NUMBER} created for feature/${TOPIC}. Reply 'open ${PR_NUMBER}' when ready to mark it for review."
 
 # H3: prune this lane's done-flags now that the lane shipped (king.md:480). The
 # 10s poll scan in Step 5 globs ALL of done/*.flag every tick; without this the
@@ -962,7 +1008,7 @@ git checkout kingdom
 git reset --hard "origin/${BASE}"
 git clean -fd
 
-cmux_set_state "$KING_WS" "✅" "Pushed feature/${TOPIC}"
+cmux_set_state "$KING_WS" "✅" "Pushed feature/${TOPIC} (draft PR #${PR_NUMBER:-?})"
 cmux_workspace_action "$KING_WS" mark-read
 # H-x: counters must persist across invocations — re-read prior values, increment, re-export.
 PRS_OPENED_TODAY=$(( ${PRS_OPENED_TODAY:-0} + 1 ))   # toward pr-limit
@@ -971,6 +1017,24 @@ export PRS_OPENED_TODAY PODS_DONE_TODAY
 ```
 
 After push, King returns to Step 5's poll loop.
+
+## Step 6b — On user's "open N" approval per PR (R56)
+
+R56: the literal word `open` + the PR number marks ONE draft PR ready — single-shot, per-PR. Generic `open all` or a prior `open` for a different PR do NOT carry over.
+
+```bash
+# H-x: 'open <N>' arrives as a fresh chat turn. Parse the PR number from the user's message.
+# The user types: open <N>   (e.g. "open 42")
+OPEN_PR_NUMBER=$(echo "$ARGUMENTS" | grep -oE '[0-9]+' | head -1)
+if [ -z "$OPEN_PR_NUMBER" ]; then
+  echo "❌ Step 6b: no PR number found in 'open' instruction. Usage: open <PR-number>" >&2
+  return 1 2>/dev/null || exit 1
+fi
+gh pr ready "$OPEN_PR_NUMBER" \
+  || { echo "❌ gh pr ready ${OPEN_PR_NUMBER} failed — check PR state with 'gh pr view ${OPEN_PR_NUMBER}'." >&2; return 1 2>/dev/null || exit 1; }
+echo "✅ PR #${OPEN_PR_NUMBER} marked ready for review."
+[ -n "$KING_WS" ] && cmux_set_state "$KING_WS" "✅" "PR #${OPEN_PR_NUMBER} ready for review"
+```
 
 ## Stopping the day
 
