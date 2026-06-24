@@ -72,7 +72,7 @@ A kingdom doesn't make the window bigger. **It makes the number of windows bigge
 | Sub-agent fan-out | shares your window | each lane spawns its own army, every sub-agent on a **fresh** window |
 | Effective working context | caps at the window | **10M → 20M → 30M+ tokens**, scaling with `lane=N` |
 | When a window fills | compaction eats your detail | that lane's task file + logs persist; the lane re-grounds from disk and keeps going |
-| Coordination | you, manually | the King — dispatch briefs, a two-way inbox, three-tier gates, one chat |
+| Coordination | you, manually | the King — dispatch briefs, a shared broker inbox, three-tier gates, one chat |
 
 The trick is that lanes don't share memory through a context window at all. They share it through **git + files**: task files (R23), the 4-step closer audit trail (R22), the inbox (R55), and `/kingdom:self-learn` doc-grounding. Context held in files doesn't compact, doesn't drift, and survives every restart — so the fleet's *combined* working context keeps growing while any single window stays comfortable.
 
@@ -172,7 +172,7 @@ The trick is that lanes don't share memory through a context window at all. They
 
 ## 🛰 How the fleet runs
 
-The King talks to lanes over whichever backend is live (cmux on macOS, tmux otherwise); each lane fans heavy work out to its own one-shot sub-agents — through the Workflow tool's live `/workflows` view when the session has it (R53), otherwise bounded `Agent()` — and leaves an audit trail in `tasks/` + `logs/`. Lanes talk back through a two-way inbox (R55): a blocked lane posts a question to the King and keeps working; the King answers every poll tick.
+The King talks to lanes over whichever backend is live (cmux on macOS, tmux otherwise); each lane fans heavy work out to its own one-shot sub-agents — through the Workflow tool's live `/workflows` view when the session has it (R53), otherwise bounded `Agent()` — and leaves an audit trail in `tasks/` + `logs/`. Lanes talk back through a shared broker inbox (R55): one flat feed everyone can read, where any actor bells any other (a blocked lane posts a question to the King and keeps working) — the King drains and answers it every turn it acts, not just on a poll tick.
 
 ```mermaid
 graph TB
@@ -255,7 +255,7 @@ Quality and speed come from clean specialization: the **King** owns cross-story 
 
 - **🧠 Context that scales with the fleet** — every lane is a real Claude session holding its own full window, and every lane fans out sub-agents on fresh windows. Dial `lane=N` and the kingdom's combined working context climbs to 10M, 20M, 30M+ tokens — while shared state lives in files, where it can't be compacted away.
 - **🧵 Real parallelism** — 3-10 lanes editing different branches simultaneously, isolated by `git worktree`. Not in-process sub-agents pretending to be parallel.
-- **📨 Lanes talk back (v0.44.0)** — a two-way file-based inbox (R55): a blocked lane posts a question to the King and keeps working instead of stalling; the King answers every poll tick. No more silent dead lanes.
+- **📨 Lanes talk back (v0.45.0)** — a shared broker inbox (R55): one flat file-based feed everyone reads, where any actor bells any other. A blocked lane posts a question to the King and keeps working instead of stalling; the King drains and answers it every turn it acts (not just on a poll tick). No more silent dead lanes, no more unseen questions.
 - **📚 Grounded before they code (v0.44.0)** — dispatch briefs carry a mandatory "Read first" file list, and `/kingdom:self-learn` walks any role through the project docs in 3 layers before it touches code.
 - **📺 Visible sub-agent armies (v0.43.0)** — when the session exposes the Workflow tool, each task's parallel fan-out runs through it, so you watch the whole army live in Claude Code's `/workflows` view (phases, per-agent tokens/time) — one run per task. Falls back to bounded `Agent()` where the tool isn't present (R53).
 - **🎓 Story pods** — several workers on one story, merged and reviewed as a unit by a Senior, shipped as one PR. King owns cross-story coordination; the Senior owns within-story review.
@@ -393,6 +393,7 @@ Same kit, same plan. Dial `worker=N` / `lane=N` and `pr-limit=N` to sit anywhere
 | ❌ | Your project files outside `.worktrees/<lane>/` — main checkout untouched until you say `push` |
 | ❌ | `develop` and `main` — read-only; only `feature/<topic>` (or `story/<id>`) reaches origin |
 | ❌ | Pushes — never without your explicit approval, single-shot + PR-specific |
+| ✅ | PRs open as **draft** (R56) — they stay draft until you say the literal `open` (then `gh pr ready`) |
 | ❌ | Your `~/.zshrc`, `~/.gitconfig`, PATH, shell hooks — zero modifications |
 | ❌ | Your `.gitignore` — kingdom adds ONE line (`.worktrees/`) and stops there |
 | ❌ | Your `tasks/`, `logs/`, `state.json`, tuned `kingdom.json` values, memory — `/kingdom:update` never touches them |
@@ -426,7 +427,7 @@ kingdom drives one terminal workspace per lane. The backend is **auto-detected a
 | How it works: King's role, lane mechanics, 4-step closer | [`docs/how-it-works.md`](docs/how-it-works.md) |
 | Why: the problem kingdom solves | [`docs/why.md`](docs/why.md) |
 | FAQ | [`docs/faq.md`](docs/faq.md) |
-| Rules: priority-tiered enforceable rules (R01-R55) | [`.kingdom/.setting/rules.md`](.kingdom/.setting/rules.md) |
+| Rules: priority-tiered enforceable rules (R01-R56) | [`.kingdom/.setting/rules.md`](.kingdom/.setting/rules.md) |
 | Internal role specs (King reads these at session start) | [`.kingdom/.setting/`](.kingdom/.setting/) |
 | Changelog | [`CHANGELOG.md`](CHANGELOG.md) |
 
