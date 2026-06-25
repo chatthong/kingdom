@@ -4,7 +4,7 @@
 
 > Layout: flat files = backend-agnostic mechanics, all in feature **core**; **`cmux/`** = the cmux.app PRIMARY backend (one wrapper per `cmux` subcommand + the `browser_*` wrappers); **`tmux/`** = the FALLBACK backend (v0.41.0; one wrapper per file, like `cmux/`; `kingdom_use_tmux_backend` routes `cmux_*` calls to tmux when `KINGDOM_BACKEND=tmux`). Function NAMES are action-based, not role-based — any role loads any helper. Features group by BACKEND/CAPABILITY only: **core** (always) deps **cmux** (always); **tmux** + **browser** load on demand.
 
-## core (57)
+## core (58)
 | function | purpose | file |
 |---|---|---|
 | `_bounded_wait` | — | [_bounded_wait.sh](_bounded_wait.sh) |
@@ -53,6 +53,7 @@
 | `read_session_state` | — | [read_session_state.sh](read_session_state.sh) |
 | `render_card` | — | [render_card.sh](render_card.sh) |
 | `review_tick` | — | [review_tick.sh](review_tick.sh) |
+| `rules_digest` | Emit the compact tiered rule list (R## + title, all tiers) + per-turn self-check header, generated from `rules/index.md` so it never drifts. The kingdom's settings-free re-injection vehicle — re-fired every poll tick / dispatch brief / looped role, kingdom-scoped (never a hook). | [rules_digest.sh](rules_digest.sh) |
 | `run_tier1_gate` | — | [run_tier1_gate.sh](run_tier1_gate.sh) |
 | `run_tier2_gate` | — | [run_tier2_gate.sh](run_tier2_gate.sh) |
 | `run_tier2_on_story` | — | [run_tier2_on_story.sh](run_tier2_on_story.sh) |

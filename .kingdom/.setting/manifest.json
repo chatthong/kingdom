@@ -54,6 +54,7 @@
         "read_session_state",
         "render_card",
         "review_tick",
+        "rules_digest",
         "run_tier1_gate",
         "run_tier2_gate",
         "run_tier2_on_story",

@@ -1,8 +1,10 @@
 ---
-description: Re-ground as a co-worker lane — re-read the canonical kingdom rules + the co-worker role spec from .kingdom/.setting/ and print a grounding summary. The King injects this as a freshly-spawned co-worker's first message (R52); re-run any time you've drifted.
+description: Re-ground as a co-worker lane — re-read the canonical kingdom rules + the co-worker role spec from .kingdom/.setting/ and print a grounding summary. The King injects this as a freshly-spawned co-worker's first message (R52); every run is a full re-read from disk — never skipped.
 ---
 
 You are re-grounding as a kingdom **co-worker** (🧑‍💼 Opus lane master, user-paired). READ-ONLY — read the docs below and print the summary; do NOT push, create branches, or commit as part of this command.
+
+> **No-skip mandate.** You were invoked explicitly — the invocation IS the trigger. There is NO "I'm already grounded, skipping this time" path. Re-read every file listed below from disk, in full, on every run — even if you read them earlier this session. Never summarize from memory, shortcut the read, or declare yourself already grounded. Skipping the read fails this command.
 
 Follow `.kingdom/.setting/reference/role-bootstrap.md` for `ROLE=co-worker`. Read in this order:
 

@@ -27,7 +27,7 @@ context window, 10M token context, multi-session context, claude max plan.
 
 <br/>
 
-![Version](https://img.shields.io/badge/version-0.45.0-success)
+![Version](https://img.shields.io/badge/version-0.46.0-success)
 ![Record](https://img.shields.io/badge/record-606M%20tokens%2Fday-ff6b35)
 ![License](https://img.shields.io/badge/license-see%20LICENSE-blue)
 ![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-purple)

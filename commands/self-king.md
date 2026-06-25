@@ -1,8 +1,10 @@
 ---
-description: Re-ground as the King — re-read the canonical kingdom rules + the king role spec from .kingdom/.setting/ and print a grounding summary. Run any time the King has drifted (e.g. after a long multi-day session or a /compact).
+description: Re-ground as the King — re-read the canonical kingdom rules + the king role spec from .kingdom/.setting/ and print a grounding summary. Every run is a full re-read from disk — never skipped.
 ---
 
 You are re-grounding as the kingdom **King** (👑 Opus). READ-ONLY — read the docs below and print the summary; do NOT dispatch, edit, commit, or push as part of this command.
+
+> **No-skip mandate.** You were invoked explicitly — the invocation IS the trigger. There is NO "I'm already grounded, skipping this time" path. Re-read every file listed below from disk, in full, on every run — even if you read them earlier this session. Never summarize from memory, shortcut the read, or declare yourself already grounded. Skipping the read fails this command.
 
 Follow `.kingdom/.setting/reference/role-bootstrap.md` for `ROLE=king`. Read in this order:
 

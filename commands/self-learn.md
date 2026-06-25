@@ -7,6 +7,8 @@ You are **learning the project** — not the kingdom kit (that's `/kingdom:self-
 
 READ-ONLY. This command reads docs and renders summary cards. It never edits, dispatches, commits, or pushes.
 
+> **No-skip mandate.** You were invoked explicitly — the invocation IS the trigger. There is NO "I already learned this project, skipping this time" path. Run the full 3-layer sweep from disk on every run, even if you swept earlier this session. Never declare yourself already grounded and shortcut the read.
+
 This is the **R52 companion** to `/kingdom:self-<role>`: the role-bootstrap command grounds you in the *rules + your role*; `/kingdom:self-learn` grounds you in the *project*. The King may inject this as a freshly-spawned lane's SECOND message (after `/kingdom:self-<role>`, before the task brief) so the lane knows both how the kingdom works AND what it's working on.
 
 ## How the fan-out works (R51/R53)

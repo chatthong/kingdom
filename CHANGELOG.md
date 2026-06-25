@@ -4,6 +4,24 @@ All notable changes to `kingdom` (formerly `claude-kingdom`) are documented here
 
 ---
 
+## [0.46.0] — 2026-06-25
+
+Rule-adherence release. Driven by the core consumer complaint: *the rules exist but agents don't follow them* — they read the rules once at session start, then drift over a long session and ignore all 57. The fix is **settings-free per-cycle rule re-injection**, chosen explicitly because a `UserPromptSubmit`/`PreToolUse` hook (the only harness-enforced option) lives in `.claude/settings.json` and would fire on **non-kingdom** sessions too — rejected. Instead the kingdom re-injects the rules through its OWN prompt stream, so it is active only while the kingdom is running and never touches the user's settings.
+
+### Added
+
+- **`rules_digest` helper (core, function #58).** Emits the compact tiered rule list (every rule as `R## — title`, grouped Tier 1/2/3) plus a 3-line **self-check header** (ROLE? / RULES IN PLAY (cite R#s)? / explaining via a card?). Generated from `rules/index.md` so it never drifts — add or edit a rule and the digest updates itself. ~800 tokens. `bash -n`-clean, output verified live.
+- **Settings-free re-injection wiring (the mechanism).** `rules_digest` is re-injected through the kingdom's own recurring prompts — NOT a hook:
+  - **King poll loop** (`work.md` Step 5) — emitted at the top of every tick.
+  - **Every dispatch brief** (resume + new, `work.md` Step 4) — prepended, so a long-lived lane re-grounds with each task, not only at spawn.
+  - **Watchman `/loop` + Senior `/loop`** — embedded in the looped prompt, which re-fires each interval.
+  - Honest limit documented in the helper: this is per-*cycle*/dispatch (the closest to per-reply achievable without a hook), and it raises compliance rather than guaranteeing it.
+- **R57 (Tier 2) — never cherry-pick to fold lanes/PRs; apply or merge.** `git cherry-pick` copies under a new SHA so source and target silently diverge (the live-build-shows-stale-code ghost). Banned for folding a lane/PR into `kingdom` or building a `feature/<topic>` branch; use the overlay (`git apply --3way`), `git merge --no-ff`, or rebuild `kingdom = base + merge --no-ff each open PR`. Auto-surfaces in the digest. Rules now 57 (Tier 1 = 10, Tier 2 = 42, Tier 3 = 5).
+
+### Changed
+
+- **All six `/kingdom:self-*` commands — no-skip mandate.** Replaced the "re-run any time you've drifted" framing (which let the model self-judge and answer "already grounded, skipping") with an explicit mandate: the invocation IS the trigger, re-read every file from disk in full on every run, never declare yourself already grounded. Fixes the reported failure where `/kingdom:self-<role>` refused to actually re-read.
+
 ## [0.45.0] — 2026-06-24
 
 PR-clarity + inbox-reliability release driven by two real consumer bugs (the King imposing an overlay when the user said *merge*; the King never seeing its inbox). Built by a 10-agent Sonnet implementer fleet (one per non-overlapping file set, against one locked contract) + a 3-agent Opus audit (consistency / bash-safety / completeness). All 9 audit findings fixed; helpers `bash -n`-clean and the inbox helpers live-tested under `zsh`.

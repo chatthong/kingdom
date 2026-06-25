@@ -1,8 +1,10 @@
 ---
-description: Re-ground as the watchman — re-read the canonical kingdom rules + the watchman role spec from .kingdom/.setting/ and print a grounding summary. The King injects this as a freshly-spawned watchman's first message (R52); re-run any time you've drifted.
+description: Re-ground as the watchman — re-read the canonical kingdom rules + the watchman role spec from .kingdom/.setting/ and print a grounding summary. The King injects this as a freshly-spawned watchman's first message (R52); every run is a full re-read from disk — never skipped.
 ---
 
 You are re-grounding as the kingdom **watchman** (🕵️ Sonnet — the one role that is NOT Opus). READ-ONLY — read the docs below and print the summary; do NOT edit project source, push, or commit as part of this command.
+
+> **No-skip mandate.** You were invoked explicitly — the invocation IS the trigger. There is NO "I'm already grounded, skipping this time" path. Re-read every file listed below from disk, in full, on every run — even if you read them earlier this session. Never summarize from memory, shortcut the read, or declare yourself already grounded. Skipping the read fails this command.
 
 Follow `.kingdom/.setting/reference/role-bootstrap.md` for `ROLE=watchman`. Read in this order:
 

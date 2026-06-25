@@ -291,8 +291,12 @@ for lane in $LANES_EXPECTED; do
     # v0.31.0 R39: watchmen are autonomous — auto-dispatch /loop on spawn (AFTER the
     # self-ground above). Without this, watchman sits at a shell prompt; the kingdom
     # appears half-alive until the user notices and asks "watchman why do nothing".
+    # The /loop prompt re-fires every interval, so embedding the rule digest in it
+    # re-injects the ruleset + self-check on EVERY watchman tick (settings-free).
     case "$lane" in
-      watchman-*) [ -n "$ref" ] && spawn_loop "$ref" "/loop" ;;
+      watchman-*) [ -n "$ref" ] && spawn_loop "$ref" "/loop
+$(rules_digest)
+— Then run your watchman duty cycle. Re-answer the 3-line self-check before each tick's actions." ;;
     esac
   ) &
   SPAWN_PIDS="$SPAWN_PIDS $!"
@@ -648,7 +652,10 @@ if [ "$INTEG_ON" = "true" ] && [ "${SENIORS:-0}" -gt 0 ] && [ "$DISPATCH_MODE" !
       cmux_send "$SENIOR_WS" \
         "[STORY] You own $BRANCH. Pod: $PODWORKERS. Conventions: <cross-cutting notes>. Read senior.md and run the story lifecycle. Mark push-eligible when clean; never push.
 Questions/blockers → inbox_send king question $STORY_ID yes \"…\" (don't stall silently). Long/multi-file work: fan out via the Workflow tool (R53; check availability first)."
-      spawn_loop "$SENIOR_WS" "/loop"   # kick the senior's autonomous story loop (self-senior already grounded it at spawn, R52)
+      # Embed the digest in the /loop prompt so it re-injects each story-loop tick (settings-free).
+      spawn_loop "$SENIOR_WS" "/loop
+$(rules_digest)
+— Then run your story review loop. Re-answer the 3-line self-check before each tick's actions."   # self-senior already grounded it at spawn, R52
       echo "Assigned $BRANCH → $SENIOR (pod: $PODWORKERS)"
     done < "$POD_FILE"
   fi
@@ -697,7 +704,11 @@ for lane in $LANES_EXPECTED; do
     TASK_FILE="$TASKS_DIR"/$(ls -1t "$TASKS_DIR"/*.md 2>/dev/null \
       | xargs -I{} basename {} | grep "__${TASK_ID}.md" | head -1)
     LAST_PROGRESS=$(grep '## Progress notes' -A5 "$TASK_FILE" 2>/dev/null | tail -4)
-    BRIEF="[RESUME] ${lane} · task ${TASK_ID} · status=${TASK_STATUS}. \
+    # Prepend the rule digest (settings-free re-injection): every dispatch re-surfaces
+    # the rules to the lane, so a long-lived lane re-grounds on each task, not just at spawn.
+    BRIEF="$(rules_digest)
+
+[RESUME] ${lane} · task ${TASK_ID} · status=${TASK_STATUS}. \
 Last progress: ${LAST_PROGRESS}. Continue from where you left off."
     lane_ws=$(grep "^${lane}_WS=" "$REFS_FILE" | cut -d= -f2)
     # v0.31.0 R31+R36 hard gate: refuse dispatch if lane workspace missing.
@@ -732,7 +743,11 @@ Last progress: ${LAST_PROGRESS}. Continue from where you left off."
   #   READ_FIRST_LIST=$'  • CLAUDE.md\n  • docs/auth.md\n  • src/app/login/route.ts'
   READ_FIRST_LIST="${READ_FIRST_LIST:-  • <project CLAUDE.md>\n  • <most relevant docs/ file>\n  • <key source file(s)>}"
   export LANE="$lane" TASK_ID="$TASK" SUGGESTED_SKILLS READ_FIRST_LIST PROJECT="$project"
-  BRIEF=$(render_card "dispatch-brief")
+  # Prepend the rule digest (settings-free re-injection) ahead of the brief card, so the
+  # lane re-grounds in the full ruleset + self-check with every dispatched task.
+  BRIEF="$(rules_digest)
+
+$(render_card "dispatch-brief")"
   # The brief card (A4) carries, near the top: the 📚 Read-first list, the R53
   # Workflow-fanout reminder ("Long/multi-file work → Workflow tool; check
   # availability first"), and the inbox one-liner ("Questions/blockers →
@@ -785,6 +800,15 @@ REFS_FILE="${REFS_FILE:-$LOGS/workspace-refs.env}"
 export LOGS PROJ KJSON REFS_FILE BASE KING_WS
 
 while true; do
+  # 5z-digest (settings-free rule re-injection). Re-surface the full tiered ruleset +
+  # the 3-line self-check at the TOP of every tick, so the rules stay in context through
+  # the whole session instead of drifting after the session-start read. This is the
+  # kingdom's substitute for a UserPromptSubmit hook (hooks need .claude/settings.json,
+  # which would also fire on NON-kingdom sessions — banned). It only runs inside this
+  # loop, i.e. only while kingdom is live. The King MUST answer the self-check (ROLE /
+  # RULES IN PLAY / card?) before taking the tick's actions.
+  rules_digest
+
   # 5a-inbox (R55 — broker model). Drain EVERY turn, not only this loop tick: the King
   # MUST also drain at session kickoff, every dispatch decision, every push/gate decision,
   # and whenever it returns to the user in chat. Consume-and-archive is MANDATORY so the

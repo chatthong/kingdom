@@ -30,7 +30,7 @@ Tier 1 is reserved for rules whose violation is **irreversible** (data loss / fo
 
 **Demoted to Tier 2 in v0.31.0 (were Tier 1 prior):** R3, R6, R7, R8, R9, R10, R11, R12, R13, R15, R16, R23, R33, R34, R35, R37, R38, R39, R41. Each demoted rule's per-rule heading now carries `— Tier 2` to match this legend (swept in v0.44.1).
 
-Tier 1 = 10. Tier 2 = 41. Tier 3 = 5. Total = 56 rules.
+Tier 1 = 10. Tier 2 = 42. Tier 3 = 5. Total = 57 rules.
 
 ---
 
@@ -99,6 +99,7 @@ Violating Tier 1 = kingdom is worse than running solo.
 | R54 | 2 | Memory writes are King-only; lanes request via inbox `memory-request` (validated against R34) | [R54-memory-writes-are-king-only.md](R54-memory-writes-are-king-only.md) |
 | R55 | 2 | Shared broker inbox — one feed, everyone reads, the addressed actor acts | [R55-two-way-inbox-protocol.md](R55-two-way-inbox-protocol.md) |
 | R56 | 2 | PRs open as draft; the literal 'open' marks ready | [R56-prs-open-as-draft.md](R56-prs-open-as-draft.md) |
+| R57 | 2 | Never cherry-pick to fold lanes/PRs — apply or merge | [R57-never-cherry-pick-fold-with-apply-or-merge.md](R57-never-cherry-pick-fold-with-apply-or-merge.md) |
 
 ## Conflict resolution
 
